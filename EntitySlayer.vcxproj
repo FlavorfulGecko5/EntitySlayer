@@ -105,7 +105,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./EntSlayer/;./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -122,7 +122,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./EntSlayer/;./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -133,18 +133,18 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Application.cpp" />
     <ClCompile Include="EntHero\prefs.cpp" />
+    <ClCompile Include="EntSlayer\Application.cpp" />
     <ClCompile Include="Parser\EntParserInitializations.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EntHero\defsext.h" />
     <ClInclude Include="EntHero\prefs.h" />
-    <ClInclude Include="EntityBookTab.h" />
-    <ClInclude Include="EntityEditor.h" />
-    <ClInclude Include="EntityFrame.h" />
-    <ClInclude Include="EntityModel.h" />
-    <ClInclude Include="FilterMenu.h" />
+    <ClInclude Include="EntSlayer\EntityBookTab.h" />
+    <ClInclude Include="EntSlayer\EntityEditor.h" />
+    <ClInclude Include="EntSlayer\EntityFrame.h" />
+    <ClInclude Include="EntSlayer\EntityModel.h" />
+    <ClInclude Include="EntSlayer\FilterMenu.h" />
     <ClInclude Include="Parser\EntityLogger.h" />
     <ClInclude Include="Parser\EntityNode.h" />
     <ClInclude Include="Parser\EntityParser.h" />

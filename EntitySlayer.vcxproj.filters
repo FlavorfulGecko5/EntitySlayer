@@ -10,25 +10,22 @@
     <Filter Include="Source Files\EntHero">
       <UniqueIdentifier>{eb77be65-29a2-42a6-9866-0e78001bb484}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\EntSlayer">
+      <UniqueIdentifier>{f8dc7a7e-0acc-4eeb-a0c3-50bbaa1923ea}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Application.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Parser\EntParserInitializations.cpp">
       <Filter>Source Files\Parser</Filter>
     </ClCompile>
     <ClCompile Include="EntHero\prefs.cpp">
       <Filter>Source Files\EntHero</Filter>
     </ClCompile>
+    <ClCompile Include="EntSlayer\Application.cpp">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="EntityFrame.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="EntityBookTab.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="Parser\EntityLogger.h">
       <Filter>Source Files\Parser</Filter>
     </ClInclude>
@@ -44,20 +41,26 @@
     <ClInclude Include="Parser\Oodle.h">
       <Filter>Source Files\Parser</Filter>
     </ClInclude>
-    <ClInclude Include="EntityEditor.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="EntityModel.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="EntHero\defsext.h">
       <Filter>Source Files\EntHero</Filter>
     </ClInclude>
     <ClInclude Include="EntHero\prefs.h">
       <Filter>Source Files\EntHero</Filter>
     </ClInclude>
-    <ClInclude Include="FilterMenu.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="EntSlayer\EntityBookTab.h">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClInclude>
+    <ClInclude Include="EntSlayer\EntityEditor.h">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClInclude>
+    <ClInclude Include="EntSlayer\EntityFrame.h">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClInclude>
+    <ClInclude Include="EntSlayer\EntityModel.h">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClInclude>
+    <ClInclude Include="EntSlayer\FilterMenu.h">
+      <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
