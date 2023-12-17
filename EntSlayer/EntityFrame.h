@@ -69,7 +69,7 @@ class EntityFrame : public wxFrame
 
 		/* Initialize Notebook */
 		{
-			book = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxSize(600, 400),
+			book = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
 				wxAUI_NB_TAB_SPLIT | wxAUI_NB_TAB_MOVE | wxAUI_NB_TAB_EXTERNAL_MOVE
 				| wxAUI_NB_SCROLL_BUTTONS | wxAUI_NB_CLOSE_ON_ALL_TABS | wxAUI_NB_TOP);
 			AddUntitledTab();

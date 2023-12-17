@@ -10,7 +10,8 @@ enum TabType {
 
 enum TabID {
 	TAB_MINIMUM = wxID_HIGHEST + 1,
-	BTN_APPLYFILTERS
+	BTN_APPLYFILTERS,
+	INPUT_KEYFILTER
 };
 
 class EntityBookTab : public wxPanel
@@ -24,11 +25,15 @@ class EntityBookTab : public wxPanel
 	FilterList* layerMenu;
 	FilterList* classMenu;
 	FilterList* inheritMenu;
+	wxCheckBox* spawnCheck;
 	wxTextCtrl* xInput;
 	wxTextCtrl* yInput;
 	wxTextCtrl* zInput;
 	wxTextCtrl* rInput;
 
+	FilterList* keyMenu;
+	wxTextCtrl* keyInput;
+	wxCheckBox* caseSensCheck;
 
 	EntityParser* parser;
 	EntNode* root;
@@ -57,8 +62,8 @@ class EntityBookTab : public wxPanel
 			wxDefaultPosition, wxDefaultSize, wxCP_NO_TLW_RESIZE);
 		{
 			wxWindow* topWindow = topWrapper->GetPane();
-			wxFont font(10, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false);
 
+			/* Layer, Class and Inherit filter lists */
 			wxBoxSizer* checklistSizer = new wxBoxSizer(wxHORIZONTAL);
 			layerMenu = new FilterList(topWindow, "Layers");
 			classMenu = new FilterList(topWindow, "Classes");
@@ -68,9 +73,10 @@ class EntityBookTab : public wxPanel
 			checklistSizer->Add(inheritMenu->container, 1, wxLEFT | wxRIGHT, 10);
 			model->refreshFilterMenus(layerMenu, classMenu, inheritMenu);
 
+			/* Spawn Position Filter */
 			wxBoxSizer* spawnFilterSizer = new wxBoxSizer(wxVERTICAL);
 			{
-				wxStaticText* label = new wxStaticText(topWindow, wxID_ANY, "Spawn Position");
+				spawnCheck = new wxCheckBox(topWindow, wxID_ANY, "Spawn Position Distance");
 				wxStaticText* xLabel = new wxStaticText(topWindow, wxID_ANY, "     x");
 				wxStaticText* yLabel = new wxStaticText(topWindow, wxID_ANY, "     y");
 				wxStaticText* zLabel = new wxStaticText(topWindow, wxID_ANY, "     z");
@@ -93,26 +99,49 @@ class EntityBookTab : public wxPanel
 				rSizer->Add(rLabel, wxLEFT | wxRIGHT, 5);
 				rSizer->Add(rInput, wxLEFT | wxRIGHT, 5);
 
-				spawnFilterSizer->Add(label);
+				spawnFilterSizer->Add(spawnCheck);
 				spawnFilterSizer->Add(xSizer);
 				spawnFilterSizer->Add(ySizer);
 				spawnFilterSizer->Add(zSizer);
 				spawnFilterSizer->Add(rSizer);
 			}
 
+			/* Text Filter */
+			wxBoxSizer* textFilterSizer = new wxBoxSizer(wxVERTICAL);
+			{
+				keyMenu = new FilterList(topWindow, "Text Key");
+				wxStaticText* keyInputLabel = new wxStaticText(topWindow, wxID_ANY, "Enter Key: ");
+				keyInput = new wxTextCtrl(topWindow, TabID::INPUT_KEYFILTER, wxEmptyString,
+					wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
+				keyInput->SetHint("networkReplicated = true;");
+				caseSensCheck = new wxCheckBox(topWindow, wxID_ANY, "Case Sensitive");
+				caseSensCheck->SetValue(true);
 
-			
+				wxBoxSizer* inputSizer = new wxBoxSizer(wxHORIZONTAL);
+				inputSizer->Add(keyInputLabel, 0);
+				inputSizer->Add(keyInput, 1, wxEXPAND);
+
+				textFilterSizer->Add(keyMenu->container, 1, wxEXPAND);
+				textFilterSizer->Add(inputSizer, 0, wxEXPAND);
+				textFilterSizer->Add(caseSensCheck);
+			}
+
+			wxBoxSizer* secondRowSizer = new wxBoxSizer(wxHORIZONTAL);
+			secondRowSizer->Add(textFilterSizer, 1, wxALL, 10); // Ensures 1/3rd horizontal space
+			secondRowSizer->Add(spawnFilterSizer, 2, wxALL, 15); // (alignment with checklists)
+
+			/* Put everything together */
 			wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
 			topSizer->Add(checklistSizer, 0, wxEXPAND);
-			topSizer->Add(spawnFilterSizer, 0, wxLEFT | wxRIGHT, 10);
+			topSizer->Add(secondRowSizer, 0, wxEXPAND);
 			topSizer->Add(new wxButton(topWindow, TabID::BTN_APPLYFILTERS, "Apply"), 0, wxALL, 10);
 			topWindow->SetSizerAndFit(topSizer);
 		}
 		
 		/* Initialize controls */
 		wxSplitterWindow* splitter = new wxSplitterWindow(this);
-		editor = new EntityEditor(splitter, wxID_ANY);
-		view = new wxDataViewCtrl(splitter, wxID_ANY);
+		editor = new EntityEditor(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
+		view = new wxDataViewCtrl(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
 
 		/* Initialize View */
 		{
@@ -162,33 +191,57 @@ class EntityBookTab : public wxPanel
 		return !fileUpToDate || editor->Modified();
 	}
 
+	void onAddKeyFilter(wxCommandEvent& event)
+	{
+		wxString key = keyInput->GetValue();
+		if(key.length() == 0) return;
+
+		keyMenu->AppendAndEnsureVisible(key); // Todo: auto-check newly added items?
+		keyInput->Clear();
+	}
+
 	void onApplyFilters(wxCommandEvent& event) 
 	{
 		/*
-		* Should be 100% safe to apply filters without committing
-		* and making nullptr the node we're editing - in spite of a warning message
-		* that appears in debug builds when you commit a root child that was
-		* filtered out of the view.
+		* It should be safe to apply filters without a commit check.
+		* However, in debug builds, committing a root child that was filtered out
+		* of the view creates a debug error popup accompanied by small memory leaks.
+		* 
+		* Unclear if these leaks are present in release builds. However, better to be
+		* safe than sorry for preventing unclear behavior.
 		*/
-		float newX = 0, newY = 0, newZ = 0, newR = 0;
-		bool newSpawnFilterSetting = true;
-
-		wxString stringX = xInput->GetValue(),
-			stringY = yInput->GetValue(),
-			stringZ = zInput->GetValue(),
-			stringR = rInput->GetValue();
-		try {
-			newX = stof(string(stringX));
-			newY = stof(string(stringY));
-			newZ = stof(string(stringZ));
-			newR = stof(string(stringR));
+		if(CommitEdits() < 0)
+		{
+			wxMessageBox("Please fix syntax errors before applying new filters.", "Cannot Change Filters",
+				wxICON_WARNING | wxOK);
+			return;
 		}
-		catch (exception) {
-			newSpawnFilterSetting = false;
+		else editor->SetActiveNode(nullptr);
+
+		bool newSpawnFilterSetting = spawnCheck->IsChecked();
+		Sphere newSphere;
+
+		if (newSpawnFilterSetting)
+		{
+			wxString stringX = xInput->GetValue(),
+				stringY = yInput->GetValue(),
+				stringZ = zInput->GetValue(),
+				stringR = rInput->GetValue();
+			try {
+				newSphere.x = stof(string(stringX));
+				newSphere.y = stof(string(stringY));
+				newSphere.z = stof(string(stringZ));
+				newSphere.r = stof(string(stringR));
+			}
+			catch (exception) {
+				newSpawnFilterSetting = false;
+				spawnCheck->SetValue(false);
+				wxMessageBox("Could not convert one or more fields to numbers", "Spawn Position Filtering Failed",
+					wxICON_WARNING | wxOK);
+			}
 		}
 
-		model->SetFilters(layerMenu, classMenu, inheritMenu,
-			newSpawnFilterSetting, newX, newY, newZ, newR);
+		model->SetFilters(layerMenu, classMenu, inheritMenu, newSpawnFilterSetting, newSphere, keyMenu, caseSensCheck->IsChecked());
 		wxDataViewItem p(nullptr); // Todo: should try to improve this so we don't destroy entire root
 		wxDataViewItem r(root);
 		model->ItemDeleted(p, r);
@@ -296,6 +349,7 @@ class EntityBookTab : public wxPanel
 wxBEGIN_EVENT_TABLE(EntityBookTab, wxPanel)
 	EVT_COLLAPSIBLEPANE_CHANGED(wxID_ANY, onFilterMenuShowHide)
 
+	EVT_TEXT_ENTER(INPUT_KEYFILTER, onAddKeyFilter)
 	EVT_BUTTON(BTN_APPLYFILTERS, onApplyFilters)
 
 	EVT_DATAVIEW_SELECTION_CHANGED(wxID_ANY, onNodeSelection)

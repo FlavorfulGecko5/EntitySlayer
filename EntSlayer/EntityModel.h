@@ -4,6 +4,13 @@
 #include "FilterMenu.h"
 #include <set>
 
+struct Sphere {
+	float x = 0;
+	float y = 0;
+	float z = 0;
+	float r = 0; // Radius
+};
+
 class EntityModel : public wxDataViewModel {
 	public:
 	// EntityModels should not have ownership of the root or tree data
@@ -15,12 +22,14 @@ class EntityModel : public wxDataViewModel {
 	set<std::string> layerFilters = {};
 
 	bool filterSpawnPosition = false;
-	float spawnPoint[3] = {0.0, 0.0, 0.0};
-	float radius = 0;
+	Sphere spawnSphere;
 
-	void refreshFilterMenus(FilterList* layerMenu, FilterList* classMenu, FilterList* inheritMenu)
+	vector<string> textFilters;
+	bool caseSensitiveText = true;
+
+	void refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu)
 	{
-		layerMenu->Clear();
+		layerMenu->Clear(); // Todo: make sure already-checked items are properly re-checked on refresh
 		classMenu->Clear();
 		inheritMenu->Clear();
 
@@ -74,12 +83,13 @@ class EntityModel : public wxDataViewModel {
 		inheritMenu->Append(inheritArray);
 	}
 
-	void SetFilters(FilterList* layerMenu, FilterList* classMenu, FilterList* inheritMenu,
-		bool newSpawnFilterSetting, float newX, float newY, float newZ, float newR)
+	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu,
+		bool newSpawnFilterSetting, Sphere newSphere, wxCheckListBox* textMenu, bool newCaseSensSetting)
 	{
 		layerFilters.clear();
 		classFilters.clear();
 		inheritFilters.clear();
+		textFilters.clear();
 
 		for (int i = 0, max = layerMenu->GetCount(); i < max; i++)
 			if(layerMenu->IsChecked(i))
@@ -93,11 +103,13 @@ class EntityModel : public wxDataViewModel {
 			if (inheritMenu->IsChecked(i))
 				inheritFilters.insert(string(inheritMenu->GetString(i)));
 
+		for(int i = 0, max = textMenu->GetCount(); i < max; i++)
+			if(textMenu->IsChecked(i))
+				textFilters.push_back(string(textMenu->GetString(i)));
+
+		caseSensitiveText = newCaseSensSetting;
 		filterSpawnPosition = newSpawnFilterSetting;
-		spawnPoint[0] = newX;
-		spawnPoint[1] = newY;
-		spawnPoint[2] = newZ;
-		radius = newR;
+		spawnSphere = newSphere;
 	}
 
 	EntityModel(EntNode* p_root) : root(p_root) {}
@@ -161,10 +173,17 @@ class EntityModel : public wxDataViewModel {
 		*/
 		if (node == root)
 		{
+			auto start = std::chrono::high_resolution_clock::now();
+
 			bool filterByClass = classFilters.size() > 0;
 			bool filterByInherit = inheritFilters.size() > 0;
 			bool filterByLayer = layerFilters.size() > 0;
 			bool noLayerFilter = layerFilters.count(FILTER_NOLAYERS) > 0;
+			
+			
+			size_t numTextFilters = textFilters.size();
+			bool filterByText = numTextFilters > 0;
+			//string textBuffer;
 
 			for (int i = 0; i < childCount; i++)
 			{
@@ -232,20 +251,44 @@ class EntityModel : public wxDataViewModel {
 						continue;
 					}
 
-					float deltaX = x - spawnPoint[0],
-						  deltaY = y - spawnPoint[1],
-						  deltaZ = z - spawnPoint[2];
+					float deltaX = x - spawnSphere.x,
+						  deltaY = y - spawnSphere.y,
+						  deltaZ = z - spawnSphere.z;
 					float distance = std::sqrtf(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
-					if(distance > radius)
+					if(distance > spawnSphere.r)
+						continue;
+				}
+
+				if (filterByText)
+				{
+					//textBuffer.clear();
+					//childBuffer[i]->generateText(textBuffer);
+					
+					bool containsText = false;
+					for (const string& key : textFilters)
+						if (childBuffer[i]->searchDownwardsLocal(key, caseSensitiveText) != EntNode::SEARCH_404)
+						{
+							containsText = true;
+							break;
+						}
+					//for (size_t filter = 0; filter < numTextFilters; filter++)
+					//	if (textBuffer.find(textFilters[filter]) != string::npos)
+					//	{
+					//		containsText = true;
+					//		break;
+					//	}
+					if(!containsText)
 						continue;
 				}
 
 				// Node has passed all filters and should be included in the filtered tree
 				array.Add(wxDataViewItem((void*)childBuffer[i]));
 			}
+			auto stop = std::chrono::high_resolution_clock::now();
+			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
+			wxLogMessage("Time to Filter: %zu", duration.count());
 
-			wxLogMessage("%zu", array.size());
 			return array.size();
 		}
 
