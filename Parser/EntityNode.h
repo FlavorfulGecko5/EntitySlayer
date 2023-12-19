@@ -78,6 +78,19 @@ class EntNode
 
 	string_view getValue() {return string_view(textPtr + nameLength, valLength); }
 
+	string_view getNameUQ() {
+		if (nameLength < 2)
+			return string_view(textPtr, nameLength);
+		return string_view(textPtr + 1, nameLength - 2);
+	}
+
+	// If the value is a string literal, get it with the quotes removed
+	string_view getValueUQ() {
+		if(valLength < 2) 
+			return string_view(textPtr + nameLength, valLength);
+		return string_view(textPtr + nameLength + 1, valLength - 2);
+	}
+
 	wxString getNameWX() {return wxString(textPtr, nameLength); }
 	
 	wxString getValueWX() {return wxString(textPtr + nameLength, valLength); }

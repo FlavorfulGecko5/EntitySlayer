@@ -262,6 +262,7 @@ class EntityFrame : public wxFrame
 	{
 		wxAboutDialogInfo info;
 		info.SetName("EntitySlayer");
+		info.SetVersion("Alpha 1.0 [Filter System Demo]");
 
 		wxString description = 
 "DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

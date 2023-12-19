@@ -47,12 +47,12 @@ class EntityModel : public wxDataViewModel {
 			{
 				EntNode& classNode = (*current)["entityDef"]["class"];
 				if (classNode.ValueLength() > 0)
-					newClasses.insert(classNode.getValue());
+					newClasses.insert(classNode.getValueUQ());
 			}
 			{
 				EntNode& inheritNode = (*current)["entityDef"]["inherit"];
 				if (inheritNode.ValueLength() > 0)
-					newInherits.insert(inheritNode.getValue());
+					newInherits.insert(inheritNode.getValueUQ());
 			}
 			{
 				EntNode& layerNode = (*current)["layers"];
@@ -61,7 +61,7 @@ class EntityModel : public wxDataViewModel {
 					EntNode** layerBuffer = layerNode.getChildBuffer();
 					int layerCount = layerNode.getChildCount();
 					for (int currentLayer = 0; currentLayer < layerCount; currentLayer++)
-						newLayers.insert(layerBuffer[currentLayer]->getName());
+						newLayers.insert(layerBuffer[currentLayer]->getNameUQ());
 				}
 			}
 
@@ -93,15 +93,15 @@ class EntityModel : public wxDataViewModel {
 
 		for (int i = 0, max = layerMenu->GetCount(); i < max; i++)
 			if(layerMenu->IsChecked(i))
-				layerFilters.insert(string(layerMenu->GetString(i)));
+				layerFilters.insert('"' + string(layerMenu->GetString(i)) + '"');
 
 		for (int i = 0, max = classMenu->GetCount(); i < max; i++)
 			if (classMenu->IsChecked(i))
-				classFilters.insert(string(classMenu->GetString(i)));
+				classFilters.insert('"' + string(classMenu->GetString(i)) + '"');
 
 		for (int i = 0, max = inheritMenu->GetCount(); i < max; i++)
 			if (inheritMenu->IsChecked(i))
-				inheritFilters.insert(string(inheritMenu->GetString(i)));
+				inheritFilters.insert('"' + string(inheritMenu->GetString(i)) + '"');
 
 		for(int i = 0, max = textMenu->GetCount(); i < max; i++)
 			if(textMenu->IsChecked(i))

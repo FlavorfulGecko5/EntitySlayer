@@ -10,8 +10,7 @@ enum TabType {
 
 enum TabID {
 	TAB_MINIMUM = wxID_HIGHEST + 1,
-	BTN_APPLYFILTERS,
-	INPUT_KEYFILTER
+	BTN_APPLYFILTERS
 };
 
 class EntityBookTab : public wxPanel
@@ -22,17 +21,16 @@ class EntityBookTab : public wxPanel
 	bool compressOnSave;
 	bool fileUpToDate;
 
-	FilterList* layerMenu;
-	FilterList* classMenu;
-	FilterList* inheritMenu;
+	FilterCtrl* layerMenu;
+	FilterCtrl* classMenu;
+	FilterCtrl* inheritMenu;
 	wxCheckBox* spawnCheck;
 	wxTextCtrl* xInput;
 	wxTextCtrl* yInput;
 	wxTextCtrl* zInput;
 	wxTextCtrl* rInput;
 
-	FilterList* keyMenu;
-	wxTextCtrl* keyInput;
+	FilterCtrl* keyMenu;
 	wxCheckBox* caseSensCheck;
 
 	EntityParser* parser;
@@ -65,13 +63,13 @@ class EntityBookTab : public wxPanel
 
 			/* Layer, Class and Inherit filter lists */
 			wxBoxSizer* checklistSizer = new wxBoxSizer(wxHORIZONTAL);
-			layerMenu = new FilterList(topWindow, "Layers");
-			classMenu = new FilterList(topWindow, "Classes");
-			inheritMenu = new FilterList(topWindow, "Inherits");
+			layerMenu = new FilterCtrl(topWindow, "Layers", false);
+			classMenu = new FilterCtrl(topWindow, "Classes", false);
+			inheritMenu = new FilterCtrl(topWindow, "Inherits", false);
 			checklistSizer->Add(layerMenu->container, 1, wxLEFT | wxRIGHT, 10);
 			checklistSizer->Add(classMenu->container, 1, wxLEFT | wxRIGHT, 10);
 			checklistSizer->Add(inheritMenu->container, 1, wxLEFT | wxRIGHT, 10);
-			model->refreshFilterMenus(layerMenu, classMenu, inheritMenu);
+			refreshFilters();
 
 			/* Spawn Position Filter */
 			wxBoxSizer* spawnFilterSizer = new wxBoxSizer(wxVERTICAL);
@@ -109,20 +107,11 @@ class EntityBookTab : public wxPanel
 			/* Text Filter */
 			wxBoxSizer* textFilterSizer = new wxBoxSizer(wxVERTICAL);
 			{
-				keyMenu = new FilterList(topWindow, "Text Key");
-				wxStaticText* keyInputLabel = new wxStaticText(topWindow, wxID_ANY, "Enter Key: ");
-				keyInput = new wxTextCtrl(topWindow, TabID::INPUT_KEYFILTER, wxEmptyString,
-					wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
-				keyInput->SetHint("networkReplicated = true;");
+				keyMenu = new FilterCtrl(topWindow, "Text Key", true);
 				caseSensCheck = new wxCheckBox(topWindow, wxID_ANY, "Case Sensitive");
 				caseSensCheck->SetValue(true);
 
-				wxBoxSizer* inputSizer = new wxBoxSizer(wxHORIZONTAL);
-				inputSizer->Add(keyInputLabel, 0);
-				inputSizer->Add(keyInput, 1, wxEXPAND);
-
 				textFilterSizer->Add(keyMenu->container, 1, wxEXPAND);
-				textFilterSizer->Add(inputSizer, 0, wxEXPAND);
 				textFilterSizer->Add(caseSensCheck);
 			}
 
@@ -191,13 +180,11 @@ class EntityBookTab : public wxPanel
 		return !fileUpToDate || editor->Modified();
 	}
 
-	void onAddKeyFilter(wxCommandEvent& event)
-	{
-		wxString key = keyInput->GetValue();
-		if(key.length() == 0) return;
-
-		keyMenu->AppendAndEnsureVisible(key); // Todo: auto-check newly added items?
-		keyInput->Clear();
+	void refreshFilters() {
+		model->refreshFilterMenus(layerMenu->list, classMenu->list, inheritMenu->list);
+		layerMenu->refreshAutocomplete();
+		classMenu->refreshAutocomplete();
+		inheritMenu->refreshAutocomplete();
 	}
 
 	void onApplyFilters(wxCommandEvent& event) 
@@ -241,7 +228,8 @@ class EntityBookTab : public wxPanel
 			}
 		}
 
-		model->SetFilters(layerMenu, classMenu, inheritMenu, newSpawnFilterSetting, newSphere, keyMenu, caseSensCheck->IsChecked());
+		model->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list, 
+			newSpawnFilterSetting, newSphere, keyMenu->list, caseSensCheck->IsChecked());
 		wxDataViewItem p(nullptr); // Todo: should try to improve this so we don't destroy entire root
 		wxDataViewItem r(root);
 		model->ItemDeleted(p, r);
@@ -335,6 +323,25 @@ class EntityBookTab : public wxPanel
 		else editor->SetActiveNode(selection);
 	}
 
+	void onNodeRightClick(wxDataViewEvent& event)
+	{
+		EntNode* node = (EntNode*)event.GetItem().GetID();
+		wxMenu menu;
+
+		if (node == nullptr || node->getType() == NodeType::ROOT) {
+			wxLogMessage("Null or root right clicked");
+			return;
+		}
+
+		menu.Append(70, "Test");
+		view->PopupMenu(&menu);
+	}
+
+	void onNodeContextAction(wxCommandEvent& event)
+	{
+
+	}
+
 	void onFilterMenuShowHide(wxCollapsiblePaneEvent& event)
 	{
 		Freeze(); // Freezing seems to fix visual bugs that may occur when expanding
@@ -349,9 +356,9 @@ class EntityBookTab : public wxPanel
 wxBEGIN_EVENT_TABLE(EntityBookTab, wxPanel)
 	EVT_COLLAPSIBLEPANE_CHANGED(wxID_ANY, onFilterMenuShowHide)
 
-	EVT_TEXT_ENTER(INPUT_KEYFILTER, onAddKeyFilter)
 	EVT_BUTTON(BTN_APPLYFILTERS, onApplyFilters)
 
 	EVT_DATAVIEW_SELECTION_CHANGED(wxID_ANY, onNodeSelection)
 	EVT_DATAVIEW_ITEM_ACTIVATED(wxID_ANY, onNodeActivation)
+	EVT_DATAVIEW_ITEM_CONTEXT_MENU(wxID_ANY, onNodeRightClick)
 wxEND_EVENT_TABLE()
