@@ -154,7 +154,7 @@ class EntityBookTab : public wxPanel
 			view->AssociateModel(model.get());
 			view->Expand(wxDataViewItem(root));
 		}
-
+		
 		splitter->SetMinimumPaneSize(20);
 		splitter->SetSashGravity(0.5); 
 		splitter->SplitVertically(view, editor);
@@ -204,6 +204,7 @@ class EntityBookTab : public wxPanel
 			return;
 		}
 		else editor->SetActiveNode(nullptr);
+		parser->ClearUndoStack(); // Must clear undo stack for the same reason as above
 
 		bool newSpawnFilterSetting = spawnCheck->IsChecked();
 		Sphere newSphere;
@@ -267,33 +268,77 @@ class EntityBookTab : public wxPanel
 
 		EntNode* replacing = editor->Node();
 		EntNode* parent = replacing->getParent();
-		EntNode* firstNewChild;
-		int newChildCount;
+		int replacingIndex = parent->getChildIndex(replacing);
 
-		if (!parser->parseAndReplace(
-			string(editor->GetText()),
-			replacing, 1, firstNewChild, newChildCount))
+		ParseResult outcome = parser->EditTree(string(editor->GetText()), parent, replacingIndex, 1);
+		if (!outcome.success)
 		{
-			editor->setAnnotationError(
-				parser->getParsedLineCount(),
-				parser->getParseFailError().what()
-			);
+			editor->setAnnotationError(outcome.errorLineNum, outcome.errorMessage);
 			return -1;
 		}
 
 		// Refresh the model
-		model->ItemDeleted(wxDataViewItem(parent), wxDataViewItem(replacing));
-		if (newChildCount > 0)
+		wxDataViewItem parentItem(parent);
+		model->ItemDeleted(parentItem, wxDataViewItem(replacing));
+
+		if (outcome.addedNodes.size() > 0)
 		{
-			int firstNewIndex = parent->getChildIndex(firstNewChild);
 			wxDataViewItemArray newItems;
-			for (int i = 0; i < newChildCount; i++)
-				newItems.Add(wxDataViewItem((*parent)[firstNewIndex + i]));
-			model->ItemsAdded(wxDataViewItem(parent), newItems);
+			for (EntNode *e : outcome.addedNodes)
+				newItems.Add(wxDataViewItem(e));
+			model->ItemsAdded(parentItem, newItems);
 		}
 
 		fileUpToDate = false;
 		return 1;
+	}
+
+	void UndoRedo(bool undo)
+	{
+		wxWindow* focused = FindFocus();
+		if (focused == editor)
+		{
+			if(undo) editor->Undo();
+			else editor->Redo();
+			return;
+		}
+
+		wxString msg = undo ? "Undo" : "Redo";
+
+		if(editor->Modified() && wxMessageBox("This action will discard your current text edits. Proceed?",
+			msg, wxICON_WARNING | wxYES_NO | wxNO_DEFAULT, this) != wxYES)
+			return;
+
+		ParseResult outcome = parser->UndoRedo(undo);
+		if (!outcome.success)
+		{
+			wxMessageBox("Nothing to " + msg, msg, wxOK | wxICON_INFORMATION);
+			return;
+		}
+
+		wxLogMessage("Undo/Redo on node tree executed successfully");
+		wxDataViewItem parentItem(outcome.parent);
+		wxDataViewItemArray removedItems;
+		wxDataViewItemArray addedItems;
+
+		for (EntNode* e : outcome.removedNodes)
+			removedItems.Add(wxDataViewItem(e));
+		for (EntNode* e : outcome.addedNodes)
+			addedItems.Add(wxDataViewItem(e));
+
+		model->ItemsDeleted(parentItem, removedItems);
+		model->ItemsAdded(parentItem, addedItems);
+		fileUpToDate = false;
+
+		if (addedItems.size() > 0)
+		{
+			view->Select(addedItems[0]);
+			editor->SetActiveNode(outcome.addedNodes[0]);
+		}
+		else {
+			view->Select(parentItem);
+			editor->SetActiveNode(outcome.parent);
+		}
 	}
 
 	void onNodeSelection(wxDataViewEvent& event)

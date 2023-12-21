@@ -14,7 +14,7 @@ struct Sphere {
 class EntityModel : public wxDataViewModel {
 	public:
 	// EntityModels should not have ownership of the root or tree data
-	static inline const std::string FILTER_NOLAYERS = "No Layers";
+	static inline const std::string FILTER_NOLAYERS = "\"No Layers\"";
 	EntNode* root;
 
 	set<std::string> classFilters = {};
@@ -40,7 +40,7 @@ class EntityModel : public wxDataViewModel {
 		EntNode** children = root->getChildBuffer();
 		int childCount = root->getChildCount();
 
-		newLayers.insert(string_view(FILTER_NOLAYERS));
+		newLayers.insert(string_view(FILTER_NOLAYERS.data() + 1, FILTER_NOLAYERS.length() - 2));
 		for (int i = 0; i < childCount; i++)
 		{
 			EntNode* current = children[i];

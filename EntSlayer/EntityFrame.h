@@ -21,6 +21,9 @@ enum FrameID
 	FILE_SAVEAS,
 	FILE_COMPRESS,
 
+	EDIT_UNDO,
+	EDIT_REDO,
+
 	HELP_ABOUT,
 	HELP_MANUAL
 };
@@ -43,6 +46,7 @@ class EntityFrame : public wxFrame
 
 		/* Build Menu Bar */
 		{
+			// Note: These shortcuts override component-level shortcuts (such as in the editor)
 			fileMenu->Append(FILE_NEW, "&New\tCtrl+N");
 			fileMenu->Append(FILE_OPEN, "&Open\tCtrl+O");
 			fileMenu->Append(FILE_SAVE, "&Save\tCtrl+S");
@@ -50,12 +54,17 @@ class EntityFrame : public wxFrame
 			fileMenu->AppendSeparator();
 			fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save");
 
+			wxMenu* editMenu = new wxMenu;
+			editMenu->Append(EDIT_UNDO, "Undo\tCtrl+Z");
+			editMenu->Append(EDIT_REDO, "Redo\tCtrl+Y");
+
 			wxMenu* helpMenu = new wxMenu;
 			helpMenu->Append(HELP_ABOUT, "About");
 			helpMenu->Append(HELP_MANUAL, "&Manual\tCtrl+M");
 
 			wxMenuBar* bar = new wxMenuBar;
 			bar->Append(fileMenu, "File");
+			bar->Append(editMenu, "Edit");
 			bar->Append(helpMenu, "Help");
 			SetMenuBar(bar);
 		}
@@ -70,8 +79,10 @@ class EntityFrame : public wxFrame
 		/* Initialize Notebook */
 		{
 			book = new wxAuiNotebook(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-				wxAUI_NB_TAB_SPLIT | wxAUI_NB_TAB_MOVE | wxAUI_NB_TAB_EXTERNAL_MOVE
-				| wxAUI_NB_SCROLL_BUTTONS | wxAUI_NB_CLOSE_ON_ALL_TABS | wxAUI_NB_TOP);
+				//wxAUI_NB_TAB_SPLIT | // Crashes when you hold left click, then move mouse from lower view to higher view tab list.
+				//wxAUI_NB_TAB_MOVE  | // Caused by tab moving, becomes more frequent with tab splitting
+									   // Report this to wxWidgets if present in latest version?
+				wxAUI_NB_SCROLL_BUTTONS | wxAUI_NB_CLOSE_ON_ALL_TABS | wxAUI_NB_TOP);
 			AddUntitledTab();
 		}
 		
@@ -256,13 +267,28 @@ class EntityFrame : public wxFrame
 	void onCompressCheck(wxCommandEvent& event)
 	{
 		activeTab->compressOnSave = event.IsChecked();
+		activeTab->fileUpToDate = false; // Allows saving unedited file when compression toggled
+	}
+
+	void onUndoRedo(wxCommandEvent& event)
+	{
+		bool undo = event.GetId() == EDIT_UNDO;
+		wxWindow* focused = FindFocus();
+		wxTextCtrl* textWindow = dynamic_cast<wxTextCtrl*>(focused);
+
+		if (textWindow != nullptr)
+		{
+			if(undo) textWindow->Undo();
+			else textWindow->Redo();
+		}
+		else activeTab->UndoRedo(undo);
 	}
 
 	void onAbout(wxCommandEvent& event)
 	{
 		wxAboutDialogInfo info;
 		info.SetName("EntitySlayer");
-		info.SetVersion("Alpha 1.0 [Filter System Demo]");
+		info.SetVersion("Alpha 2.0 [Undo/Redo Demo]");
 
 		wxString description = 
 "DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -296,6 +322,8 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_SAVE, EntityFrame::onFileSave)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
 	EVT_MENU(FILE_COMPRESS, EntityFrame::onCompressCheck)
+	EVT_MENU(EDIT_UNDO, EntityFrame::onUndoRedo)
+	EVT_MENU(EDIT_REDO, EntityFrame::onUndoRedo)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
 	EVT_MENU(HELP_MANUAL, EntityFrame::onManual)
 wxEND_EVENT_TABLE()

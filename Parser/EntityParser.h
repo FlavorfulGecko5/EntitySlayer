@@ -7,8 +7,34 @@
 #include <fstream>
 using namespace std;
 
+
+
+struct ParseResult {
+	bool success = true;
+	size_t errorLineNum = 0;
+	string errorMessage;
+
+	EntNode* parent = nullptr;
+	vector<EntNode*> removedNodes;
+	vector<EntNode*> addedNodes;
+};
+
 class EntityParser {
 	private:
+	enum class CommandType
+	{
+		EDITTREE // Call to EditTree function
+	};
+
+	struct ParseCommand 
+	{
+		CommandType type;
+		string text;             // .entities text we must parse for this command
+		int parentID;            // Positional id of the parent node
+		int insertionIndex;      // Number of nodes this command target
+		int removalCount;
+	};
+
 	enum class TokenType : unsigned char 
 	{
 		END = 0x00,
@@ -34,7 +60,18 @@ class EntityParser {
 	BlockAllocator<EntNode> nodeAlloc; // Allocator for the nodes
 	BlockAllocator<EntNode*> childAlloc; // Allocator for node child buffers
 	bool fileWasCompressed;
-	runtime_error mostRecentError; // Post-construction, stores most recently thrown error from parsing
+
+	const size_t MAX_COMMAND_MEMORY = 100;
+	vector<ParseCommand> undoRedoStack;
+	int undoIndex = 0;
+	bool undoingOrRedoing = false; // If true, reverse the command at undoIndex instead of pushing a new one
+	/*
+	* Let undoIndex be the insertion index for new commands
+	* Then:
+	* - The first undoable command is undoIndex - 1
+	* - The first redoable command is at undoIndex
+	*/
+	
 
 	/*
 	* Variables used during a parse.
@@ -59,7 +96,7 @@ class EntityParser {
 	/*
 	* Constructs an EntityParser with minimal data
 	*/
-	EntityParser() : root(NodeType::ROOT), fileWasCompressed(false), mostRecentError("N/A"),
+	EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
 		textAlloc(1000000), nodeAlloc(1000), childAlloc(1000)
 	{
 		// Cannot append a null character to a string? Hence const char* instead
@@ -79,7 +116,7 @@ class EntityParser {
 	* @throw runtime_error thrown when the file cannot be parsed
 	*/
 	EntityParser(const string& filepath, const bool debug_logParseTime = false) 
-		: root(NodeType::ROOT), mostRecentError("N/A"), 
+		: root(NodeType::ROOT),
 		textAlloc(1000000), nodeAlloc(1000), childAlloc(1000)
 	{
 		auto timeStart = chrono::high_resolution_clock::now();
@@ -159,121 +196,112 @@ class EntityParser {
 			EntityLogger::logTimeStamps("Parsing Duration: ", timeStart, chrono::high_resolution_clock::now());
 	}
 
+	void ClearUndoStack() {
+		undoRedoStack.clear();
+		undoIndex = 0;
+	}
+
+	ParseResult UndoRedo(bool undo)
+	{
+		ParseResult outcome;
+		if ((undo && undoIndex == 0) || (!undo && undoIndex == undoRedoStack.size()))
+		{
+			outcome.success = false;
+			outcome.errorMessage = "Nothing to " + undo ? "Undo" : "Redo";
+			return outcome;
+		}
+		undoingOrRedoing = true;
+		if(undo) undoIndex--;
+
+		ParseCommand* order = &(undoRedoStack[undoIndex]);
+		switch (order->type)
+		{
+			case CommandType::EDITTREE:
+			int id = order->parentID;
+			EntNode* parent = root.nodeFromPositionalID(id);
+			outcome = EditTree(order->text, parent, order->insertionIndex, order->removalCount);
+			break;
+		}
+
+		if(!undo) undoIndex++;
+		undoingOrRedoing = false;
+		return outcome;
+	}
+
 	/*
 	* Parses a given string of text and replaces a pre-existing block of EntNodes
 	* belonging to the same parent.
 	* @param text Text to parse
-	* @param replacing The first EntNode to replace
-	* @param count Number of nodes to swap out
-	* @param firstNewNode The first newly created, top-level node is placed here. nullptr if no new nodes.
-	* @param numNewNodes The number of newly created top-level nodes
-	* @param debug_logTime If true, outputs execution time
-	* @return True if parsing is successful. If an error is encountered, then the node replacement
-	* is cancelled and false is returned.
+	* @param parent Node whose children we're editing
+	* @param insertionIndex Index to insert new nodes at
+	* @param removeCount Number of nodes to delete, starting at insertionIndex
 	*/
-	bool parseAndReplace(string text, EntNode* replacing, int count, 
-		EntNode* &firstNewNode, int& numNewNodes, bool debug_logTime = false)
+	ParseResult EditTree(string text, EntNode* parent, int insertionIndex, int removeCount)
 	{
-		auto timeStart = chrono::high_resolution_clock::now();
-
-		EntNode* parent = replacing->parent; 
-		if(replacing == &root) { // Failsafe to prevent replacing of root
-			mostRecentError = runtime_error("Cannot replace the root");
-			return false;
-		} 
+		ParseResult outcome;
 
 		// We must ensure the parse is successful before modifying the existing tree
 		EntNode tempRoot(NodeType::ROOT);
-		if(!initiateParse(text, &tempRoot, parent->TYPE)) return false;
+		initiateParse(text, &tempRoot, parent->TYPE, outcome);
+		if(!outcome.success) return outcome;
+		outcome.parent = parent;
 
 		// -count because we are replacing existing nodes
-		int firstChildIndex = parent->getChildIndex(replacing);
-		int newNumChildren = parent->childCount + tempRoot.childCount - count;
+		int newNumChildren = parent->childCount + tempRoot.childCount - removeCount;
 		EntNode** newChildBuffer = childAlloc.reserveBlock(newNumChildren);
 
 		// Copy everything into the new child buffer
 		int inc = 0;
-		for(inc = 0; inc < firstChildIndex; inc++)
+		for(inc = 0; inc < insertionIndex; inc++)
 			newChildBuffer[inc] = parent->children[inc];
 		for (int i = 0; i < tempRoot.childCount; i++)
 		{
 			newChildBuffer[inc++] = tempRoot.children[i];
 			tempRoot.children[i]->populateParentRefs(parent);  // Set the parents of incoming nodes.
+			outcome.addedNodes.push_back(tempRoot.children[i]);
 		}	
-		for(int i = firstChildIndex + count; i < parent->childCount; i++)
+		for(int i = insertionIndex + removeCount; i < parent->childCount; i++)
 			newChildBuffer[inc++] = parent->children[i];
 
-		// Set return values
-		numNewNodes = tempRoot.childCount;
-		firstNewNode = numNewNodes > 0 ? tempRoot[0] : nullptr;
+		// Build the reverse command
+		ParseCommand* reverse;
+		if (undoingOrRedoing) {
+			reverse = &undoRedoStack[undoIndex]; // Will be index of command we must reverse
+			*reverse = ParseCommand(); // Set to new to prevent building on old data
+		}
+		else {
+			undoRedoStack.resize(undoIndex);
+			if (undoRedoStack.size() == MAX_COMMAND_MEMORY)
+			{
+				undoRedoStack.erase(undoRedoStack.begin());
+				undoIndex--;
+			}
+			undoRedoStack.emplace_back();
+			reverse = &undoRedoStack[undoIndex++];
+		}
+		reverse->type = CommandType::EDITTREE;
+		root.findPositionalID(parent, reverse->parentID);
+		reverse->insertionIndex = insertionIndex;
+		reverse->removalCount = tempRoot.childCount;
 
 		// Now that we've built the new child buffer, deallocate all old data
-		for(int i = 0; i < count; i++)
-			freeNode(parent->children[firstChildIndex + i]);
+		for (int i = 0; i < removeCount; i++)
+		{
+			EntNode* n = parent->children[insertionIndex + i];
+			outcome.removedNodes.push_back(n);
+			n->generateText(reverse->text);
+			reverse->text.push_back('\n');
+			freeNode(n);
+		}
+			
 		childAlloc.freeBlock(parent->children, parent->childCount);
 		childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
 
 		// Finally, attach new data to the parent
 		parent->childCount = newNumChildren;
 		parent->children = newChildBuffer;
-
-		if (debug_logTime)
-			EntityLogger::logTimeStamps("Parse/Replace Duration: ", timeStart, chrono::high_resolution_clock::now());
-
-		return true;
+		return outcome;
 	}
-
-	bool deleteNode(EntNode* deleting)
-	{
-		EntNode* parent = deleting->parent;
-		if (deleting == &root) {
-			mostRecentError = runtime_error("Cannot delete the root node");
-			return false;
-		}
-
-		int index = parent->getChildIndex(deleting);
-
-		EntNode** newChildBuffer = childAlloc.reserveBlock(parent->childCount-1);
-		for(int i = 0; i < index; i++)
-			newChildBuffer[i] = parent->children[i];
-		for(int i = index+1; i < parent->childCount; i++)
-			newChildBuffer[i-1] = parent->children[i];
-
-		freeNode(deleting);
-		childAlloc.freeBlock(parent->children, parent->childCount);
-
-		parent->childCount--;
-		parent->children = newChildBuffer;
-
-		return true;
-	}
-
-	/* FINISH ME - MUST CONSIDER HOW TO HANDLE CONTEXT
-	bool changeNodeName(EntNode* node, string newName) 
-	{
-		if (node == &root)
-		{
-			mostRecentError = "Can't change name of root";
-			return false;
-		}
-
-		newName.append('\0');
-		textView = string_view(newName);
-		currentLine = 1;
-		it = 0;
-		start = 0;
-
-		try {
-			
-			assertIgnore(TokenType::IDENTIFIER);
-			assertIgnore(TokenType::END);
-		}
-		catch (runtime_error err) {
-			mostRecentError = err;
-			return false;
-		}
-		return true;
-	}*/
 
 	/*
 	* Converts the entirety of this parser's EntNode tree into text and saves
@@ -324,10 +352,6 @@ class EntityParser {
 
 	EntNode* getRoot() { return &root;}
 
-	runtime_error getParseFailError() {return mostRecentError;}
-
-	size_t getParsedLineCount() {return currentLine;}
-
 	bool wasFileCompressed() {return fileWasCompressed;}
 
 	/*
@@ -360,7 +384,8 @@ class EntityParser {
 	* RECURSIVE PARSING FUNCTIONS
 	*/
 
-	bool initiateParse(string &text, EntNode* tempRoot, NodeType parentType)
+	void initiateParse(string &text, EntNode* tempRoot, NodeType parentType,
+		ParseResult& results)
 	{
 		// Setup variables
 		text.push_back('\0');
@@ -397,7 +422,6 @@ class EntityParser {
 			for (EntNode* e : tempChildren)
 				freeNode(e);
 			tempChildren.clear();
-			tempChildren.shrink_to_fit();
 
 			// Deallocate everything in the temporary root node,
 			// then deallocate it's child buffer
@@ -405,11 +429,11 @@ class EntityParser {
 				freeNode(tempRoot->children[i]);
 			childAlloc.freeBlock(tempRoot->children, tempRoot->childCount);
 
-			mostRecentError = err;
-			return false;
+			results.errorLineNum = currentLine;
+			results.errorMessage = err.what();
+			results.success = false;
 		}
 		tempChildren.shrink_to_fit();
-		return true;
 	}
 
 	void parseContentsFile(EntNode* node) {

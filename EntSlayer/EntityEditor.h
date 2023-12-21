@@ -45,6 +45,7 @@ class EntityEditor: public wxStyledTextCtrl
 
     void setAnnotationError(const size_t lineNumber, const string& errorMessage)
     {
+        AnnotationClearAll();
         AnnotationSetStyle(lineNumber - 1, ANNOTATION_STYLE);
         AnnotationSetText(lineNumber - 1, errorMessage);
         GotoLine(lineNumber - 1);

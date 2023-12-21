@@ -23,38 +23,6 @@ class EntNode
 	static EntNode* SEARCH_404; // Returned by all search functions if a key-node is not found.
 
 	private:
-	// A lookup table for case-insensitive string comparisons. Is this a cleverly efficient solution? Not currently clear
-	static inline const char CASE_TABLE[128] = {
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
-		0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F,
-		0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F,
-		0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F,
-		0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F,
-		0x60, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, // Lowercase indices
-		0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F  // with uppercase values
-	};
-	static inline size_t TAB_TABLE_LENGTH = 16;
-	static inline string* TAB_TABLE = new string[TAB_TABLE_LENGTH] {
-		"",
-		"",		// We need 2 empty strings because entitydef closing brace is moved back one whitespace.
-		"\t",   // This means text generation should begin with index 1
-		"\t\t",
-		"\t\t\t",
-		"\t\t\t\t",
-		"\t\t\t\t\t",
-		"\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t\t\t\t\t\t\t",
-		"\t\t\t\t\t\t\t\t\t\t\t\t\t\t",
-	};
-
-	private:
 	EntNode* parent = nullptr;
 	EntNode** children = nullptr; // Unused by value nodes
 	char* textPtr = nullptr; // Pointer to text buffer with data [name][value]
@@ -86,18 +54,18 @@ class EntNode
 
 	// If the value is a string literal, get it with the quotes removed
 	string_view getValueUQ() {
-		if(valLength < 2) 
+		if (valLength < 2)
 			return string_view(textPtr + nameLength, valLength);
 		return string_view(textPtr + nameLength + 1, valLength - 2);
 	}
 
-	wxString getNameWX() {return wxString(textPtr, nameLength); }
-	
-	wxString getValueWX() {return wxString(textPtr + nameLength, valLength); }
+	wxString getNameWX() { return wxString(textPtr, nameLength); }
 
-	int NameLength() {return nameLength;}
+	wxString getValueWX() { return wxString(textPtr + nameLength, valLength); }
 
-	int ValueLength() {return valLength;}
+	int NameLength() { return nameLength; }
+
+	int ValueLength() { return valLength; }
 
 	EntNode* getParent() { return parent; }
 
@@ -114,6 +82,10 @@ class EntNode
 			if(children[i] == child)
 				return i;
 		return -1;
+	}
+
+	EntNode* ChildAt(int index) {
+		return children[index];
 	}
 
 	bool IsRelatedTo(EntNode* b)
@@ -181,11 +153,6 @@ class EntNode
 		return *SEARCH_404;
 	}
 
-	EntNode* operator[](const int key)
-	{
-		return children[key];
-	}
-
 	/*
 	* MUTATORS
 	*/
@@ -197,19 +164,19 @@ class EntNode
 			children[i]->populateParentRefs(this);
 	}
 
-	bool swapChildPositions(EntNode* a, EntNode* b)
-	{
-		int indexA = getChildIndex(a);
-		int indexB = getChildIndex(b);
-		if (indexA == -1 || indexB == -1)
-			return false;
+	//bool swapChildPositions(EntNode* a, EntNode* b)
+	//{
+	//	int indexA = getChildIndex(a);
+	//	int indexB = getChildIndex(b);
+	//	if (indexA == -1 || indexB == -1)
+	//		return false;
 
-		EntNode* temp = a;
-		children[indexA] = b;
-		children[indexB] = temp;
+	//	EntNode* temp = a;
+	//	children[indexA] = b;
+	//	children[indexB] = temp;
 
-		return true;
-	}
+	//	return true;
+	//}
 
 	/*
 	* DEBUGGING FUNCTIONS
@@ -249,16 +216,27 @@ class EntNode
 		int max = n - k + 1; // Don't search where key can't fit.
 		int i = 0;
 
+		char fixedKey0 = key[0];
+		if(fixedKey0 > '`' && fixedKey0 < '{') fixedKey0 -= 32;
+
 		FAILED:
 		while (i < max)
 		{
-			if (CASE_TABLE[textPtr[i++]] == CASE_TABLE[key[0]])
+			char c1 = textPtr[i++];
+			if(c1 > '`' && c1 < '{') c1-= 32;
+
+			if (c1 == fixedKey0)
 			{
 				for (int j = 1; j < k; j++, i++)
+				{
+					c1 = textPtr[i]; if (c1 > '`' && c1 < '{') c1 -= 32;
+					char c2 = key[j]; if (c2 > '`' && c2 < '{') c2 -= 32;
 					// Do not increment i here: If we fail, we'll want to
 					// check the failing character to see if it == key[0]
-					if (CASE_TABLE[textPtr[i]] != CASE_TABLE[key[j]])
+					if (c1 != c2)
 						goto FAILED;
+				}
+
 				return true;
 			}
 		}
@@ -357,9 +335,9 @@ class EntNode
 		return buffer;
 	}
 
-	void generateText(string& buffer, size_t wsIndex = 1)
+	void generateText(string& buffer, int wsIndex = 0)
 	{
-		buffer.append(TAB_TABLE[wsIndex]);
+		buffer.append(wsIndex, '\t');
 		buffer.append(textPtr, nameLength);
 		switch (TYPE)
 		{
@@ -399,25 +377,13 @@ class EntNode
 			wsIndex--; 	// Entitydef objects have no inner indentation
 			break;      // and their closing brace is one whitespace char backwards
 		}
-		size_t nextSize = wsIndex + 1;
-		if (nextSize == TAB_TABLE_LENGTH)
-		{
-			string* oldTable = TAB_TABLE;
-			size_t oldLength = TAB_TABLE_LENGTH;
-			TAB_TABLE_LENGTH *= 2;
-			TAB_TABLE = new string[TAB_TABLE_LENGTH];
-			for(size_t i = 0; i < oldLength; i++)
-				TAB_TABLE[i] = oldTable[i];
-			for(size_t i = oldLength; i < TAB_TABLE_LENGTH; i++)
-				TAB_TABLE[i] = TAB_TABLE[i-1] + '\t';
-			delete[] oldTable;
-		}
 		for (int i = 0; i < childCount; i++)
 		{
-			children[i]->generateText(buffer, nextSize);
+			children[i]->generateText(buffer, wsIndex + 1);
 			buffer.push_back('\n');
 		}
-		buffer.append(TAB_TABLE[wsIndex]);
+		if(wsIndex > 0) // If we generate entityDef text directly this will be -1
+			buffer.append(wsIndex, '\t');
 		buffer.push_back('}');
 	}
 };
