@@ -17,6 +17,7 @@ class EntityBookTab : public wxPanel
 {
 	public:
 	TabType type;
+	wxString tabName;
 	wxString filePath;
 	bool compressOnSave;
 	bool fileUpToDate;
@@ -39,8 +40,8 @@ class EntityBookTab : public wxPanel
 	wxDataViewCtrl* view;
 	EntityEditor* editor;
 
-	EntityBookTab(wxWindow* parent, const wxString& path = "")
-		: wxPanel(parent, wxID_ANY), filePath(path), fileUpToDate(true)
+	EntityBookTab(wxWindow* parent, const wxString name, const wxString& path = "")
+		: wxPanel(parent, wxID_ANY), tabName(name), filePath(path), fileUpToDate(true)
 	{
 		/* Initialize parser */
 		if (path == "") {
@@ -187,7 +188,12 @@ class EntityBookTab : public wxPanel
 		inheritMenu->refreshAutocomplete();
 	}
 
-	void onApplyFilters(wxCommandEvent& event) 
+	void onApplyFilters(wxCommandEvent& event)
+	{
+		applyFilters();
+	}
+
+	void applyFilters() 
 	{
 		/*
 		* It should be safe to apply filters without a commit check.

@@ -105,7 +105,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>./EntSlayer/;./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./EntHero/RPCInterface/;./EntSlayer/;./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -122,7 +122,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>./EntSlayer/;./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>./EntHero/RPCInterface/;./EntSlayer/;./wxwidget/include;./EntHero/;./Parser/;./wxWidget/include/msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -134,12 +134,16 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="EntHero\prefs.cpp" />
+    <ClCompile Include="EntHero\RPCInterface\meathook_interface_c.c" />
+    <ClCompile Include="EntHero\RPCInterface\mhclient.cpp" />
     <ClCompile Include="EntSlayer\Application.cpp" />
     <ClCompile Include="Parser\EntParserInitializations.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="EntHero\defsext.h" />
     <ClInclude Include="EntHero\prefs.h" />
+    <ClInclude Include="EntHero\RPCInterface\meathook_interface.h" />
+    <ClInclude Include="EntHero\RPCInterface\mhclient.h" />
     <ClInclude Include="EntSlayer\EntityBookTab.h" />
     <ClInclude Include="EntSlayer\EntityEditor.h" />
     <ClInclude Include="EntSlayer\EntityFrame.h" />

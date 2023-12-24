@@ -13,6 +13,9 @@
     <Filter Include="Source Files\EntSlayer">
       <UniqueIdentifier>{f8dc7a7e-0acc-4eeb-a0c3-50bbaa1923ea}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\EntHero\Meathook">
+      <UniqueIdentifier>{d37ee6db-e3f0-4b3e-9278-eaf89fb71895}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Parser\EntParserInitializations.cpp">
@@ -23,6 +26,12 @@
     </ClCompile>
     <ClCompile Include="EntSlayer\Application.cpp">
       <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
+    <ClCompile Include="EntHero\RPCInterface\meathook_interface_c.c">
+      <Filter>Source Files\EntHero\Meathook</Filter>
+    </ClCompile>
+    <ClCompile Include="EntHero\RPCInterface\mhclient.cpp">
+      <Filter>Source Files\EntHero\Meathook</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -61,6 +70,12 @@
     </ClInclude>
     <ClInclude Include="EntSlayer\FilterMenu.h">
       <Filter>Source Files\EntSlayer</Filter>
+    </ClInclude>
+    <ClInclude Include="EntHero\RPCInterface\meathook_interface.h">
+      <Filter>Source Files\EntHero\Meathook</Filter>
+    </ClInclude>
+    <ClInclude Include="EntHero\RPCInterface\mhclient.h">
+      <Filter>Source Files\EntHero\Meathook</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
