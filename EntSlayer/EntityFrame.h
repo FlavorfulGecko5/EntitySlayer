@@ -25,21 +25,24 @@ enum FrameID
 
 	EDIT_UNDO,
 	EDIT_REDO,
+	EDIT_NUMBERLISTS,
 
 	HELP_ABOUT,
 	HELP_MANUAL,
 
 	MEATHOOK_CHECKSTATUS,
-
 	MEATHOOK_MAKEACTIVETAB,
 	MEATHOOK_OPENFILE,
 	MEATHOOK_RELOAD,
+	MEATHOOK_GET_CHECKPOINT,
+	MEATHOOK_GET_ENCOUNTER
 };
 
 class EntityFrame : public wxFrame
 {
 	private:
 	wxMenu* fileMenu = new wxMenu;
+	wxMenu* editMenu = new wxMenu;
 	wxAuiNotebook* book;
 	EntityBookTab* activeTab = nullptr;
 	wxTextCtrl* log = nullptr;
@@ -73,17 +76,21 @@ class EntityFrame : public wxFrame
 			fileMenu->AppendSeparator();
 			fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save");
 
-			wxMenu* editMenu = new wxMenu;
 			editMenu->Append(EDIT_UNDO, "Undo\tCtrl+Z");
 			editMenu->Append(EDIT_REDO, "Redo\tCtrl+Y");
+			//editMenu->AppendSeparator();
+			//editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
 
 			mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Make Active Tab");
-			mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map");
-			mhMenu->Append(MEATHOOK_RELOAD, "Save and Reload Map\tCtrl+R");
+			mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O");
+			mhMenu->Append(MEATHOOK_RELOAD, "Save and Reload Map\tF5");
+			//mhMenu->AppendSeparator();
+			//mhMenu->Append(MEATHOOK_GET_CHECKPOINT, "Goto Checkpoint");
+			//mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Goto Current Encounter");
 
 			wxMenu* helpMenu = new wxMenu;
 			helpMenu->Append(HELP_ABOUT, "About");
-			helpMenu->Append(HELP_MANUAL, "&Manual\tCtrl+M");
+			helpMenu->Append(HELP_MANUAL, "&Manual");
 
 			wxMenuBar* bar = new wxMenuBar;
 			bar->Append(fileMenu, "File");
@@ -123,7 +130,8 @@ class EntityFrame : public wxFrame
 			statusbar->SetFieldsCount(1);
 
 			// Start Meathook Status Checking
-			RefreshMHMenu(); // Initial check so we don't need to wait for the first timer
+			// Initial check performed when first tab is added
+			// so we don't have to wait 5 seconds on launch
 			mhStatusTimer.SetOwner(this, MEATHOOK_CHECKSTATUS);
 			mhStatusTimer.Start(5000);
 		}
@@ -205,12 +213,8 @@ class EntityFrame : public wxFrame
 			return;
 		}
 
-		if (page == mhTab) {
-			 // Need these lines for newAndUntouched edge case
-			book->SetPageText(index, mhTab->tabName);
+		if (page == mhTab)
 			mhTab = nullptr;
-			RefreshMHMenu(); 
-		}
 
 		if (book->GetPageCount() == 1)
 		{
@@ -225,21 +229,16 @@ class EntityFrame : public wxFrame
 		int i = event.GetSelection();
 		wxLogMessage("Switching to page %i out of %zu", i + 1, book->GetPageCount());
 		activeTab = (EntityBookTab*)book->GetPage(i);
-		if(activeTab->filePath == "") SetTitle("EntitySlayer");
-		else SetTitle(activeTab->filePath + " - EntitySlayer");
-		switch (activeTab->type)
-		{
-			case TabType::NEW_FILE:
+		if(activeTab->filePath == "") {
+			SetTitle("EntitySlayer");
 			fileMenu->Enable(FILE_SAVE, false);
-			fileMenu->Enable(FILE_SAVEAS, true);
-			break;
-
-			case TabType::OPENED_FILE:
+		}
+		else {
+			SetTitle(activeTab->filePath + " - EntitySlayer");
 			fileMenu->Enable(FILE_SAVE, true);
-			fileMenu->Enable(FILE_SAVEAS, true);
-			break;
 		}
 		fileMenu->Check(FILE_COMPRESS, activeTab->compressOnSave);
+		//editMenu->Check(EDIT_NUMBERLISTS, activeTab->autoNumberLists);
 		RefreshMHMenu();
 	}
 
@@ -339,7 +338,6 @@ class EntityFrame : public wxFrame
 		}
 
 		// Reconfigure tab
-		activeTab->type = TabType::OPENED_FILE;
 		activeTab->tabName = saveFileDialog.GetFilename();
 		activeTab->filePath = path;
 		activeTab->fileUpToDate = false;
@@ -355,9 +353,17 @@ class EntityFrame : public wxFrame
 
 	void onCompressCheck(wxCommandEvent& event)
 	{
-		// TODO: NEED TO FORCE DECOMPRESSION WHEN USING MEATHOOK RELOAD
-		activeTab->compressOnSave = event.IsChecked();
-		activeTab->fileUpToDate = false; // Allows saving unedited file when compression toggled
+		if (activeTab == mhTab)
+		{
+			wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
+				"Oodle Compression", wxICON_WARNING | wxOK);
+			fileMenu->Check(FILE_COMPRESS, false);
+		}
+
+		else {
+			activeTab->compressOnSave = event.IsChecked();
+			activeTab->fileUpToDate = false; // Allows saving unedited file when compression toggled
+		}
 	}
 
 	void onUndoRedo(wxCommandEvent& event)
@@ -372,6 +378,11 @@ class EntityFrame : public wxFrame
 			else textWindow->Redo();
 		}
 		else activeTab->UndoRedo(undo);
+	}
+
+	void onNumberListCheck(wxCommandEvent& event)
+	{
+		activeTab->autoNumberLists = event.IsChecked();
 	}
 
 	void onAbout(wxCommandEvent& event)
@@ -404,13 +415,25 @@ class EntityFrame : public wxFrame
 
 	void onSetMHTab(wxCommandEvent& event)
 	{
-		int activeIndex = book->GetPageIndex(activeTab);
-		if (event.IsChecked()) {
-			book->SetPageText(activeIndex, "[Meathook] " + activeTab->tabName);
+		// Clear the old mhTab if there is one
+		if (mhTab != nullptr) {
+			int index = book->GetPageIndex(mhTab);
+			book->SetPageText(index, mhTab->tabName);
+			mhTab = nullptr;
+		}
 
-			int oldIndex = book->GetPageIndex(mhTab);
-			book->SetPageText(oldIndex, mhTab->tabName);
+		if (event.IsChecked()) {
+			int activeIndex = book->GetPageIndex(activeTab);
+			book->SetPageText(activeIndex, "[Meathook] " + activeTab->tabName);
 			mhTab = activeTab;
+
+			if (mhTab->compressOnSave) {
+				wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.", 
+					"Oodle Compression", wxICON_WARNING | wxOK);
+				fileMenu->Check(FILE_COMPRESS, false);
+				mhTab->compressOnSave = false;
+				mhTab->fileUpToDate = false;
+			}
 
 			/*
 			* Due to inadequacies in the RPC server code, we must call GetEntitiesFile
@@ -438,10 +461,6 @@ class EntityFrame : public wxFrame
 			}
 
 		}
-		else {
-			book->SetPageText(activeIndex, mhTab->tabName);
-			mhTab = nullptr;
-		}
 		RefreshMHMenu();
 	}
 
@@ -464,7 +483,7 @@ class EntityFrame : public wxFrame
 		bool online = meathook.m_Initialized || DEBUG_SIMULATE_ONLINE;
 		statusbar->SetStatusText(mhText_Preface + (online ? mhText_Active : mhText_Inactive));
 
-		mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online);
+		mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != ""); // Tabs with no file shouldn't be useable with mh
 		mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab == mhTab);
 		mhMenu->Enable(MEATHOOK_OPENFILE, online);
 		mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab == mhTab);
@@ -487,6 +506,7 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_COMPRESS, EntityFrame::onCompressCheck)
 	EVT_MENU(EDIT_UNDO, EntityFrame::onUndoRedo)
 	EVT_MENU(EDIT_REDO, EntityFrame::onUndoRedo)
+	EVT_MENU(EDIT_NUMBERLISTS, EntityFrame::onNumberListCheck)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
 	EVT_MENU(HELP_MANUAL, EntityFrame::onManual)
 

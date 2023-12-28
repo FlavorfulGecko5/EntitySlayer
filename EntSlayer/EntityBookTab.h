@@ -3,11 +3,6 @@
 #include "wx/splitter.h"
 #include "EntityModel.h"
 
-enum TabType {
-	NEW_FILE,
-	OPENED_FILE,
-};
-
 enum TabID {
 	TAB_MINIMUM = wxID_HIGHEST + 1,
 	BTN_APPLYFILTERS
@@ -16,11 +11,11 @@ enum TabID {
 class EntityBookTab : public wxPanel
 {
 	public:
-	TabType type;
 	wxString tabName;
 	wxString filePath;
+	bool fileUpToDate = true;
 	bool compressOnSave;
-	bool fileUpToDate;
+	bool autoNumberLists = true;
 
 	FilterCtrl* layerMenu;
 	FilterCtrl* classMenu;
@@ -41,17 +36,13 @@ class EntityBookTab : public wxPanel
 	EntityEditor* editor;
 
 	EntityBookTab(wxWindow* parent, const wxString name, const wxString& path = "")
-		: wxPanel(parent, wxID_ANY), tabName(name), filePath(path), fileUpToDate(true)
+		: wxPanel(parent, wxID_ANY), tabName(name), filePath(path)
 	{
 		/* Initialize parser */
-		if (path == "") {
-			type = TabType::NEW_FILE;
+		if (path == "") 
 			parser = new EntityParser();
-		}
-		else {
-			type = TabType::OPENED_FILE;
+		else
 			parser = new EntityParser(std::string(path));
-		}
 		compressOnSave = parser->wasFileCompressed();
 		root = parser->getRoot();
 		model = new EntityModel(root);
@@ -173,7 +164,7 @@ class EntityBookTab : public wxPanel
 
 	bool IsNewAndUntouched()
 	{
-		return type == TabType::NEW_FILE && fileUpToDate && !editor->Modified();
+		return filePath == "" && fileUpToDate && !editor->Modified();
 	}
 
 	bool UnsavedChanges()
@@ -246,7 +237,7 @@ class EntityBookTab : public wxPanel
 
 	void saveFile()
 	{
-		if(type != TabType::OPENED_FILE) return;
+		if(filePath == "") return;
 
 		int commitResult = CommitEdits();
 		if(commitResult > 0)
