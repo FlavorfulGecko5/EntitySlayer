@@ -137,6 +137,10 @@
     <ClCompile Include="EntHero\RPCInterface\meathook_interface_c.c" />
     <ClCompile Include="EntHero\RPCInterface\mhclient.cpp" />
     <ClCompile Include="EntSlayer\Application.cpp" />
+    <ClCompile Include="EntSlayer\EntityEditor.cpp" />
+    <ClCompile Include="EntSlayer\EntityFrame.cpp" />
+    <ClCompile Include="EntSlayer\EntityTab.cpp" />
+    <ClCompile Include="EntSlayer\FilterMenus.cpp" />
     <ClCompile Include="Parser\EntParserInitializations.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -144,11 +148,11 @@
     <ClInclude Include="EntHero\prefs.h" />
     <ClInclude Include="EntHero\RPCInterface\meathook_interface.h" />
     <ClInclude Include="EntHero\RPCInterface\mhclient.h" />
-    <ClInclude Include="EntSlayer\EntityBookTab.h" />
+    <ClInclude Include="EntSlayer\EntityTab.h" />
     <ClInclude Include="EntSlayer\EntityEditor.h" />
     <ClInclude Include="EntSlayer\EntityFrame.h" />
     <ClInclude Include="EntSlayer\EntityModel.h" />
-    <ClInclude Include="EntSlayer\FilterMenu.h" />
+    <ClInclude Include="EntSlayer\FilterMenus.h" />
     <ClInclude Include="Parser\EntityLogger.h" />
     <ClInclude Include="Parser\EntityNode.h" />
     <ClInclude Include="Parser\EntityParser.h" />

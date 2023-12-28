@@ -33,6 +33,18 @@
     <ClCompile Include="EntHero\RPCInterface\mhclient.cpp">
       <Filter>Source Files\EntHero\Meathook</Filter>
     </ClCompile>
+    <ClCompile Include="EntSlayer\EntityEditor.cpp">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
+    <ClCompile Include="EntSlayer\EntityFrame.cpp">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
+    <ClCompile Include="EntSlayer\EntityTab.cpp">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
+    <ClCompile Include="EntSlayer\FilterMenus.cpp">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser\EntityLogger.h">
@@ -56,7 +68,7 @@
     <ClInclude Include="EntHero\prefs.h">
       <Filter>Source Files\EntHero</Filter>
     </ClInclude>
-    <ClInclude Include="EntSlayer\EntityBookTab.h">
+    <ClInclude Include="EntSlayer\EntityTab.h">
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
     <ClInclude Include="EntSlayer\EntityEditor.h">
@@ -68,7 +80,7 @@
     <ClInclude Include="EntSlayer\EntityModel.h">
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
-    <ClInclude Include="EntSlayer\FilterMenu.h">
+    <ClInclude Include="EntSlayer\FilterMenus.h">
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
     <ClInclude Include="EntHero\RPCInterface\meathook_interface.h">

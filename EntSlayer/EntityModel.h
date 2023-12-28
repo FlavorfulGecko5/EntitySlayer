@@ -1,7 +1,6 @@
 #include "wx/wx.h"
 #include "wx/dataview.h"
 #include "EntityEditor.h"
-#include "FilterMenu.h"
 #include <set>
 
 struct Sphere {
