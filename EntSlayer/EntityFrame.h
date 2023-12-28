@@ -55,8 +55,6 @@ class EntityFrame : public wxFrame
 	wxString mhText_Preface;
 	wxString mhText_Active = "Connected";
 	wxString mhText_Inactive = "Inactive";
-	EntityBookTab* mhTab = nullptr;
-	
 
 	public:
 	EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
@@ -213,9 +211,6 @@ class EntityFrame : public wxFrame
 			return;
 		}
 
-		if (page == mhTab)
-			mhTab = nullptr;
-
 		if (book->GetPageCount() == 1)
 		{
 			if (activeTab->IsNewAndUntouched())
@@ -345,7 +340,7 @@ class EntityFrame : public wxFrame
 
 		// Reconfigure Book's perspective of tab
 		int tabIndex = book->GetSelection();
-		if (activeTab == mhTab) book->SetPageText(tabIndex, "[Meathook] " + activeTab->tabName);
+		if (activeTab->usingMH) book->SetPageText(tabIndex, "[Meathook] " + activeTab->tabName);
 		else book->SetPageText(tabIndex, activeTab->tabName);
 		SetTitle(activeTab->filePath + " - EntitySlayer");
 		fileMenu->Enable(FILE_SAVE, true);
@@ -353,7 +348,7 @@ class EntityFrame : public wxFrame
 
 	void onCompressCheck(wxCommandEvent& event)
 	{
-		if (activeTab == mhTab)
+		if (activeTab->usingMH)
 		{
 			wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
 				"Oodle Compression", wxICON_WARNING | wxOK);
@@ -416,23 +411,26 @@ class EntityFrame : public wxFrame
 	void onSetMHTab(wxCommandEvent& event)
 	{
 		// Clear the old mhTab if there is one
-		if (mhTab != nullptr) {
-			int index = book->GetPageIndex(mhTab);
-			book->SetPageText(index, mhTab->tabName);
-			mhTab = nullptr;
+		for (size_t i = 0, max = book->GetPageCount(); i < max; i++)
+		{
+			EntityBookTab* page = (EntityBookTab*)book->GetPage(i);
+			if (page->usingMH) {
+				page->usingMH = false;
+				book->SetPageText(i, page->tabName);
+			}
 		}
 
 		if (event.IsChecked()) {
 			int activeIndex = book->GetPageIndex(activeTab);
 			book->SetPageText(activeIndex, "[Meathook] " + activeTab->tabName);
-			mhTab = activeTab;
+			activeTab->usingMH = true;
 
-			if (mhTab->compressOnSave) {
+			if (activeTab->compressOnSave) {
 				wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.", 
 					"Oodle Compression", wxICON_WARNING | wxOK);
 				fileMenu->Check(FILE_COMPRESS, false);
-				mhTab->compressOnSave = false;
-				mhTab->fileUpToDate = false;
+				activeTab->compressOnSave = false;
+				activeTab->fileUpToDate = false;
 			}
 
 			/*
@@ -467,10 +465,10 @@ class EntityFrame : public wxFrame
 	void onReloadMH(wxCommandEvent& event)
 	{
 		wxLogMessage("Reload function called");
-		mhTab->saveFile();
+		activeTab->saveFile();
 
 		char Directory[MAX_PATH];
-		string pathString = string(mhTab->filePath);
+		string pathString = string(activeTab->filePath);
 		memcpy(&Directory[0], pathString.data(), pathString.length());
 		Directory[pathString.length()] = '\0'; 
 
@@ -484,9 +482,9 @@ class EntityFrame : public wxFrame
 		statusbar->SetStatusText(mhText_Preface + (online ? mhText_Active : mhText_Inactive));
 
 		mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != ""); // Tabs with no file shouldn't be useable with mh
-		mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab == mhTab);
+		mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab->usingMH);
 		mhMenu->Enable(MEATHOOK_OPENFILE, online);
-		mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab == mhTab);
+		mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab->usingMH);
 	}
 
 	private:
