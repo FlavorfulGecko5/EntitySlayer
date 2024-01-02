@@ -25,7 +25,6 @@ class FilterListCombo : public wxCheckListBox, public wxComboPopup
 				value.Append(GetString(i));
 				value.Append(',');
 			}
-				
 		return value;
 	}
 
@@ -36,6 +35,7 @@ class FilterListCombo : public wxCheckListBox, public wxComboPopup
 };
 
 class EntityTab;
+struct Sphere;
 class FilterCtrl : public wxComboCtrl
 {
 	public:
@@ -47,6 +47,25 @@ class FilterCtrl : public wxComboCtrl
 
 	FilterCtrl(EntityTab* tab, wxWindow* parent, const wxString& labelText, bool isTextKeyBox);
 	void refreshAutocomplete();
+	void deleteUnchecked();
+	void uncheckAll();
 	void onListLeftDown(wxMouseEvent& event);
 	void onQuickInputEnter(wxCommandEvent& event);
+};
+
+class SpawnFilter : public wxBoxSizer 
+{
+	private:
+	EntityTab* owner;
+	wxCheckBox* toggle;
+	wxTextCtrl* inputs[4];
+	
+	public:
+	SpawnFilter(EntityTab* tab, wxWindow* parent);
+	bool getData(Sphere& sphere);
+	bool activated();
+	void deactivate();
+
+	void onCheckbox(wxCommandEvent &event);
+	void onInputText(wxCommandEvent &event);
 };

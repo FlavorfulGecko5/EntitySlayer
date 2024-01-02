@@ -4,6 +4,7 @@
 #include "EntityModel.h"
 
 class FilterCtrl;
+class SpawnFilter;
 class EntityTab : public wxPanel
 {
 	public:
@@ -17,14 +18,11 @@ class EntityTab : public wxPanel
 	FilterCtrl* layerMenu;
 	FilterCtrl* classMenu;
 	FilterCtrl* inheritMenu;
-	wxCheckBox* spawnCheck;
-	wxTextCtrl* xInput;
-	wxTextCtrl* yInput;
-	wxTextCtrl* zInput;
-	wxTextCtrl* rInput;
-
 	FilterCtrl* keyMenu;
 	wxCheckBox* caseSensCheck;
+	SpawnFilter* spawnMenu;
+
+
 
 	EntityParser* parser;
 	EntNode* root;
@@ -37,8 +35,11 @@ class EntityTab : public wxPanel
 	bool IsNewAndUntouched();
 	bool UnsavedChanges();
 	void refreshFilters();
-	void onApplyFilters(wxCommandEvent& event);
-	void applyFilters();
+	void onFilterCaseCheck(wxCommandEvent& event);
+	void onFilterDelKeys(wxCommandEvent& event);
+	void onFilterRefresh(wxCommandEvent& event);
+	void onFilterClearAll(wxCommandEvent& event);
+	bool applyFilters(bool clearAll);
 	void saveFile();
 	int CommitEdits();
 	void UndoRedo(bool undo);

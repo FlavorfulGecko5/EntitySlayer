@@ -1,15 +1,8 @@
 #include "EntityTab.h"
 #include "FilterMenus.h"
 
-enum TabID {
-	TAB_MINIMUM = wxID_HIGHEST + 1,
-	BTN_APPLYFILTERS
-};
-
 wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
 	EVT_COLLAPSIBLEPANE_CHANGED(wxID_ANY, onFilterMenuShowHide)
-
-	EVT_BUTTON(BTN_APPLYFILTERS, onApplyFilters)
 
 	EVT_DATAVIEW_SELECTION_CHANGED(wxID_ANY, onNodeSelection)
 	EVT_DATAVIEW_ITEM_ACTIVATED(wxID_ANY, onNodeActivation)
@@ -45,58 +38,53 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		refreshFilters();
 
 		/* Spawn Position Filter */
-		wxBoxSizer* spawnFilterSizer = new wxBoxSizer(wxVERTICAL);
-		{
-			spawnCheck = new wxCheckBox(topWindow, wxID_ANY, "Spawn Position Distance");
-			wxStaticText* xLabel = new wxStaticText(topWindow, wxID_ANY, "     x");
-			wxStaticText* yLabel = new wxStaticText(topWindow, wxID_ANY, "     y");
-			wxStaticText* zLabel = new wxStaticText(topWindow, wxID_ANY, "     z");
-			wxStaticText* rLabel = new wxStaticText(topWindow, wxID_ANY, "Radius");
-			xInput = new wxTextCtrl(topWindow, wxID_ANY);
-			yInput = new wxTextCtrl(topWindow, wxID_ANY);
-			zInput = new wxTextCtrl(topWindow, wxID_ANY);
-			rInput = new wxTextCtrl(topWindow, wxID_ANY);
-			wxBoxSizer* xSizer = new wxBoxSizer(wxHORIZONTAL);
-			wxBoxSizer* ySizer = new wxBoxSizer(wxHORIZONTAL);
-			wxBoxSizer* zSizer = new wxBoxSizer(wxHORIZONTAL);
-			wxBoxSizer* rSizer = new wxBoxSizer(wxHORIZONTAL);
-
-			xSizer->Add(xLabel, wxLEFT | wxRIGHT, 5);
-			xSizer->Add(xInput, wxLEFT | wxRIGHT, 5);
-			ySizer->Add(yLabel, wxLEFT | wxRIGHT, 5);
-			ySizer->Add(yInput, wxLEFT | wxRIGHT, 5);
-			zSizer->Add(zLabel, wxLEFT | wxRIGHT, 5);
-			zSizer->Add(zInput, wxLEFT | wxRIGHT, 5);
-			rSizer->Add(rLabel, wxLEFT | wxRIGHT, 5);
-			rSizer->Add(rInput, wxLEFT | wxRIGHT, 5);
-
-			spawnFilterSizer->Add(spawnCheck);
-			spawnFilterSizer->Add(xSizer);
-			spawnFilterSizer->Add(ySizer);
-			spawnFilterSizer->Add(zSizer);
-			spawnFilterSizer->Add(rSizer);
-		}
+		spawnMenu = new SpawnFilter(this, topWindow);
 
 		/* Text Filter */
 		wxBoxSizer* textFilterSizer = new wxBoxSizer(wxVERTICAL);
 		{
 			keyMenu = new FilterCtrl(this, topWindow, "Text Key", true);
+
 			caseSensCheck = new wxCheckBox(topWindow, wxID_ANY, "Case Sensitive");
 			caseSensCheck->SetValue(true);
+			caseSensCheck->Bind(wxEVT_CHECKBOX, &EntityTab::onFilterCaseCheck, this);
+
+			wxButton* delKeysBtn = new wxButton(topWindow, wxID_ANY, "Delete Unchecked Text Keys");
+			delKeysBtn->Bind(wxEVT_BUTTON, &EntityTab::onFilterDelKeys, this);
+
+			wxBoxSizer* bottomRow = new wxBoxSizer(wxHORIZONTAL);
+			bottomRow->Add(caseSensCheck);
+			bottomRow->Add(delKeysBtn);
 
 			textFilterSizer->Add(keyMenu->container, 1, wxEXPAND);
-			textFilterSizer->Add(caseSensCheck);
+			//textFilterSizer->Add(caseSensCheck);
+			textFilterSizer->Add(bottomRow, 0, wxTOP, 2);
 		}
 
+		// TODO: Find a more polished layout for these buttons
+		wxBoxSizer* otherButtons = new wxBoxSizer(wxVERTICAL);
+		{
+			wxButton* clearButton = new wxButton(topWindow, wxID_ANY, "Clear All Filters");
+			clearButton->Bind(wxEVT_BUTTON, &EntityTab::onFilterClearAll, this);
+
+			wxButton* refreshButton = new wxButton(topWindow, wxID_ANY, "Refresh Filter Lists");
+			refreshButton->Bind(wxEVT_BUTTON, &EntityTab::onFilterRefresh, this);
+			
+			otherButtons->Add(clearButton, 0, wxALL, 10);
+			otherButtons->Add(refreshButton, 0, wxALL, 10);
+		}
+		wxBoxSizer* compact = new wxBoxSizer(wxHORIZONTAL);
+		compact->Add(spawnMenu);
+		compact->Add(otherButtons, 0, wxLEFT, 5);
+
 		wxBoxSizer* secondRowSizer = new wxBoxSizer(wxHORIZONTAL);
-		secondRowSizer->Add(textFilterSizer, 1, wxALL, 10); // Ensures 1/3rd horizontal space
-		secondRowSizer->Add(spawnFilterSizer, 2, wxALL, 15); // (alignment with checklists)
+		secondRowSizer->Add(textFilterSizer, 1, wxALL, 10);
+		secondRowSizer->Add(compact, 2, wxALL, 10);
 
 		/* Put everything together */
 		wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
 		topSizer->Add(checklistSizer, 0, wxEXPAND);
 		topSizer->Add(secondRowSizer, 0, wxEXPAND);
-		topSizer->Add(new wxButton(topWindow, TabID::BTN_APPLYFILTERS, "Apply"), 0, wxALL, 10);
 		topWindow->SetSizerAndFit(topSizer);
 	}
 
@@ -153,6 +141,12 @@ bool EntityTab::UnsavedChanges()
 	return !fileUpToDate || editor->Modified();
 }
 
+void EntityTab::onFilterRefresh(wxCommandEvent& event)
+{
+	// Edge Case: should we force a commit before refreshing?
+	refreshFilters();
+}
+
 void EntityTab::refreshFilters() {
 	model->refreshFilterMenus(layerMenu->list, classMenu->list, inheritMenu->list);
 	layerMenu->refreshAutocomplete();
@@ -160,12 +154,23 @@ void EntityTab::refreshFilters() {
 	inheritMenu->refreshAutocomplete();
 }
 
-void EntityTab::onApplyFilters(wxCommandEvent& event)
+void EntityTab::onFilterCaseCheck(wxCommandEvent& event)
 {
-	applyFilters();
+	if (!applyFilters(false))
+		caseSensCheck->SetValue(!event.IsChecked());
 }
 
-void EntityTab::applyFilters()
+void EntityTab::onFilterDelKeys(wxCommandEvent& event)
+{
+	keyMenu->deleteUnchecked();
+}
+
+void EntityTab::onFilterClearAll(wxCommandEvent& event)
+{
+	applyFilters(true);
+}
+
+bool EntityTab::applyFilters(bool clearAll)
 {
 	/*
 	* It should be safe to apply filters without a commit check.
@@ -174,46 +179,39 @@ void EntityTab::applyFilters()
 	*
 	* Unclear if these leaks are present in release builds. However, better to be
 	* safe than sorry for preventing unclear behavior.
+	* 
+	* TODO: if there is an error, the new responsive filter menus will become desynced
+	* with the actual applied filters. Adjust for this later
 	*/
 	if (CommitEdits() < 0)
 	{
 		wxMessageBox("Please fix syntax errors before applying new filters.", "Cannot Change Filters",
 			wxICON_WARNING | wxOK);
-		return;
+		return false;
 	}
 	else editor->SetActiveNode(nullptr);
 	parser->ClearUndoStack(); // Must clear undo stack for the same reason as above
 
-	bool newSpawnFilterSetting = spawnCheck->IsChecked();
-	Sphere newSphere;
-
-	if (newSpawnFilterSetting)
+	if (clearAll)
 	{
-		wxString stringX = xInput->GetValue(),
-			stringY = yInput->GetValue(),
-			stringZ = zInput->GetValue(),
-			stringR = rInput->GetValue();
-		try {
-			newSphere.x = stof(string(stringX));
-			newSphere.y = stof(string(stringY));
-			newSphere.z = stof(string(stringZ));
-			newSphere.r = stof(string(stringR));
-		}
-		catch (exception) {
-			newSpawnFilterSetting = false;
-			spawnCheck->SetValue(false);
-			wxMessageBox("Could not convert one or more fields to numbers", "Spawn Position Filtering Failed",
-				wxICON_WARNING | wxOK);
-		}
+		inheritMenu->uncheckAll();
+		classMenu->uncheckAll();
+		layerMenu->uncheckAll();
+		keyMenu->uncheckAll();
+		spawnMenu->deactivate();
 	}
 
+	Sphere newSphere;
+	bool filterSpawns = spawnMenu->activated() && spawnMenu->getData(newSphere);
+
 	model->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list,
-		newSpawnFilterSetting, newSphere, keyMenu->list, caseSensCheck->IsChecked());
+		filterSpawns, newSphere, keyMenu->list, caseSensCheck->IsChecked());
 	wxDataViewItem p(nullptr); // Todo: should try to improve this so we don't destroy entire root
 	wxDataViewItem r(root);
 	model->ItemDeleted(p, r);
 	model->ItemAdded(p, r);
 	view->Expand(r);
+	return true;
 }
 
 void EntityTab::saveFile()

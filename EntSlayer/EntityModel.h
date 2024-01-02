@@ -26,12 +26,12 @@ class EntityModel : public wxDataViewModel {
 	vector<string> textFilters;
 	bool caseSensitiveText = true;
 
+	/* 
+	* Checks for newly created layers/classes/inherits and adds them to their respective filter checklists
+	* Previously identified values are NOT removed from the checklists
+	*/
 	void refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu)
 	{
-		layerMenu->Clear(); // Todo: make sure already-checked items are properly re-checked on refresh
-		classMenu->Clear();
-		inheritMenu->Clear();
-
 		set<string_view> newLayers;
 		set<string_view> newClasses;
 		set<string_view> newInherits;
@@ -43,13 +43,14 @@ class EntityModel : public wxDataViewModel {
 		for (int i = 0; i < childCount; i++)
 		{
 			EntNode* current = children[i];
+			EntNode& defNode = (*current)["entityDef"];
 			{
-				EntNode& classNode = (*current)["entityDef"]["class"];
+				EntNode& classNode = defNode["class"];
 				if (classNode.ValueLength() > 0)
 					newClasses.insert(classNode.getValueUQ());
 			}
 			{
-				EntNode& inheritNode = (*current)["entityDef"]["inherit"];
+				EntNode& inheritNode = defNode["inherit"];
 				if (inheritNode.ValueLength() > 0)
 					newInherits.insert(inheritNode.getValueUQ());
 			}
@@ -63,23 +64,28 @@ class EntityModel : public wxDataViewModel {
 						newLayers.insert(layerBuffer[currentLayer]->getNameUQ());
 				}
 			}
-
 		}
 
-		wxArrayString layerArray;
-		for(string_view s : newLayers)
-			layerArray.push_back(wxString(s.data(), s.length()));
-		layerMenu->Append(layerArray);
+		for (string_view view : newLayers)
+		{
+			wxString s(view.data(), view.length());
+			if(layerMenu->FindString(s, true) < 0)
+				layerMenu->Append(s);
+		}
 
-		wxArrayString classArray;
-		for(string_view s : newClasses)
-			classArray.push_back(wxString(s.data(), s.length()));
-		classMenu->Append(classArray);
+		for (string_view view : newClasses)
+		{
+			wxString s(view.data(), view.length());
+			if (classMenu->FindString(s, true) < 0)
+				classMenu->Append(s);
+		}
 
-		wxArrayString inheritArray;
-		for(string_view s : newInherits)
-			inheritArray.push_back(wxString(s.data(), s.length()));
-		inheritMenu->Append(inheritArray);
+		for (string_view view : newInherits)
+		{
+			wxString s(view.data(), view.length());
+			if (inheritMenu->FindString(s, true) < 0)
+				inheritMenu->Append(s);
+		}
 	}
 
 	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu,
@@ -224,11 +230,11 @@ class EntityModel : public wxDataViewModel {
 
 				if (filterSpawnPosition)
 				{
-					// If spawnPosition is undefined, we exclude (instead of assuming (0, 0, 0))
 					// If a variable is undefined, we assume default value of 0
+					// If spawnPosition is undefined, we assume (0, 0, 0) instead of excluding
 					EntNode& positionNode = (*childBuffer[i])["entityDef"]["edit"]["spawnPosition"];
-					if(&positionNode == EntNode::SEARCH_404)
-						continue;
+					//if(&positionNode == EntNode::SEARCH_404)
+					//	continue;
 					EntNode& xNode = positionNode["x"];
 					EntNode& yNode = positionNode["y"];
 					EntNode& zNode = positionNode["z"];
