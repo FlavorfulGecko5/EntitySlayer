@@ -1,8 +1,6 @@
-#pragma once
 #include <vector>
 #include <string>
 #include <sstream>
-using namespace std;
 
 /*
 * Realistically speaking, this allocator has some flaws that require
@@ -14,10 +12,10 @@ template <typename T>
 class BlockAllocator
 {
 	private:
-	vector<T*> blockStarts; // Sorted starting addresses of deallocated blocks
-	vector<T*> blockEnds;   // Sorted ending addresses of deallocated blocks
+	std::vector<T*> blockStarts; // Sorted starting addresses of deallocated blocks
+	std::vector<T*> blockEnds;   // Sorted ending addresses of deallocated blocks
 
-	vector<T*> allBuffers; // Contains every buffer made by this allocator
+	std::vector<T*> allBuffers; // Contains every buffer made by this allocator
 	const size_t NEW_BUFFER_LENGTH;
 
 	T* buffer; // Active buffer
@@ -38,9 +36,9 @@ class BlockAllocator
 			delete[] buff; 
 	}
 
-	string toString(bool includeBlockList)
+	std::string toString(bool includeBlockList)
 	{
-		ostringstream buffer;
+		std::ostringstream buffer;
 		buffer << "Number of Buffers: " << allBuffers.size();
 		buffer << "\nActive Buffer Status: " << used << " / " << max << " (used / max)";
 		buffer << "\nNew Buffer Sizes: " << NEW_BUFFER_LENGTH;
@@ -162,7 +160,7 @@ class BlockAllocator
 	* 
 	* @returns true if the target is already inside the vector, otherwise false
 	*/
-	bool binarySearch(vector<T*> &list, T* target, size_t minimum, size_t maximum, size_t &finalPosition) 
+	bool binarySearch(std::vector<T*> &list, T* target, size_t minimum, size_t maximum, size_t &finalPosition)
 	{
 		while (minimum < maximum) {
 			size_t midPoint = minimum + (maximum - minimum) / 2; // Truncation means the left value is favored.

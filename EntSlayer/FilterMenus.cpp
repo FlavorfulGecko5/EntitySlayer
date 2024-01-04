@@ -131,12 +131,12 @@ bool SpawnFilter::getData(Sphere& sphere)
 		stringZ = inputs[2]->GetValue(),
 		stringR = inputs[3]->GetValue();
 	try { // Todo: Ensure this function is as thorough as needed
-		sphere.x = stof(string(stringX));
-		sphere.y = stof(string(stringY));
-		sphere.z = stof(string(stringZ));
-		sphere.r = stof(string(stringR));
+		sphere.x = stof(std::string(stringX));
+		sphere.y = stof(std::string(stringY));
+		sphere.z = stof(std::string(stringZ));
+		sphere.r = stof(std::string(stringR));
 	}
-	catch (exception) {
+	catch (std::exception) {
 		toggle->SetValue(false);
 		wxMessageBox("Could not convert one or more fields to numbers", 
 			"Spawn Position Filtering Failed", wxICON_WARNING | wxOK);

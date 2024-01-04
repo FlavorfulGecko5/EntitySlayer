@@ -1,3 +1,4 @@
+#include "Oodle.h"
 #include "EntityFrame.h"
 #include "EntityTab.h"
 
@@ -22,7 +23,9 @@ enum FrameID
 	MEATHOOK_OPENFILE,
 	MEATHOOK_RELOAD,
 	MEATHOOK_GET_CHECKPOINT,
-	MEATHOOK_GET_ENCOUNTER
+	MEATHOOK_GET_ENCOUNTER,
+
+	SPECIAL_PROPMOVERS
 };
 
 wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
@@ -46,6 +49,8 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(MEATHOOK_MAKEACTIVETAB, EntityFrame::onSetMHTab)
 	EVT_MENU(MEATHOOK_OPENFILE, EntityFrame::onMeathookOpen) 
 	EVT_MENU(MEATHOOK_RELOAD, EntityFrame::onReloadMH)
+
+	EVT_MENU(SPECIAL_PROPMOVERS, EntityFrame::onSpecial_PropMovers)
 wxEND_EVENT_TABLE()
 
 EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
@@ -67,8 +72,8 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 
 		editMenu->Append(EDIT_UNDO, "Undo\tCtrl+Z");
 		editMenu->Append(EDIT_REDO, "Redo\tCtrl+Y");
-		//editMenu->AppendSeparator();
-		//editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
+		editMenu->AppendSeparator();
+		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
 
 		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Make Active Tab");
 		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O");
@@ -76,6 +81,9 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		//mhMenu->AppendSeparator();
 		//mhMenu->Append(MEATHOOK_GET_CHECKPOINT, "Goto Checkpoint");
 		//mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Goto Current Encounter");
+
+		//wxMenu* specialMenu = new wxMenu;
+		//specialMenu->Append(SPECIAL_PROPMOVERS, "Bind idProp2 Entities to idMovers");
 
 		wxMenu* helpMenu = new wxMenu;
 		helpMenu->Append(HELP_ABOUT, "About");
@@ -85,6 +93,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		bar->Append(fileMenu, "File");
 		bar->Append(editMenu, "Edit");
 		bar->Append(mhMenu, "Meathook");
+		//bar->Append(specialMenu, "Advanced");
 		bar->Append(helpMenu, "Help");
 		SetMenuBar(bar);
 	}
@@ -224,7 +233,7 @@ void EntityFrame::onTabChanged(wxAuiNotebookEvent& event)
 		fileMenu->Enable(FILE_SAVE, true);
 	}
 	fileMenu->Check(FILE_COMPRESS, activeTab->compressOnSave);
-	//editMenu->Check(EDIT_NUMBERLISTS, activeTab->autoNumberLists);
+	editMenu->Check(EDIT_NUMBERLISTS, activeTab->autoNumberLists);
 	RefreshMHMenu();
 }
 
@@ -265,7 +274,7 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 		}
 		else book->AddPage(newTab, newTab->tabName, true);
 	}
-	catch (runtime_error e) {
+	catch (std::runtime_error e) {
 		wxString msg = wxString::Format("File Opening Cancelled\n\n%s", e.what());
 		wxMessageBox(msg, "Error", wxICON_ERROR | wxOK | wxCENTER, this);
 	}
@@ -279,13 +288,13 @@ void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 
 	// This will be a newly created temp. file dumped from meathook,
 	// so we can skip some safety checks we need for ordinary files
-	string filePath(Path, PathSize);
+	std::string filePath(Path, PathSize);
 
 	size_t delimiter = filePath.find_last_of('\\') + 1;
-	if (delimiter == string::npos)
+	if (delimiter == std::string::npos)
 		delimiter = filePath.find_last_of('/') + 1;
 
-	string tabName = filePath.substr(delimiter, filePath.length() - delimiter);
+	std::string tabName = filePath.substr(delimiter, filePath.length() - delimiter);
 
 	EntityTab* newTab = new EntityTab(book, "[TEMPORARY FILE] " + tabName, filePath);
 	if (activeTab->IsNewAndUntouched())
@@ -375,7 +384,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 5.0 [Filter/Editor Polish, MH+Oodle Interaction + Internal Refactoring]");
+	info.SetVersion("Alpha 6.0 [Automatic idList Renumbering - Closed Testing Build]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -459,7 +468,7 @@ void EntityFrame::onReloadMH(wxCommandEvent& event)
 	activeTab->saveFile();
 
 	char Directory[MAX_PATH];
-	string pathString = string(activeTab->filePath);
+	std::string pathString = std::string(activeTab->filePath);
 	memcpy(&Directory[0], pathString.data(), pathString.length());
 	Directory[pathString.length()] = '\0';
 
@@ -476,4 +485,9 @@ void EntityFrame::RefreshMHMenu()
 	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab->usingMH);
 	mhMenu->Enable(MEATHOOK_OPENFILE, online);
 	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab->usingMH);
+}
+
+void EntityFrame::onSpecial_PropMovers(wxCommandEvent &event)
+{
+	activeTab->action_PropMovers();
 }

@@ -2,6 +2,7 @@
 #include "wx/dataview.h"
 #include <EntityParser.h>
 #include <set>
+#include <chrono>
 
 struct Sphere {
 	float x = 0;
@@ -16,14 +17,14 @@ class EntityModel : public wxDataViewModel {
 	static inline const std::string FILTER_NOLAYERS = "\"No Layers\"";
 	EntNode* root;
 
-	set<std::string> classFilters = {};
-	set<std::string> inheritFilters = {};
-	set<std::string> layerFilters = {};
+	std::set<std::string> classFilters = {};
+	std::set<std::string> inheritFilters = {};
+	std::set<std::string> layerFilters = {};
 
 	bool filterSpawnPosition = false;
 	Sphere spawnSphere;
 
-	vector<string> textFilters;
+	std::vector<std::string> textFilters;
 	bool caseSensitiveText = true;
 
 	/* 
@@ -32,14 +33,14 @@ class EntityModel : public wxDataViewModel {
 	*/
 	void refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu)
 	{
-		set<string_view> newLayers;
-		set<string_view> newClasses;
-		set<string_view> newInherits;
+		std::set<std::string_view> newLayers;
+		std::set<std::string_view> newClasses;
+		std::set<std::string_view> newInherits;
 
 		EntNode** children = root->getChildBuffer();
 		int childCount = root->getChildCount();
 
-		newLayers.insert(string_view(FILTER_NOLAYERS.data() + 1, FILTER_NOLAYERS.length() - 2));
+		newLayers.insert(std::string_view(FILTER_NOLAYERS.data() + 1, FILTER_NOLAYERS.length() - 2));
 		for (int i = 0; i < childCount; i++)
 		{
 			EntNode* current = children[i];
@@ -66,21 +67,21 @@ class EntityModel : public wxDataViewModel {
 			}
 		}
 
-		for (string_view view : newLayers)
+		for (std::string_view view : newLayers)
 		{
 			wxString s(view.data(), view.length());
 			if(layerMenu->FindString(s, true) < 0)
 				layerMenu->Append(s);
 		}
 
-		for (string_view view : newClasses)
+		for (std::string_view view : newClasses)
 		{
 			wxString s(view.data(), view.length());
 			if (classMenu->FindString(s, true) < 0)
 				classMenu->Append(s);
 		}
 
-		for (string_view view : newInherits)
+		for (std::string_view view : newInherits)
 		{
 			wxString s(view.data(), view.length());
 			if (inheritMenu->FindString(s, true) < 0)
@@ -98,19 +99,19 @@ class EntityModel : public wxDataViewModel {
 
 		for (int i = 0, max = layerMenu->GetCount(); i < max; i++)
 			if(layerMenu->IsChecked(i))
-				layerFilters.insert('"' + string(layerMenu->GetString(i)) + '"');
+				layerFilters.insert('"' + std::string(layerMenu->GetString(i)) + '"');
 
 		for (int i = 0, max = classMenu->GetCount(); i < max; i++)
 			if (classMenu->IsChecked(i))
-				classFilters.insert('"' + string(classMenu->GetString(i)) + '"');
+				classFilters.insert('"' + std::string(classMenu->GetString(i)) + '"');
 
 		for (int i = 0, max = inheritMenu->GetCount(); i < max; i++)
 			if (inheritMenu->IsChecked(i))
-				inheritFilters.insert('"' + string(inheritMenu->GetString(i)) + '"');
+				inheritFilters.insert('"' + std::string(inheritMenu->GetString(i)) + '"');
 
 		for(int i = 0, max = textMenu->GetCount(); i < max; i++)
 			if(textMenu->IsChecked(i))
-				textFilters.push_back(string(textMenu->GetString(i)));
+				textFilters.push_back(std::string(textMenu->GetString(i)));
 
 		caseSensitiveText = newCaseSensSetting;
 		filterSpawnPosition = newSpawnFilterSetting;
@@ -194,15 +195,15 @@ class EntityModel : public wxDataViewModel {
 			{
 				if (filterByClass)
 				{
-					string_view classVal = (*childBuffer[i])["entityDef"]["class"].getValue();
-					if (classFilters.count(string(classVal)) < 1) // TODO: OPTIMIZE ACCESS CASTING
+					std::string_view classVal = (*childBuffer[i])["entityDef"]["class"].getValue();
+					if (classFilters.count(std::string(classVal)) < 1) // TODO: OPTIMIZE ACCESS CASTING
 						continue;
 				}
 
 				if (filterByInherit)
 				{
-					string_view inheritVal = (*childBuffer[i])["entityDef"]["inherit"].getValue();
-					if (inheritFilters.count(string(inheritVal)) < 1) // TODO: OPTIMIZE CASTING
+					std::string_view inheritVal = (*childBuffer[i])["entityDef"]["inherit"].getValue();
+					if (inheritFilters.count(std::string(inheritVal)) < 1) // TODO: OPTIMIZE CASTING
 						continue;
 				}
 
@@ -217,7 +218,7 @@ class EntityModel : public wxDataViewModel {
 					int layerCount = layerNode.getChildCount();
 					for (int currentLayer = 0; currentLayer < layerCount; currentLayer++)
 					{
-						string_view l = layers[currentLayer]->getName();
+						std::string_view l = layers[currentLayer]->getName();
 						if (layerFilters.count(std::string(l)) > 0)
 						{
 							hasLayer = true;
@@ -244,15 +245,15 @@ class EntityModel : public wxDataViewModel {
 						// Need comparisons to distinguish between actual formatting exception
 						// and exception from trying to convert "" to a float
 						if(&xNode != EntNode::SEARCH_404)
-							x = std::stof(string(xNode.getValue()));
+							x = std::stof(std::string(xNode.getValue()));
 
 						if (&yNode != EntNode::SEARCH_404)
-							y = std::stof(string(yNode.getValue()));
+							y = std::stof(std::string(yNode.getValue()));
 
 						if (&zNode != EntNode::SEARCH_404)
-							z = std::stof(string(zNode.getValue()));
+							z = std::stof(std::string(zNode.getValue()));
 					}
-					catch (exception) {
+					catch (std::exception) {
 						continue;
 					}
 
@@ -271,7 +272,7 @@ class EntityModel : public wxDataViewModel {
 					//childBuffer[i]->generateText(textBuffer);
 					
 					bool containsText = false;
-					for (const string& key : textFilters)
+					for (const std::string& key : textFilters)
 						if (childBuffer[i]->searchDownwardsLocal(key, caseSensitiveText) != EntNode::SEARCH_404)
 						{
 							containsText = true;

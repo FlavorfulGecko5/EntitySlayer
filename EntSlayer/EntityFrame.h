@@ -53,6 +53,7 @@ class EntityFrame : public wxFrame
 	void onSetMHTab(wxCommandEvent& event);
 	void onReloadMH(wxCommandEvent& event);
 	void RefreshMHMenu();
+	void onSpecial_PropMovers(wxCommandEvent &event);
 
 	private:
 	wxDECLARE_EVENT_TABLE();

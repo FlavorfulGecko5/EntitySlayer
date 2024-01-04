@@ -1,5 +1,4 @@
-#include <string>
-#include "wx/string.h"
+#include <string_view>
 
 enum class NodeType : unsigned char {
 	UNDESIGNATED,
@@ -14,6 +13,7 @@ enum class NodeType : unsigned char {
 	ROOT
 };
 
+class wxString;
 class EntNode 
 {
 	friend class EntityParser;
@@ -45,6 +45,9 @@ class EntNode
 
 	std::string_view getValue() {return std::string_view(textPtr + nameLength, valLength); }
 
+	wxString getNameWX();
+	wxString getValueWX();
+
 	std::string_view getNameUQ() {
 		if (nameLength < 2)
 			return std::string_view(textPtr, nameLength);
@@ -57,10 +60,6 @@ class EntNode
 			return std::string_view(textPtr + nameLength, valLength);
 		return std::string_view(textPtr + nameLength + 1, valLength - 2);
 	}
-
-	wxString getNameWX() { return wxString(textPtr, nameLength); }
-
-	wxString getValueWX() { return wxString(textPtr + nameLength, valLength); }
 
 	int NameLength() { return nameLength; }
 
@@ -337,7 +336,7 @@ class EntNode
 	void generateText(std::string& buffer, int wsIndex = 0)
 	{
 		buffer.append(wsIndex, '\t');
-		buffer.append(textPtr, nameLength);
+		buffer.append(textPtr, nameLength); // Root shouldn't have a name, so this should be fine
 		switch (TYPE)
 		{
 			case NodeType::UNDESIGNATED:
@@ -345,9 +344,9 @@ class EntNode
 			case NodeType::COMMENT:
 			return;
 
-			case NodeType::ROOT: // As a fail-safe, Root should only generate it's full text when writing to a file
-			buffer.append("root");
-			return;
+			case NodeType::ROOT:
+			wsIndex--;
+			break;
 
 			case NodeType::VALUE_FILE:
 			buffer.push_back(' ');
@@ -385,4 +384,13 @@ class EntNode
 			buffer.append(wsIndex, '\t');
 		buffer.push_back('}');
 	}
+
+	/*
+	* Converts the entirety of this node into text and saves
+	* the result to a file
+	* @param filepath File to write to
+	* @param oodleCompress If true, compress the file
+	* @param debug_logTime If true, output execution time data.
+	*/
+	void writeToFile(const std::string filepath, const bool oodleCompress, const bool debug_logTime = false);
 };

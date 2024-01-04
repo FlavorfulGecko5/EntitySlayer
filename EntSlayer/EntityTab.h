@@ -50,6 +50,8 @@ class EntityTab : public wxPanel
 	void onNodeContextAction(wxCommandEvent& event);
 	void onFilterMenuShowHide(wxCollapsiblePaneEvent& event);
 
+	void action_PropMovers();
+
 	private:
 	wxDECLARE_EVENT_TABLE();
 };

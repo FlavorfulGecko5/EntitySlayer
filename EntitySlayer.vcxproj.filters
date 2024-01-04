@@ -18,9 +18,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Parser\EntParserInitializations.cpp">
-      <Filter>Source Files\Parser</Filter>
-    </ClCompile>
     <ClCompile Include="EntHero\prefs.cpp">
       <Filter>Source Files\EntHero</Filter>
     </ClCompile>
@@ -49,6 +46,12 @@
       <Filter>Source Files\Parser</Filter>
     </ClCompile>
     <ClCompile Include="Parser\Oodle.cpp">
+      <Filter>Source Files\Parser</Filter>
+    </ClCompile>
+    <ClCompile Include="Parser\EntityNode.cpp">
+      <Filter>Source Files\Parser</Filter>
+    </ClCompile>
+    <ClCompile Include="Parser\EntityParser.cpp">
       <Filter>Source Files\Parser</Filter>
     </ClCompile>
   </ItemGroup>

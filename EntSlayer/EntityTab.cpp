@@ -21,6 +21,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	compressOnSave = parser->wasFileCompressed();
 	root = parser->getRoot();
 	model = new EntityModel(root);
+	parser->model = model.get();
 
 	/* Filter Menu (should be initialized before model is associated with view) */
 	wxGenericCollapsiblePane* topWrapper = new wxGenericCollapsiblePane(this, wxID_ANY, "Filter Menu",
@@ -191,7 +192,7 @@ bool EntityTab::applyFilters(bool clearAll)
 		return false;
 	}
 	else editor->SetActiveNode(nullptr);
-	parser->ClearUndoStack(); // Must clear undo stack for the same reason as above
+	parser->ClearHistory(); // Must clear undo stack for the same reason as above
 
 	if (clearAll)
 	{
@@ -225,7 +226,7 @@ void EntityTab::saveFile()
 
 	if (fileUpToDate) return; // Need to check this when commitResult <= 0
 
-	parser->writeToFile(std::string(filePath), compressOnSave);
+	root->writeToFile(std::string(filePath), compressOnSave);
 
 	if (commitResult < 0)
 		wxMessageBox("File was saved. But you must fix syntax errors before saving contents of text box.",
@@ -247,24 +248,13 @@ int EntityTab::CommitEdits()
 	EntNode* parent = replacing->getParent();
 	int replacingIndex = parent->getChildIndex(replacing);
 
-	ParseResult outcome = parser->EditTree(string(editor->GetText()), parent, replacingIndex, 1);
+	ParseResult outcome = parser->EditTree(std::string(editor->GetText()), parent, replacingIndex, 1, autoNumberLists);
 	if (!outcome.success)
 	{
 		editor->setAnnotationError(outcome.errorLineNum, outcome.errorMessage);
 		return -1;
 	}
-
-	// Refresh the model
-	wxDataViewItem parentItem(parent);
-	model->ItemDeleted(parentItem, wxDataViewItem(replacing));
-
-	if (outcome.addedNodes.size() > 0)
-	{
-		wxDataViewItemArray newItems;
-		for (EntNode* e : outcome.addedNodes)
-			newItems.Add(wxDataViewItem(e));
-		model->ItemsAdded(parentItem, newItems);
-	}
+	parser->PushGroupCommand();
 
 	fileUpToDate = false;
 	return 1;
@@ -286,36 +276,29 @@ void EntityTab::UndoRedo(bool undo)
 		msg, wxICON_WARNING | wxYES_NO | wxNO_DEFAULT, this) != wxYES)
 		return;
 
-	ParseResult outcome = parser->UndoRedo(undo);
-	if (!outcome.success)
+	bool result = undo? parser->Undo() : parser->Redo();
+	if (!result)
 	{
 		wxMessageBox("Nothing to " + msg, msg, wxOK | wxICON_INFORMATION);
 		return;
 	}
 
 	wxLogMessage("Undo/Redo on node tree executed successfully");
-	wxDataViewItem parentItem(outcome.parent);
-	wxDataViewItemArray removedItems;
-	wxDataViewItemArray addedItems;
 
-	for (EntNode* e : outcome.removedNodes)
-		removedItems.Add(wxDataViewItem(e));
-	for (EntNode* e : outcome.addedNodes)
-		addedItems.Add(wxDataViewItem(e));
+	// TODO: Figure out how to re-add auto-selection. For now, set nullptr
+	// as the active node
+	// POSSIBILITY: Setup and allow multi-selection? Select each added/changed node?
+	editor->SetActiveNode(nullptr);
 
-	model->ItemsDeleted(parentItem, removedItems);
-	model->ItemsAdded(parentItem, addedItems);
-	fileUpToDate = false;
-
-	if (addedItems.size() > 0)
-	{
-		view->Select(addedItems[0]);
-		editor->SetActiveNode(outcome.addedNodes[0]);
-	}
-	else {
-		view->Select(parentItem);
-		editor->SetActiveNode(outcome.parent);
-	}
+	//if (addedItems.size() > 0)
+	//{
+	//	view->Select(addedItems[0]);
+	//	editor->SetActiveNode(outcome.addedNodes[0]);
+	//}
+	//else {
+	//	view->Select(parentItem);
+	//	editor->SetActiveNode(outcome.parent);
+	//}
 }
 
 void EntityTab::onNodeSelection(wxDataViewEvent& event)
@@ -369,4 +352,53 @@ void EntityTab::onFilterMenuShowHide(wxCollapsiblePaneEvent& event)
 	Freeze(); // Freezing seems to fix visual bugs that may occur when expanding
 	Layout(); // for the first time
 	Thaw();
+}
+
+const std::string IDMOVER =
+"entity {"
+"    entityDef %s_offset_fix {" // same name as the pickup but with something added to the end like "_offset_fix"
+"    inherit = \"func/mover\";"
+"    class = \"idMover\";"
+"    expandInheritance = false;"
+"    poolCount = 0;"
+"    poolGranularity = 2;"
+"    networkReplicated = true;"
+"    disableAIPooling = false;"
+"    edit = {"
+"        spawnPosition = {" // change spawn position to the same as pickup
+"            x = %s;"
+"            y = %s;"
+"            z = %s;"
+"        }"
+"        renderModelInfo = {"
+"            model = NULL;"
+"        }"
+"        clipModelInfo = {"
+"            clipModelName = NULL;"
+"        }"
+"    }"
+"}"
+"}";
+
+void EntityTab::action_PropMovers()
+{
+	// TODO: Force commit, prevent if error
+	std::set<std::string_view> moverNames;
+	std::vector<EntNode*> props;
+	std::string movers;
+
+	for (int i = 0, max = root->getChildCount(); i < max; i++)
+	{
+		EntNode* entity = root->ChildAt(i);
+		std::string_view classVal = (*entity)["class"].getValueUQ();
+		if(classVal == "idProp2")
+			props.push_back(entity);
+		else if (classVal == "idMover")
+			moverNames.insert((*entity)["entityDef"].getValue());
+	}
+
+	for (EntNode* prop : props)
+	{
+		//std::format
+	}
 }
