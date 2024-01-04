@@ -3,6 +3,7 @@
 #include "wx/splitter.h"
 #include "EntityModel.h"
 
+class EntityEditor;
 class FilterCtrl;
 class SpawnFilter;
 class EntityTab : public wxPanel

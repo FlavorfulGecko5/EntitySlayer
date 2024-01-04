@@ -10,6 +10,10 @@
 #ifndef _PREFS_H_
 #define _PREFS_H_
 
+/* MOVED FROM defsext.h */
+#define DEFAULT_LANGUAGE "<default>"
+#define STYLE_TYPES_COUNT 32
+
 //----------------------------------------------------------------------------
 // informations
 //----------------------------------------------------------------------------
@@ -23,7 +27,6 @@
 
 //! wxWidgets/contrib headers
 #include "wx/stc/stc.h"  // styled text control
-#include "defsext.h"
 //! application headers
 
 

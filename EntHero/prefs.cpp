@@ -29,7 +29,6 @@
 //! wxWidgets/contrib headers
 
 //! application headers
-#include "defsext.h"     // Additional definitions
 #include "prefs.h"       // Preferences
 
 

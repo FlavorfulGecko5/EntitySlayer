@@ -1,4 +1,5 @@
 #include "EntityTab.h"
+#include "EntityEditor.h"
 #include "FilterMenus.h"
 
 wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)

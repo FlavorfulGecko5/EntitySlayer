@@ -141,10 +141,11 @@
     <ClCompile Include="EntSlayer\EntityFrame.cpp" />
     <ClCompile Include="EntSlayer\EntityTab.cpp" />
     <ClCompile Include="EntSlayer\FilterMenus.cpp" />
+    <ClCompile Include="Parser\EntityLogger.cpp" />
     <ClCompile Include="Parser\EntParserInitializations.cpp" />
+    <ClCompile Include="Parser\Oodle.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="EntHero\defsext.h" />
     <ClInclude Include="EntHero\prefs.h" />
     <ClInclude Include="EntHero\RPCInterface\meathook_interface.h" />
     <ClInclude Include="EntHero\RPCInterface\mhclient.h" />

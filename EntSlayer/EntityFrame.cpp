@@ -375,7 +375,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 4.0 [Meathook Open/Reloading Demo (but it works this time)]");
+	info.SetVersion("Alpha 5.0 [Filter/Editor Polish, MH+Oodle Interaction + Internal Refactoring]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

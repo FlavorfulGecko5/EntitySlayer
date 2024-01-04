@@ -157,7 +157,7 @@ class EntityParser {
 
 		if (debug_logParseTime)
 		{
-			EntityLogger::logTimeStamps("File Read/Decompress Duration: ", timeStart, chrono::high_resolution_clock::now());
+			EntityLogger::logTimeStamps("File Read/Decompress Duration: ", timeStart);
 			timeStart = chrono::high_resolution_clock::now();
 		}
 
@@ -183,7 +183,7 @@ class EntityParser {
 													                 
 		if (debug_logParseTime)
 		{
-			EntityLogger::logTimeStamps("Node Buffer Init Duration: ", timeStart, chrono::high_resolution_clock::now());
+			EntityLogger::logTimeStamps("Node Buffer Init Duration: ", timeStart);
 			timeStart = chrono::high_resolution_clock::now();
 		}
 		parseContentsFile(&root); // During construction we allow exceptions to propagate and the parser to be destroyed
@@ -193,7 +193,7 @@ class EntityParser {
 		if(fileWasCompressed)
 			delete[] decompressedText;
 		if (debug_logParseTime)
-			EntityLogger::logTimeStamps("Parsing Duration: ", timeStart, chrono::high_resolution_clock::now());
+			EntityLogger::logTimeStamps("Parsing Duration: ", timeStart);
 	}
 
 	void ClearUndoStack() {
@@ -343,7 +343,7 @@ class EntityParser {
 
 		output.close();
 		if (debug_logTime)
-			EntityLogger::logTimeStamps("Writing Duration: ", timeStart, chrono::high_resolution_clock::now());
+			EntityLogger::logTimeStamps("Writing Duration: ", timeStart);
 	}
 
 	/*

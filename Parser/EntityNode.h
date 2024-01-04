@@ -1,6 +1,5 @@
 #include <string>
 #include "wx/string.h"
-using namespace std;
 
 enum class NodeType : unsigned char {
 	UNDESIGNATED,
@@ -42,21 +41,21 @@ class EntNode
 
 	NodeType getType() {return TYPE;}
 
-	string_view getName() {return string_view(textPtr, nameLength); }
+	std::string_view getName() {return std::string_view(textPtr, nameLength); }
 
-	string_view getValue() {return string_view(textPtr + nameLength, valLength); }
+	std::string_view getValue() {return std::string_view(textPtr + nameLength, valLength); }
 
-	string_view getNameUQ() {
+	std::string_view getNameUQ() {
 		if (nameLength < 2)
-			return string_view(textPtr, nameLength);
-		return string_view(textPtr + 1, nameLength - 2);
+			return std::string_view(textPtr, nameLength);
+		return std::string_view(textPtr + 1, nameLength - 2);
 	}
 
 	// If the value is a string literal, get it with the quotes removed
-	string_view getValueUQ() {
+	std::string_view getValueUQ() {
 		if (valLength < 2)
-			return string_view(textPtr + nameLength, valLength);
-		return string_view(textPtr + nameLength + 1, valLength - 2);
+			return std::string_view(textPtr + nameLength, valLength);
+		return std::string_view(textPtr + nameLength + 1, valLength - 2);
 	}
 
 	wxString getNameWX() { return wxString(textPtr, nameLength); }
@@ -145,7 +144,7 @@ class EntNode
 	* @param key - the name to search for
 	* @return The first child with the given name, or 404 Node if not found
 	*/
-	EntNode& operator[](const string& key)
+	EntNode& operator[](const std::string& key)
 	{
 		for (int i = 0; i < childCount; i++)
 			if (children[i]->getName() == key)
@@ -204,12 +203,12 @@ class EntNode
 	* SEARCH FUNCTIONS
 	*/
 
-	bool searchText(const string& key, const bool caseSensitive)
+	bool searchText(const std::string& key, const bool caseSensitive)
 	{
 		if (caseSensitive)
 		{
-			string_view s(textPtr, nameLength + valLength);
-			return s.find(key) != string_view::npos;
+			std::string_view s(textPtr, nameLength + valLength);
+			return s.find(key) != std::string_view::npos;
 		}
 
 		int k = (int)key.length(), n = nameLength + valLength;
@@ -249,7 +248,7 @@ class EntNode
 	* - recursively check all nodes listed after the starting node
 	*	- parents in parent chain do not need their values checked
 	*/
-	EntNode* searchDownwards(const string& key, const bool caseSensitive, const EntNode* startAfter=nullptr)
+	EntNode* searchDownwards(const std::string& key, const bool caseSensitive, const EntNode* startAfter=nullptr)
 	{
 		int startIndex = 0;
 		if(startAfter != nullptr) // Ensures all children in the starting node are checked
@@ -269,7 +268,7 @@ class EntNode
 		return searchDownwardsLocal(key, caseSensitive);
 	}
 
-	EntNode* searchDownwardsLocal(const string& key, const bool caseSensitive)
+	EntNode* searchDownwardsLocal(const std::string& key, const bool caseSensitive)
 	{
 		if(searchText(key, caseSensitive)) return this;
 		for (int i = 0; i < childCount; i++)
@@ -292,7 +291,7 @@ class EntNode
 	* the node directly above this one.
 	* 
 	*/
-	EntNode* searchUpwards(const string &key, const bool caseSensitive) 
+	EntNode* searchUpwards(const std::string &key, const bool caseSensitive)
 	{
 		// Wrap around by performing local search on root
 		if(parent == nullptr)
@@ -313,7 +312,7 @@ class EntNode
 		return parent->searchUpwards(key, caseSensitive);
 	}
 
-	EntNode* searchUpwardsLocal(const string& key, const bool caseSensitive)
+	EntNode* searchUpwardsLocal(const std::string& key, const bool caseSensitive)
 	{
 		for(int i = childCount - 1; i > -1; i--)
 		{
@@ -328,14 +327,14 @@ class EntNode
 	* TEXT GENERATION
 	*/
 
-	string toString()
+	std::string toString()
 	{
-		string buffer;
+		std::string buffer;
 		generateText(buffer);
 		return buffer;
 	}
 
-	void generateText(string& buffer, int wsIndex = 0)
+	void generateText(std::string& buffer, int wsIndex = 0)
 	{
 		buffer.append(wsIndex, '\t');
 		buffer.append(textPtr, nameLength);

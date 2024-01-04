@@ -45,6 +45,12 @@
     <ClCompile Include="EntSlayer\FilterMenus.cpp">
       <Filter>Source Files\EntSlayer</Filter>
     </ClCompile>
+    <ClCompile Include="Parser\EntityLogger.cpp">
+      <Filter>Source Files\Parser</Filter>
+    </ClCompile>
+    <ClCompile Include="Parser\Oodle.cpp">
+      <Filter>Source Files\Parser</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser\EntityLogger.h">
@@ -61,9 +67,6 @@
     </ClInclude>
     <ClInclude Include="Parser\Oodle.h">
       <Filter>Source Files\Parser</Filter>
-    </ClInclude>
-    <ClInclude Include="EntHero\defsext.h">
-      <Filter>Source Files\EntHero</Filter>
     </ClInclude>
     <ClInclude Include="EntHero\prefs.h">
       <Filter>Source Files\EntHero</Filter>
