@@ -93,7 +93,8 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	/* Initialize controls */
 	wxSplitterWindow* splitter = new wxSplitterWindow(this);
 	editor = new EntityEditor(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
-	view = new wxDataViewCtrl(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
+	view = new wxDataViewCtrl(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300), wxDV_MULTIPLE);
+	parser->view = view;
 
 	/* Initialize View */
 	{
@@ -256,6 +257,20 @@ int EntityTab::CommitEdits()
 	}
 	parser->PushGroupCommand();
 
+	// Brainstorming:
+	//if (loadFirstNode)
+	//{
+	//	wxDataViewItemArray items;
+	//	view->GetSelections(items);
+	//	if(items.size() == 0)
+	//		editor->SetActiveNode(nullptr);
+	//	else editor->SetActiveNode((EntNode*)items[0].GetID());
+	//}
+	//else 
+	//{
+	//	
+	//}
+
 	fileUpToDate = false;
 	return 1;
 }
@@ -289,6 +304,7 @@ void EntityTab::UndoRedo(bool undo)
 	// as the active node
 	// POSSIBILITY: Setup and allow multi-selection? Select each added/changed node?
 	editor->SetActiveNode(nullptr);
+	fileUpToDate = false;
 
 	//if (addedItems.size() > 0)
 	//{
@@ -308,13 +324,15 @@ void EntityTab::onNodeSelection(wxDataViewEvent& event)
 		return;
 
 	// Prevents freed node from being loaded into editor
-	EntNode* selection = ((EntNode*)view->GetSelection().GetID());
+	EntNode* selection = ((EntNode*)event.GetItem().GetID());
 	if (selection == nullptr || !selection->isValid())
 		editor->SetActiveNode(nullptr);
 	else editor->SetActiveNode(selection);
 	//m_LastNavigation.push_back(event.GetItem());
 }
 
+// Should be unnecessary since multi-selection fires selection events
+// when you left click a selected node
 void EntityTab::onNodeActivation(wxDataViewEvent& event)
 {
 	wxLogMessage("Activation event fired");
@@ -354,9 +372,14 @@ void EntityTab::onFilterMenuShowHide(wxCollapsiblePaneEvent& event)
 	Thaw();
 }
 
-const std::string IDMOVER =
+void EntityTab::action_PropMovers()
+{
+	const size_t MOVER_NAME_APPEND_LEN = 13;
+	const char* MOVER_NAME_APPEND = "_offset_mover";
+
+	const char* IDMOVER =
 "entity {"
-"    entityDef %s_offset_fix {" // same name as the pickup but with something added to the end like "_offset_fix"
+"    entityDef %s_offset_mover {" // same name as the pickup but with something added to the end like "_offset_fix"
 "    inherit = \"func/mover\";"
 "    class = \"idMover\";"
 "    expandInheritance = false;"
@@ -365,11 +388,8 @@ const std::string IDMOVER =
 "    networkReplicated = true;"
 "    disableAIPooling = false;"
 "    edit = {"
-"        spawnPosition = {" // change spawn position to the same as pickup
-"            x = %s;"
-"            y = %s;"
-"            z = %s;"
-"        }"
+"        %s" // spawnPosition - copy from pickup
+"        %s" // spawnOrientation - copy from pickup
 "        renderModelInfo = {"
 "            model = NULL;"
 "        }"
@@ -380,25 +400,111 @@ const std::string IDMOVER =
 "}"
 "}";
 
-void EntityTab::action_PropMovers()
-{
-	// TODO: Force commit, prevent if error
+	if(CommitEdits() < 0)
+		return;
+	editor->SetActiveNode(nullptr);
+
+	wxLogMessage("Binding idProp2s to idMovers");
+
 	std::set<std::string_view> moverNames;
 	std::vector<EntNode*> props;
-	std::string movers;
 
+	// Identify all Prop and Mover entities
+	int deletedMovers = 0;
 	for (int i = 0, max = root->getChildCount(); i < max; i++)
 	{
 		EntNode* entity = root->ChildAt(i);
-		std::string_view classVal = (*entity)["class"].getValueUQ();
+		EntNode& defNode = (*entity)["entityDef"];
+
+		std::string_view classVal = defNode["class"].getValueUQ();
 		if(classVal == "idProp2")
 			props.push_back(entity);
-		else if (classVal == "idMover")
-			moverNames.insert((*entity)["entityDef"].getValue());
+		else if (classVal == "idMover") 
+		{
+			moverNames.insert(defNode.getValue());
+			// Remove any other "offset_fix" mover
+			//std::string_view defVal = defNode.getValue();
+			//size_t index = defVal.rfind(MOVER_NAME_APPEND, defVal.length() - MOVER_NAME_APPEND_LEN); 
+			//if (index != std::string_view::npos)
+			//{
+			//	parser->EditTree("", root, i, 1, false);
+			//	i--;
+			//	max--;
+			//}
+		}
+			
 	}
 
+	wxLogMessage("Counted %zu idProp2 entities", props.size());
+
+	// Create the idMover entites
+	const size_t MAX = 4096;
+	char buffer[MAX];
+	std::string movers;
+	std::vector<EntNode*> propsUsed;
+	propsUsed.reserve(props.size());
+
 	for (EntNode* prop : props)
-	{
-		//std::format
+	{ // Must use strings instead of string_view to insure null termination for snprintf
+		std::string propName = std::string((*prop)["entityDef"].getValue());
+		std::string moverName = propName + MOVER_NAME_APPEND;
+
+		if(moverNames.count(moverName) > 0)
+			continue;
+		propsUsed.push_back(prop);
+
+		EntNode& editNode = (*prop)["entityDef"]["edit"];
+		std::string spawnPosition;
+		std::string spawnOrientation;
+
+		editNode["spawnPosition"].generateText(spawnPosition);
+		editNode["spawnOrientation"].generateText(spawnOrientation);
+		
+		int length = std::snprintf(buffer, MAX, IDMOVER, propName.data(), spawnPosition.data(), spawnOrientation.data());
+		if (length == MAX)
+		{
+			wxMessageBox("Buffer size limit reached", "Binding Props to Movers Failed", wxICON_WARNING | wxOK);
+			return;
+		}
+		movers.append(buffer);
 	}
+
+	wxLogMessage("Creating idMovers for %zu idProp2 entities. This may take some time - please be patient.", propsUsed.size());
+
+	EntNode* version = root->ChildAt(0);
+	ParseResult result = parser->EditTree(movers, root, 0, 0, false);
+	int moversAdded = root->getChildIndex(version);
+
+	wxLogMessage("%i idMover entities created", moversAdded);
+	
+	int manualBindCount = 0;
+	wxString manualBindLog = "%i idProp2 entities already had bindInfo defined. You must manually bind the following:\n";
+	for (int i = 0; i < moversAdded; i++) 
+	{
+		EntNode* prop = propsUsed[i];
+		int propIndex = root->getChildIndex(prop);
+		parser->EditPosition(root, 0, propIndex); // Should place below the prop
+
+		EntNode& edit = (*prop)["entityDef"]["edit"];
+		EntNode& bindInfo = edit["bindInfo"];
+		if (&bindInfo != EntNode::SEARCH_404)
+		{
+			manualBindCount++;
+			manualBindLog.append( (*prop)["entityDef"].getValueWX() + '\n');
+			continue;
+		}
+
+		std::string bindString = "bindInfo = { bindParent = \""
+			+ std::string((*prop)["entityDef"].getValue()) 
+			+ MOVER_NAME_APPEND + "\";}";
+			
+		parser->EditTree(bindString, &edit, 0, 0, false);
+	}
+	
+	if(manualBindCount > 0)
+		wxLogMessage(manualBindLog, manualBindCount);
+	wxLogMessage("Finished Binding Props to Movers");
+
+	parser->PushGroupCommand();
+	fileUpToDate = false;
 }

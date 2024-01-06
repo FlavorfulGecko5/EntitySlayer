@@ -7,7 +7,7 @@
 
 
 EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
-	textAlloc(1000000), nodeAlloc(1000), childAlloc(1000)
+	textAlloc(1000000), nodeAlloc(1000), childAlloc(30000)
 {
 	// Cannot append a null character to a string? Hence const char* instead
 	const char* rawText = "Version 7\nHierarchyVersion 1\0";
@@ -20,7 +20,7 @@ EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
 }
 
 EntityParser::EntityParser(const std::string& filepath, const bool debug_logParseTime)
-	: root(NodeType::ROOT), textAlloc(1000000), nodeAlloc(1000), childAlloc(1000)
+	: root(NodeType::ROOT), textAlloc(1000000), nodeAlloc(1000), childAlloc(30000)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
 	std::ifstream file(filepath, std::ios_base::binary); // Binary mode 50% faster than 'in' mode, keeps CR chars
@@ -157,6 +157,8 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	wxDataViewItem parentItem(parent);
 	model->ItemsDeleted(parentItem, removedNodes);
 	model->ItemsAdded(parentItem, addedNodes);
+	for(wxDataViewItem &i : addedNodes) // Must use Select() instead of SetSelections()
+		view->Select(i);                // because the latter deselects everything else
 
 	if (renumberLists)
 	{
@@ -193,7 +195,41 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 	node->valLength = (int)text.length() - nameLength;
 
 	// Alert model
-	model->ItemChanged(wxDataViewItem(node));
+	wxDataViewItem item(node);
+	model->ItemChanged(item);
+	view->Select(item);
+}
+
+/* 
+* Moves a node's child to a different index in it's buffer 
+* Nodes inbetween the two indices are shifted up/down to fill the node's old slot
+*/
+void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIndex)
+{
+	// Construct reverse command
+	reverseGroup.emplace_back();
+	ParseCommand& reverse = reverseGroup.back();
+	reverse.type = CommandType::EDIT_POSITION;
+	reverse.insertionIndex = childIndex; // Removal count is interpreted as the child index, and 
+	reverse.removalCount = insertionIndex;
+	root.findPositionalID(parent, reverse.parentID);
+
+	// Shift nodes around
+	EntNode** buffer = parent->children;
+	EntNode* child = buffer[childIndex];
+	if (childIndex < insertionIndex) // Shift middle elements up
+		for(int i = childIndex; i < insertionIndex; i++)
+			buffer[i] = buffer[i+1];
+	else for(int i = childIndex; i > insertionIndex; i--) // Shift middle elements down
+			buffer[i] = buffer[i-1];
+	buffer[insertionIndex] = child;
+
+	// Notify model
+	wxDataViewItem parentItem(parent);
+	wxDataViewItem childItem(child);
+	model->ItemDeleted(parentItem, childItem);
+	model->ItemAdded(parentItem, childItem);
+	view->Select(childItem);
 }
 
 void EntityParser::EditName(std::string text, EntNode* node)
@@ -301,6 +337,10 @@ void EntityParser::ExecuteCommand(ParseCommand& cmd)
 
 		case CommandType::EDIT_TEXT:
 		EditText(cmd.text, node, cmd.insertionIndex); // TODO: GENERALIZE PARM NAMES?
+		break;
+
+		case CommandType::EDIT_POSITION:
+		EditPosition(node, cmd.removalCount, cmd.insertionIndex);
 		break;
 	}
 }

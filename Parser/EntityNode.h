@@ -382,7 +382,9 @@ class EntNode
 		}
 		if(wsIndex > 0) // If we generate entityDef text directly this will be -1
 			buffer.append(wsIndex, '\t');
-		buffer.push_back('}');
+
+		if(TYPE != NodeType::ROOT) // Try to improve this later
+			buffer.push_back('}');
 	}
 
 	/*

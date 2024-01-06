@@ -17,7 +17,8 @@ class EntityParser {
 	{
 		UNDECLARED,
 		EDIT_TREE, // Call to EditTree function
-		EDIT_TEXT
+		EDIT_TEXT,
+		EDIT_POSITION
 	};
 
 	struct ParseCommand 
@@ -50,6 +51,7 @@ class EntityParser {
 	* of the parsed data
 	*/
 	public:
+	wxDataViewCtrl* view = nullptr;
 	EntityModel* model = nullptr; // Must set this after construction
 	private:
 	EntNode root;
@@ -122,6 +124,8 @@ class EntityParser {
 
 	/* Should be called only by undo/redo and other scenarios where the command is safe */
 	void EditText(const std::string& text, EntNode* node, int nameLength);
+
+	void EditPosition(EntNode* parent, int childIndex, int insertionIndex);
 
 
 	void EditName(std::string text, EntNode* node);

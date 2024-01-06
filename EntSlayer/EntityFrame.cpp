@@ -82,8 +82,9 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		//mhMenu->Append(MEATHOOK_GET_CHECKPOINT, "Goto Checkpoint");
 		//mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Goto Current Encounter");
 
-		//wxMenu* specialMenu = new wxMenu;
-		//specialMenu->Append(SPECIAL_PROPMOVERS, "Bind idProp2 Entities to idMovers");
+		wxMenu* specialMenu = new wxMenu;
+		specialMenu->Append(SPECIAL_PROPMOVERS, "Bind idProp2 Entities to idMovers",
+			"For Modded Multiplayer developers. Use this to fix idProp2 entity offsets");
 
 		wxMenu* helpMenu = new wxMenu;
 		helpMenu->Append(HELP_ABOUT, "About");
@@ -93,7 +94,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		bar->Append(fileMenu, "File");
 		bar->Append(editMenu, "Edit");
 		bar->Append(mhMenu, "Meathook");
-		//bar->Append(specialMenu, "Advanced");
+		bar->Append(specialMenu, "Advanced");
 		bar->Append(helpMenu, "Help");
 		SetMenuBar(bar);
 	}
@@ -384,7 +385,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 6.0 [Automatic idList Renumbering - Closed Testing Build]");
+	info.SetVersion("Alpha 7.1 [idList Renumbering, Multi-Selection, Advanced Prop/Mover Bind Script]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

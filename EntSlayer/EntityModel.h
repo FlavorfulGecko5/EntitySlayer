@@ -161,6 +161,11 @@ class EntityModel : public wxDataViewModel {
 		return wxDataViewItem((void*)node->getParent());
 	}
 
+	/*
+	* TODO: ItemsAdded() calls this ONCE PER ITEM ADDED
+	* This means the filtration system can get applied multiple times consecutively, for no good reason
+	* Need to refactor the filters system - move it out of GetChildren, to fix this, and the debug errors/memory leaks
+	*/
 	unsigned int GetChildren(const wxDataViewItem& parent, wxDataViewItemArray& array) const override
 	{
 		EntNode* node = (EntNode*)parent.GetID();
@@ -293,7 +298,7 @@ class EntityModel : public wxDataViewModel {
 			}
 			auto stop = std::chrono::high_resolution_clock::now();
 			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-			wxLogMessage("Time to Filter: %zu", duration.count());
+			//wxLogMessage("Time to Filter: %zu", duration.count());
 
 			return array.size();
 		}
