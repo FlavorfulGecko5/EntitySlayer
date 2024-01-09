@@ -247,37 +247,48 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 {
 	wxFileDialog openFileDialog(this, "Open File", wxEmptyString, wxEmptyString,
 		"All Files (*.entities;*.txt)|*.entities;*.txt|Doom Files (*.entities)|*.entities",
-		wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
-	// Don't open the same file twice
-	wxString filepath = openFileDialog.GetPath();
-	for (size_t i = 0, max = book->GetPageCount(); i < max; i++)
+	wxArrayString allPaths;
+	wxArrayString allNames;
+	openFileDialog.GetPaths(allPaths);
+	openFileDialog.GetFilenames(allNames);
+	for (size_t i = 0, max = allPaths.size(); i < max; i++)
 	{
-		EntityTab* page = (EntityTab*)book->GetPage(i);
-		if (page->filePath == filepath)
-		{
-			book->SetSelection(i);
-			return;
-		}
-	}
+		wxString filepath = allPaths[i];
+		wxString name = allNames[i];
 
-	try {
-		EntityTab* newTab = new EntityTab(book, openFileDialog.GetFilename(), filepath);
-
-		// Replace an unused new page
-		if (activeTab->IsNewAndUntouched())
+		// Don't open the same file twice
+		for (size_t i = 0, max = book->GetPageCount(); i < max; i++)
 		{
-			int index = book->GetPageIndex(activeTab);
-			book->InsertPage(index, newTab, newTab->tabName, true);
-			book->RemovePage(index + 1);
+			EntityTab* page = (EntityTab*)book->GetPage(i);
+			if (page->filePath == filepath)
+			{
+				book->SetSelection(i);
+				goto LABEL_CONTINUE_OUTER;
+			}
 		}
-		else book->AddPage(newTab, newTab->tabName, true);
-	}
-	catch (std::runtime_error e) {
-		wxString msg = wxString::Format("File Opening Cancelled\n\n%s", e.what());
-		wxMessageBox(msg, "Error", wxICON_ERROR | wxOK | wxCENTER, this);
+
+		try {
+			EntityTab* newTab = new EntityTab(book, name, filepath);
+
+			// Replace an unused new page
+			if (activeTab->IsNewAndUntouched())
+			{
+				int index = book->GetPageIndex(activeTab);
+				book->InsertPage(index, newTab, newTab->tabName, true);
+				book->RemovePage(index + 1);
+			}
+			else book->AddPage(newTab, newTab->tabName, true);
+		}
+		catch (std::runtime_error e) {
+			wxString msg = wxString::Format("File Opening Cancelled\n\n%s", e.what());
+			wxMessageBox(msg, name, wxICON_ERROR | wxOK | wxCENTER, this);
+		}
+
+		LABEL_CONTINUE_OUTER:;
 	}
 }
 
