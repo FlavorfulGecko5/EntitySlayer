@@ -118,14 +118,16 @@ class EntityParser {
 	* @param parent Node whose children we're editing
 	* @param insertionIndex Index to insert new nodes at
 	* @param removeCount Number of nodes to delete, starting at insertionIndex
+	* @param renumberLists If true, perform automatic list renumbering
+	* @param highlightNew If true, highlight newly created nodes
 	*/
-	ParseResult EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists);
+	ParseResult EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew);
 
 
 	/* Should be called only by undo/redo and other scenarios where the command is safe */
-	void EditText(const std::string& text, EntNode* node, int nameLength);
+	void EditText(const std::string& text, EntNode* node, int nameLength, bool highlight);
 
-	void EditPosition(EntNode* parent, int childIndex, int insertionIndex);
+	void EditPosition(EntNode* parent, int childIndex, int insertionIndex, bool highlight);
 
 
 	void EditName(std::string text, EntNode* node);
@@ -135,7 +137,7 @@ class EntityParser {
 
 
 	/* Move this outside of this class */
-	void fixListNumberings(EntNode* parent, bool recursive);
+	void fixListNumberings(EntNode* parent, bool recursive, bool highlight);
 
 
 	/*

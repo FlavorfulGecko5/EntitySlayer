@@ -7,10 +7,8 @@ enum TabID
 {
 	NODEVIEW_UNDO,
 	NODEVIEW_REDO,
-	NODEVIEW_COPY,
-	NODEVIEW_COPY_ACCEL,
-	NODEVIEW_COPYALL,
-	NODEVIEW_COPYALL_ACCEL,
+	NODEVIEW_COPYSELECTED,
+	NODEVIEW_COPYSELECTED_ACCEL,
 	NODEVIEW_PASTE,
 	NODEVIEW_PASTE_ACCEL,
 	NODEVIEW_SELECTALLENTS,
@@ -27,14 +25,12 @@ wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
 
 	EVT_MENU(NODEVIEW_UNDO, onUndo)
 	EVT_MENU(NODEVIEW_REDO, onRedo)
-	EVT_MENU(NODEVIEW_COPY, onCopyNode)
-	EVT_MENU(NODEVIEW_COPYALL, onCopySelectedNodes)
+	EVT_MENU(NODEVIEW_COPYSELECTED, onCopySelectedNodes)
 	EVT_MENU(NODEVIEW_PASTE, onPaste)
 	EVT_MENU(NODEVIEW_SELECTALLENTS, onSelectAllEntities)
 	EVT_MENU(NODEVIEW_DELETESELECTED, EntityTab::onDeleteSelectedNodes)
 
-	EVT_MENU(NODEVIEW_COPY_ACCEL, onNodeContextAccelerator)
-	EVT_MENU(NODEVIEW_COPYALL_ACCEL, onNodeContextAccelerator)
+	EVT_MENU(NODEVIEW_COPYSELECTED_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_PASTE_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_SELECTALLENTS_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_DELETESELECTED_ACCEL, onNodeContextAccelerator)
@@ -132,8 +128,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		viewMenu.Append(NODEVIEW_UNDO, "Undo\tCtrl+Z");
 		viewMenu.Append(NODEVIEW_REDO, "Redo\tCtrl+Y");
 		viewMenu.AppendSeparator();
-		//viewMenu.Append(NODEVIEW_COPY, "Copy\tCtrl+C");
-		viewMenu.Append(NODEVIEW_COPYALL, "Copy Selected\tCtrl+C");
+		viewMenu.Append(NODEVIEW_COPYSELECTED, "Copy Selected\tCtrl+C");
 		viewMenu.Append(NODEVIEW_PASTE, "Paste\tCtrl+V");
 		viewMenu.AppendSeparator();
 		viewMenu.Append(NODEVIEW_SELECTALLENTS, "Select All Entities\tCtrl+A");
@@ -143,11 +138,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		wxAcceleratorEntry entries[BINDCOUNT] {
 			wxAcceleratorEntry(wxACCEL_CTRL, 'Z', NODEVIEW_UNDO),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'Y', NODEVIEW_REDO),
-
-			wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPYALL_ACCEL),
-			//wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPY_ACCEL),
-			//wxAcceleratorEntry(wxACCEL_CTRL | wxACCEL_SHIFT, 'C', NODEVIEW_COPYALL_ACCEL),
-
+			wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPYSELECTED_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'V', NODEVIEW_PASTE_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'A', NODEVIEW_SELECTALLENTS_ACCEL),
 			wxAcceleratorEntry(wxACCEL_NORMAL, WXK_DELETE, NODEVIEW_DELETESELECTED_ACCEL)
@@ -308,7 +299,7 @@ int EntityTab::CommitEdits()
 	EntNode* parent = replacing->getParent();
 	int replacingIndex = parent->getChildIndex(replacing);
 
-	ParseResult outcome = parser->EditTree(std::string(editor->GetText()), parent, replacingIndex, 1, autoNumberLists);
+	ParseResult outcome = parser->EditTree(std::string(editor->GetText()), parent, replacingIndex, 1, autoNumberLists, false);
 	if (!outcome.success)
 	{
 		editor->setAnnotationError(outcome.errorLineNum, outcome.errorMessage);
@@ -436,8 +427,7 @@ void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 		// the functions
 		viewMenu.Enable(NODEVIEW_UNDO, true);
 		viewMenu.Enable(NODEVIEW_REDO, true);
-		//viewMenu.Enable(NODEVIEW_COPY, node != nullptr && node != root);
-		viewMenu.Enable(NODEVIEW_COPYALL, view->HasSelection());
+		viewMenu.Enable(NODEVIEW_COPYSELECTED, view->HasSelection());
 		viewMenu.Enable(NODEVIEW_PASTE, node != nullptr && node != root);
 		viewMenu.Enable(NODEVIEW_SELECTALLENTS, true);
 		viewMenu.Enable(NODEVIEW_DELETESELECTED, view->HasSelection());
@@ -456,11 +446,7 @@ void EntityTab::onNodeContextAccelerator(wxCommandEvent& event)
 
 	switch (event.GetId())
 	{
-		case NODEVIEW_COPY_ACCEL:
-		onCopyNode(event);
-		break;
-
-		case NODEVIEW_COPYALL_ACCEL:
+		case NODEVIEW_COPYSELECTED_ACCEL:
 		onCopySelectedNodes(event);
 		break;
 
@@ -492,24 +478,6 @@ void EntityTab::onRedo(wxCommandEvent& event)
 	UndoRedo(false);
 }
 
-void EntityTab::onCopyNode(wxCommandEvent& event)
-{
-	EntNode* item = (EntNode*)view->GetCurrentItem().GetID();
-	if(item == nullptr || item == root) return;
-
-	wxClipboard* clipboard = wxTheClipboard->Get();
-	if (clipboard->Open())
-	{
-		std::string text;
-		item->generateText(text);
-		clipboard->SetData(new wxTextDataObject(text));
-
-		clipboard->Close();
-		wxLogMessage("Node copied to clipboard as text");
-	}
-	else wxLogMessage("Could not access clipboard");
-}
-
 void EntityTab::onCopySelectedNodes(wxCommandEvent& event)
 {
 	wxDataViewItemArray selections;
@@ -521,6 +489,7 @@ void EntityTab::onCopySelectedNodes(wxCommandEvent& event)
 	if (clipboard->Open())
 	{
 		std::string text;
+		int numCopies = 0;
 		for (wxDataViewItem item : selections)
 		{
 			EntNode* node = (EntNode*)item.GetID();
@@ -529,11 +498,12 @@ void EntityTab::onCopySelectedNodes(wxCommandEvent& event)
 			else {
 				node->generateText(text);
 				text.push_back('\n');
+				numCopies++;
 			}
 		}
 		clipboard->SetData(new wxTextDataObject(text));
 		clipboard->Close();
-		wxLogMessage("%zu nodes copied to clipboard as text.", selections.size());
+		wxLogMessage("%i nodes copied to clipboard as text.", numCopies);
 	}
 	else wxLogMessage("Could not access clipboard");
 }
@@ -554,7 +524,7 @@ void EntityTab::onPaste(wxCommandEvent& event)
 
 			std::string text(data.GetText());
 			
-			ParseResult outcome = parser->EditTree(text, parent, parent->getChildIndex(node) + 1, 0, autoNumberLists);
+			ParseResult outcome = parser->EditTree(text, parent, parent->getChildIndex(node) + 1, 0, autoNumberLists, true);
 			if (!outcome.success)
 				wxMessageBox(outcome.errorMessage, "Paste Failed ", wxICON_ERROR | wxOK);
 			else {
@@ -582,6 +552,7 @@ void EntityTab::onDeleteSelectedNodes(wxCommandEvent& event)
 	view->GetSelections(selections);
 	if(selections.IsEmpty()) return;
 
+	int numDeletions = 0;
 	editor->SetActiveNode(nullptr);
 	for (wxDataViewItem item : selections) {
 		EntNode* node = (EntNode*)item.GetID();
@@ -589,11 +560,12 @@ void EntityTab::onDeleteSelectedNodes(wxCommandEvent& event)
 			wxLogMessage("Cannot delete the root node");
 		else if (view->IsSelected(item)) { // Tests if the node was removed in a previous deletion
 			EntNode* parent = node->getParent();
-			parser->EditTree("", parent, parent->getChildIndex(node), 1, autoNumberLists);
+			parser->EditTree("", parent, parent->getChildIndex(node), 1, autoNumberLists, false);
+			numDeletions++;
 		}
 	}
 	parser->PushGroupCommand();
-	wxLogMessage("Removed %zu nodes", selections.size()); // TODO: Measure more exactly
+	wxLogMessage("Deleted %i nodes and their children", numDeletions);
 }
 
 void EntityTab::onFilterMenuShowHide(wxCollapsiblePaneEvent& event)
@@ -703,7 +675,7 @@ void EntityTab::action_PropMovers()
 	wxLogMessage("Creating idMovers for %zu idProp2 entities. This may take some time - please be patient.", propsUsed.size());
 
 	EntNode* version = root->ChildAt(0);
-	ParseResult result = parser->EditTree(movers, root, 0, 0, false);
+	ParseResult result = parser->EditTree(movers, root, 0, 0, false, true);
 	int moversAdded = root->getChildIndex(version);
 
 	wxLogMessage("%i idMover entities created", moversAdded);
@@ -714,7 +686,7 @@ void EntityTab::action_PropMovers()
 	{
 		EntNode* prop = propsUsed[i];
 		int propIndex = root->getChildIndex(prop);
-		parser->EditPosition(root, 0, propIndex); // Should place below the prop
+		parser->EditPosition(root, 0, propIndex, true); // Should place below the prop
 
 		EntNode& edit = (*prop)["entityDef"]["edit"];
 		EntNode& bindInfo = edit["bindInfo"];
@@ -729,7 +701,7 @@ void EntityTab::action_PropMovers()
 			+ std::string((*prop)["entityDef"].getValue()) 
 			+ MOVER_NAME_APPEND + "\";}";
 			
-		parser->EditTree(bindString, &edit, 0, 0, false);
+		parser->EditTree(bindString, &edit, 0, 0, false, false);
 	}
 	
 	if(manualBindCount > 0)

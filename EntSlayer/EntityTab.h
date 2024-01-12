@@ -48,11 +48,6 @@ class EntityTab : public wxPanel
 	void onNodeSelection(wxDataViewEvent& event);
 	void onViewRightMouseDown(wxMouseEvent& event);
 
-
-	/* TODO: NOTABLE FLAW - WHAT IF ROOT IS SELECTED OR THE ACTIVE NODE IN THE DATAVIEW?
-	* WHAT WILL THESE FUNCTIONS DO WITH ROOT? MUST CORRECT
-	*	- Fixed for copy/copy all - must keep consistent in future functions
-	*/
 	/*
 	* To add a new right click menu option:
 	* - Define a function for it
@@ -67,7 +62,6 @@ class EntityTab : public wxPanel
 	void onNodeContextAccelerator(wxCommandEvent& event);
 	void onUndo(wxCommandEvent &event);
 	void onRedo(wxCommandEvent &event);
-	void onCopyNode(wxCommandEvent& event);
 	void onCopySelectedNodes(wxCommandEvent &event);
 	void onPaste(wxCommandEvent& event);
 	void onSelectAllEntities(wxCommandEvent &event);

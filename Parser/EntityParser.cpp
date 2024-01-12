@@ -99,7 +99,7 @@ EntityParser::EntityParser(const std::string& filepath, const bool debug_logPars
 		EntityLogger::logTimeStamps("Parsing Duration: ", timeStart);
 }
 
-ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists)
+ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew)
 {
 	ParseResult outcome;
 
@@ -157,20 +157,21 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	wxDataViewItem parentItem(parent);
 	model->ItemsDeleted(parentItem, removedNodes);
 	model->ItemsAdded(parentItem, addedNodes);
-	for(wxDataViewItem &i : addedNodes) // Must use Select() instead of SetSelections()
-		view->Select(i);                // because the latter deselects everything else
+	if (highlightNew)
+		for (wxDataViewItem& i : addedNodes) // Must use Select() instead of SetSelections()
+			view->Select(i);                // because the latter deselects everything else
 
 	if (renumberLists)
 	{
 		for (wxDataViewItem& n : addedNodes)
-			fixListNumberings((EntNode*)n.GetID(), true);
-		if(parent != &root)
-			fixListNumberings(parent, false);
+			fixListNumberings((EntNode*)n.GetID(), true, false);
+		if(parent != &root && parent->TYPE != NodeType::OBJECT_SIMPLE_LAYER) // Are these safeguards necessary? Are more needed?
+			fixListNumberings(parent, false, true);
 	}
 	return outcome;
 }
 
-void EntityParser::EditText(const std::string& text, EntNode* node, int nameLength)
+void EntityParser::EditText(const std::string& text, EntNode* node, int nameLength, bool highlight)
 {
 	// Construct reverse command
 	reverseGroup.emplace_back();
@@ -197,14 +198,15 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 	// Alert model
 	wxDataViewItem item(node);
 	model->ItemChanged(item);
-	view->Select(item);
+	if(highlight)
+		view->Select(item);
 }
 
 /* 
 * Moves a node's child to a different index in it's buffer 
 * Nodes inbetween the two indices are shifted up/down to fill the node's old slot
 */
-void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIndex)
+void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIndex, bool highlight)
 {
 	// Construct reverse command
 	reverseGroup.emplace_back();
@@ -229,7 +231,8 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 	wxDataViewItem childItem(child);
 	model->ItemDeleted(parentItem, childItem);
 	model->ItemAdded(parentItem, childItem);
-	view->Select(childItem);
+	if(highlight)
+		view->Select(childItem);
 }
 
 void EntityParser::EditName(std::string text, EntNode* node)
@@ -241,14 +244,14 @@ void EntityParser::EditValue(std::string text, EntNode* node)
 
 }
 
-void EntityParser::fixListNumberings(EntNode* parent, bool recursive)
+void EntityParser::fixListNumberings(EntNode* parent, bool recursive, bool highlight)
 {
 	int listItems = 0;
 	for (int i = 0; i < parent->childCount; i++) 
 	{
 		EntNode* current = parent->children[i];
 		if(current->childCount > 0 && recursive)
-			fixListNumberings(current, true);
+			fixListNumberings(current, true, highlight);
 
 		std::string_view name = current->getName();
 		if(!name._Starts_with("item["))
@@ -261,20 +264,20 @@ void EntityParser::fixListNumberings(EntNode* parent, bool recursive)
 		int length = (int)newName.length();
 		newName.append(current->getValue());
 
-		EditText(newName, current, length);
+		EditText(newName, current, length, highlight);
 	}
 
 	EntNode& numNode = (*parent)["num"];
 	if (&numNode == EntNode::SEARCH_404)
 	{
 		if (listItems == 0) return;
-		EditTree("num = " + std::to_string(listItems) + ';', parent, 0, 0, false);
+		EditTree("num = " + std::to_string(listItems) + ';', parent, 0, 0, false, highlight);
 	}
 	else {
 		std::string newVal = std::to_string(listItems);
 		if(numNode.getValue() == newVal) return;
 
-		EditText("num" + newVal, &numNode, 3);
+		EditText("num" + newVal, &numNode, 3, highlight);
 	}
 }
 
@@ -332,15 +335,15 @@ void EntityParser::ExecuteCommand(ParseCommand& cmd)
 	switch (cmd.type)
 	{
 		case CommandType::EDIT_TREE:
-		EditTree(cmd.text, node, cmd.insertionIndex, cmd.removalCount, false);
+		EditTree(cmd.text, node, cmd.insertionIndex, cmd.removalCount, false, true);
 		break;
 
 		case CommandType::EDIT_TEXT:
-		EditText(cmd.text, node, cmd.insertionIndex); // TODO: GENERALIZE PARM NAMES?
+		EditText(cmd.text, node, cmd.insertionIndex, true); // TODO: GENERALIZE PARM NAMES?
 		break;
 
 		case CommandType::EDIT_POSITION:
-		EditPosition(node, cmd.removalCount, cmd.insertionIndex);
+		EditPosition(node, cmd.removalCount, cmd.insertionIndex, true);
 		break;
 	}
 }

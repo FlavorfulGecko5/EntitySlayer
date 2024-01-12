@@ -373,7 +373,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 7.1 [idList Renumbering, Multi-Selection, Advanced Prop/Mover Bind Script]");
+	info.SetVersion("Alpha 8 [Right Click Menu, Multi-File-Select, Fine-Tune Node Auto-Selection]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
