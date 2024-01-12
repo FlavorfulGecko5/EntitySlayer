@@ -120,10 +120,10 @@ class EntityModel : public wxDataViewModel {
 
 	EntityModel(EntNode* p_root) : root(p_root) {}
 
+	// wxWidgets calls this function very frequently, on every visible node, if you so much as breathe on the dataview
 	void GetValue(wxVariant& variant, const wxDataViewItem& item, unsigned int col) const override
 	{
 		wxASSERT(item.IsOk());
-
 		EntNode* node = (EntNode*)item.GetID();
 
 		if (col == 0) {

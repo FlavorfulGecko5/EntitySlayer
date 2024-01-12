@@ -102,13 +102,18 @@ class EntNode
 		return false;
 	}
 
-	/*
-	* Use this to quickly check whether a node is inside the tree
-	* (Parser must be properly resetting variables of freed nodes for this to work)
-	*/
-	bool isValid()
+	bool Equals(const EntNode* b) 
 	{
-		return TYPE != NodeType::UNDESIGNATED;
+		if(    TYPE       != b->TYPE
+			|| parent     != b->parent
+			|| nameLength != b->nameLength
+			|| valLength  != b->valLength
+			|| textPtr    != b->textPtr
+			|| childCount != b->childCount
+			|| children   != b->children
+		)
+			return false;
+		return true;
 	}
 
 	/*

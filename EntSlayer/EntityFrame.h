@@ -36,6 +36,7 @@ class EntityFrame : public wxFrame
 	EntityFrame();
 	~EntityFrame();
 	void AddUntitledTab();
+	void AddOpenedTab(EntityTab* tab);
 	void onWindowClose(wxCloseEvent& event);
 	void onTabClosing(wxAuiNotebookEvent& event);
 	void onTabChanged(wxAuiNotebookEvent& event);
@@ -45,7 +46,6 @@ class EntityFrame : public wxFrame
 	void onFileSave(wxCommandEvent& event);
 	void onFileSaveAs(wxCommandEvent& event);
 	void onCompressCheck(wxCommandEvent& event);
-	void onUndoRedo(wxCommandEvent& event);
 	void onNumberListCheck(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
 	void onManual(wxCommandEvent& event);

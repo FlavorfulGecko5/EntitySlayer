@@ -11,8 +11,6 @@ enum FrameID
 	FILE_SAVEAS,
 	FILE_COMPRESS,
 
-	EDIT_UNDO,
-	EDIT_REDO,
 	EDIT_NUMBERLISTS,
 
 	HELP_ABOUT,
@@ -39,8 +37,6 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_SAVE, EntityFrame::onFileSave)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
 	EVT_MENU(FILE_COMPRESS, EntityFrame::onCompressCheck)
-	EVT_MENU(EDIT_UNDO, EntityFrame::onUndoRedo)
-	EVT_MENU(EDIT_REDO, EntityFrame::onUndoRedo)
 	EVT_MENU(EDIT_NUMBERLISTS, EntityFrame::onNumberListCheck)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
 	EVT_MENU(HELP_MANUAL, EntityFrame::onManual)
@@ -70,9 +66,6 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->AppendSeparator();
 		fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save");
 
-		editMenu->Append(EDIT_UNDO, "Undo\tCtrl+Z");
-		editMenu->Append(EDIT_REDO, "Redo\tCtrl+Y");
-		editMenu->AppendSeparator();
 		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
 
 		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Make Active Tab");
@@ -171,6 +164,18 @@ void EntityFrame::AddUntitledTab()
 {
 	EntityTab* newTab = new EntityTab(book, "Untitled");
 	book->AddPage(newTab, "Untitled", true);
+}
+
+void EntityFrame::AddOpenedTab(EntityTab* tab)
+{
+	// Replace an unused new page
+	if (activeTab->IsNewAndUntouched())
+	{
+		int index = book->GetPageIndex(activeTab);
+		book->InsertPage(index, tab, tab->tabName, true);
+		book->DeletePage(index + 1); // RemovePage does not delete the tab object, use DeletePage to prevent memory leak
+	}
+	else book->AddPage(tab, tab->tabName, true);
 }
 
 void EntityFrame::onWindowClose(wxCloseEvent& event)
@@ -273,15 +278,7 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 
 		try {
 			EntityTab* newTab = new EntityTab(book, name, filepath);
-
-			// Replace an unused new page
-			if (activeTab->IsNewAndUntouched())
-			{
-				int index = book->GetPageIndex(activeTab);
-				book->InsertPage(index, newTab, newTab->tabName, true);
-				book->RemovePage(index + 1);
-			}
-			else book->AddPage(newTab, newTab->tabName, true);
+			AddOpenedTab(newTab);
 		}
 		catch (std::runtime_error e) {
 			wxString msg = wxString::Format("File Opening Cancelled\n\n%s", e.what());
@@ -309,13 +306,7 @@ void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 	std::string tabName = filePath.substr(delimiter, filePath.length() - delimiter);
 
 	EntityTab* newTab = new EntityTab(book, "[TEMPORARY FILE] " + tabName, filePath);
-	if (activeTab->IsNewAndUntouched())
-	{
-		int index = book->GetPageIndex(activeTab);
-		book->InsertPage(index, newTab, newTab->tabName, true);
-		book->RemovePage(index + 1);
-	}
-	else book->AddPage(newTab, newTab->tabName, true);
+	AddOpenedTab(newTab);
 }
 
 void EntityFrame::onFileSave(wxCommandEvent& event)
@@ -371,20 +362,6 @@ void EntityFrame::onCompressCheck(wxCommandEvent& event)
 		activeTab->compressOnSave = event.IsChecked();
 		activeTab->fileUpToDate = false; // Allows saving unedited file when compression toggled
 	}
-}
-
-void EntityFrame::onUndoRedo(wxCommandEvent& event)
-{
-	bool undo = event.GetId() == EDIT_UNDO;
-	wxWindow* focused = FindFocus();
-	wxTextCtrl* textWindow = dynamic_cast<wxTextCtrl*>(focused);
-
-	if (textWindow != nullptr)
-	{
-		if (undo) textWindow->Undo();
-		else textWindow->Redo();
-	}
-	else activeTab->UndoRedo(undo);
 }
 
 void EntityFrame::onNumberListCheck(wxCommandEvent& event)
@@ -455,8 +432,6 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 		* 1. Set your meathook tab AFTER loading into the level you want to edit.
 		* 2. If you quit to main menu or play a different level, then load back into the level you were editing,
 		* you should reload with EntitySlayer to ensure the game uses your file.
-		* 3. Make sure your meathook tab has compression-on-save turned off (or your game will crash, as
-		*	it happens when meathook tries loading a compressed file as an override).
 		*/
 		{
 			auto start = std::chrono::high_resolution_clock::now();
