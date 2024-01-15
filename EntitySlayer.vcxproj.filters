@@ -54,6 +54,9 @@
     <ClCompile Include="Parser\EntityParser.cpp">
       <Filter>Source Files\Parser</Filter>
     </ClCompile>
+    <ClCompile Include="EntSlayer\Meathook.cpp">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser\EntityLogger.h">
@@ -94,6 +97,9 @@
     </ClInclude>
     <ClInclude Include="EntHero\RPCInterface\mhclient.h">
       <Filter>Source Files\EntHero\Meathook</Filter>
+    </ClInclude>
+    <ClInclude Include="EntSlayer\Meathook.h">
+      <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

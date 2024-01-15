@@ -86,6 +86,16 @@ class EntNode
 		return children[index];
 	}
 
+	// More generally, get the second ancestor
+	EntNode* getEntity() {
+		if(TYPE == NodeType::ROOT) return nullptr;
+
+		EntNode* entity = this;
+		while (entity->parent->TYPE != NodeType::ROOT) 
+			entity = entity->parent;
+		return entity;
+	}
+
 	bool IsRelatedTo(EntNode* b)
 	{
 		EntNode* current = this;
@@ -166,20 +176,6 @@ class EntNode
 		for(int i = 0; i < childCount; i++)
 			children[i]->populateParentRefs(this);
 	}
-
-	//bool swapChildPositions(EntNode* a, EntNode* b)
-	//{
-	//	int indexA = getChildIndex(a);
-	//	int indexB = getChildIndex(b);
-	//	if (indexA == -1 || indexB == -1)
-	//		return false;
-
-	//	EntNode* temp = a;
-	//	children[indexA] = b;
-	//	children[indexB] = temp;
-
-	//	return true;
-	//}
 
 	/*
 	* DEBUGGING FUNCTIONS

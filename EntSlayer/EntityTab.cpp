@@ -2,6 +2,7 @@
 #include "EntityTab.h"
 #include "EntityEditor.h"
 #include "FilterMenus.h"
+#include "Meathook.h"
 
 enum TabID 
 {
@@ -14,7 +15,13 @@ enum TabID
 	NODEVIEW_SELECTALLENTS,
 	NODEVIEW_SELECTALLENTS_ACCEL,
 	NODEVIEW_DELETESELECTED,
-	NODEVIEW_DELETESELECTED_ACCEL
+	NODEVIEW_DELETESELECTED_ACCEL,
+	NODEVIEW_SETPOSITION,
+	NODEVIEW_SETPOSITION_ACCEL,
+	NODEVIEW_SETORIENTATION,
+	NODEVIEW_SETORIENTATION_ACCEL,
+	NODEVIEW_TELEPORTPOSITION,
+	NODEVIEW_TELEPORTPOSITION_ACCEL
 };
 
 wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
@@ -29,11 +36,17 @@ wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
 	EVT_MENU(NODEVIEW_PASTE, onPaste)
 	EVT_MENU(NODEVIEW_SELECTALLENTS, onSelectAllEntities)
 	EVT_MENU(NODEVIEW_DELETESELECTED, EntityTab::onDeleteSelectedNodes)
+	EVT_MENU(NODEVIEW_SETPOSITION, EntityTab::onSetSpawnPosition)
+	EVT_MENU(NODEVIEW_SETORIENTATION, EntityTab::onSetSpawnOrientation)
+	EVT_MENU(NODEVIEW_TELEPORTPOSITION, EntityTab::onTeleportToEntity)
 
 	EVT_MENU(NODEVIEW_COPYSELECTED_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_PASTE_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_SELECTALLENTS_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_DELETESELECTED_ACCEL, onNodeContextAccelerator)
+	EVT_MENU(NODEVIEW_SETPOSITION_ACCEL, onNodeContextAccelerator)
+	EVT_MENU(NODEVIEW_SETORIENTATION_ACCEL, onNodeContextAccelerator)
+	EVT_MENU(NODEVIEW_TELEPORTPOSITION_ACCEL, onNodeContextAccelerator)
 wxEND_EVENT_TABLE()
 
 EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path)
@@ -133,15 +146,22 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		viewMenu.AppendSeparator();
 		viewMenu.Append(NODEVIEW_SELECTALLENTS, "Select All Entities\tCtrl+A");
 		viewMenu.Append(NODEVIEW_DELETESELECTED, "Delete Selected\tDel");
+		viewMenu.AppendSeparator();
+		viewMenu.Append(NODEVIEW_SETPOSITION, "Copy and Set spawnPosition\tCtrl+E");
+		viewMenu.Append(NODEVIEW_SETORIENTATION, "Copy and Set spawnOrientation\tCtrl+R");
+		viewMenu.Append(NODEVIEW_TELEPORTPOSITION, "Teleport to spawnPosition\tCtrl+W");
 
-		const size_t BINDCOUNT = 6;
+		const size_t BINDCOUNT = 9;
 		wxAcceleratorEntry entries[BINDCOUNT] {
 			wxAcceleratorEntry(wxACCEL_CTRL, 'Z', NODEVIEW_UNDO),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'Y', NODEVIEW_REDO),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPYSELECTED_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'V', NODEVIEW_PASTE_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'A', NODEVIEW_SELECTALLENTS_ACCEL),
-			wxAcceleratorEntry(wxACCEL_NORMAL, WXK_DELETE, NODEVIEW_DELETESELECTED_ACCEL)
+			wxAcceleratorEntry(wxACCEL_NORMAL, WXK_DELETE, NODEVIEW_DELETESELECTED_ACCEL),
+			wxAcceleratorEntry(wxACCEL_CTRL, 'E', NODEVIEW_SETPOSITION_ACCEL),
+			wxAcceleratorEntry(wxACCEL_CTRL, 'R', NODEVIEW_SETORIENTATION_ACCEL),
+			wxAcceleratorEntry(wxACCEL_CTRL, 'W', NODEVIEW_TELEPORTPOSITION_ACCEL)
 		};
 		wxAcceleratorTable accel(BINDCOUNT, entries);
 		view->SetAcceleratorTable(accel);
@@ -421,6 +441,7 @@ void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 	if (dataviewMouseAction(item))
 	{
 		EntNode* node = (EntNode*)item.GetID();
+		bool online = Meathook::IsOnline();
 
 		// To prevent errors from occurring with accelerator hotkeys,
 		// we should also ensure these conditions are checked when executing
@@ -431,6 +452,13 @@ void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 		viewMenu.Enable(NODEVIEW_PASTE, node != nullptr && node != root);
 		viewMenu.Enable(NODEVIEW_SELECTALLENTS, true);
 		viewMenu.Enable(NODEVIEW_DELETESELECTED, view->HasSelection());
+
+		// Todo: Verify edit node exists
+		viewMenu.Enable(NODEVIEW_SETPOSITION, online && usingMH && node != nullptr && node != root);
+		viewMenu.Enable(NODEVIEW_SETORIENTATION, online && usingMH && node != nullptr && node != root);
+		viewMenu.Enable(NODEVIEW_TELEPORTPOSITION, online && usingMH && node != nullptr && node != root);
+
+
 		view->PopupMenu(&viewMenu);
 	}
 }
@@ -460,6 +488,18 @@ void EntityTab::onNodeContextAccelerator(wxCommandEvent& event)
 
 		case NODEVIEW_DELETESELECTED_ACCEL:
 		onDeleteSelectedNodes(event);
+		break;
+
+		case NODEVIEW_SETPOSITION_ACCEL:
+		onSetSpawnPosition(event);
+		break;
+
+		case NODEVIEW_SETORIENTATION_ACCEL:
+		onSetSpawnOrientation(event);
+		break;
+
+		case NODEVIEW_TELEPORTPOSITION_ACCEL:
+		onTeleportToEntity(event);
 		break;
 
 		default:
@@ -530,6 +570,7 @@ void EntityTab::onPaste(wxCommandEvent& event)
 			else {
 				parser->PushGroupCommand();
 				editor->SetActiveNode(nullptr); // Adjust this?
+				fileUpToDate = false;
 			}
 		}
 		else wxLogMessage("Could not paste non-text content");
@@ -565,7 +606,113 @@ void EntityTab::onDeleteSelectedNodes(wxCommandEvent& event)
 		}
 	}
 	parser->PushGroupCommand();
+	fileUpToDate = false;
 	wxLogMessage("Deleted %i nodes and their children", numDeletions);
+}
+
+void EntityTab::onSetSpawnPosition(wxCommandEvent& event)
+{
+	// Verify the selection is valid
+	EntNode* selection = (EntNode*)view->GetCurrentItem().GetID();
+	if (selection == nullptr || selection == root) return;
+	EntNode* entity = selection->getEntity();
+
+	EntNode& edit = (*entity)["entityDef"]["edit"];
+	if (&edit == EntNode::SEARCH_404) return;
+
+	// Copy and retrieve from clipboard
+	if(!Meathook::CopySpawnPosition()) return;
+	editor->SetActiveNode(nullptr);
+
+	wxClipboard* clipboard = wxTheClipboard->Get();
+	clipboard->Open();
+	wxTextDataObject data;
+	clipboard->GetData(data);
+
+	std::string text(data.GetText());
+	clipboard->Close();
+
+	// Perform Edit operation
+	EntNode& spawnPosition = edit["spawnPosition"];
+	if (&spawnPosition == EntNode::SEARCH_404)
+		parser->EditTree(text, &edit, 0, 0, false, true);
+	else parser->EditTree(text, &edit, edit.getChildIndex(&spawnPosition), 1, false, true);
+
+	parser->PushGroupCommand();
+	fileUpToDate = false;
+}
+
+void EntityTab::onSetSpawnOrientation(wxCommandEvent& event)
+{
+	// Verify the selection is valid
+	EntNode* selection = (EntNode*)view->GetCurrentItem().GetID();
+	if (selection == nullptr || selection == root) return;
+	EntNode* entity = selection->getEntity();
+
+	EntNode& edit = (*entity)["entityDef"]["edit"];
+	if (&edit == EntNode::SEARCH_404) return;
+
+	// Copy and retrieve from clipboard
+	if(!Meathook::CopySpawnOrientation()) return;
+	editor->SetActiveNode(nullptr);
+
+	wxClipboard* clipboard = wxTheClipboard->Get();
+	clipboard->Open();
+	wxTextDataObject data;
+	clipboard->GetData(data);
+
+	std::string text(data.GetText());
+	clipboard->Close();
+
+	// Perform Edit operation
+	EntNode& spawnOrientation = edit["spawnOrientation"];
+	if (&spawnOrientation == EntNode::SEARCH_404)
+		parser->EditTree(text, &edit, 0, 0, false, true);
+	else parser->EditTree(text, &edit, edit.getChildIndex(&spawnOrientation), 1, false, true);
+
+	parser->PushGroupCommand();
+	fileUpToDate = false;
+}
+
+void EntityTab::onTeleportToEntity(wxCommandEvent& event)
+{
+	// Verify the selection is valid
+	EntNode* selection = (EntNode*)view->GetCurrentItem().GetID();
+	if (selection == nullptr || selection == root) return;
+	EntNode* entity = selection->getEntity();
+
+	std::string command = "teleportposition";
+
+	EntNode& spawnPosition = (*entity)["entityDef"]["edit"]["spawnPosition"];
+	if (&spawnPosition == EntNode::SEARCH_404) {
+		command.append(" 0 0 0 0");
+	} else {
+		EntNode& x = spawnPosition["x"];
+		EntNode& y = spawnPosition["y"];
+		EntNode& z = spawnPosition["z"];
+
+		if(&x == EntNode::SEARCH_404) command.append(" 0");
+		else {
+			command.push_back(' ');
+			command.append(x.getValue());
+		}
+
+		if (&y == EntNode::SEARCH_404) command.append(" 0");
+		else {
+			command.push_back(' ');
+			command.append(y.getValue());
+		}
+
+		if (&z == EntNode::SEARCH_404) command.append(" 0");
+		else {
+			command.push_back(' ');
+			command.append(z.getValue());
+		}
+		command.append(" 0");
+	}
+	wxLogMessage("%s", command);
+	if(!Meathook::ExecuteCommand(command))
+		wxLogMessage("Teleport command failed?");
 }
 
 void EntityTab::onFilterMenuShowHide(wxCollapsiblePaneEvent& event)

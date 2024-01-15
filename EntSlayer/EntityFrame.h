@@ -5,14 +5,6 @@
 #include "wx/display.h"
 #include "wx/timer.h"
 
-// STL
-#include <vector>
-#include <string>
-#include <cassert>
-
-// Custom
-#include <mhclient.h>
-
 class EntityTab;
 class EntityFrame : public wxFrame
 {
@@ -25,7 +17,6 @@ class EntityFrame : public wxFrame
 	wxStatusBar* statusbar = nullptr;
 
 	// Meathook
-	MeathookInterface meathook;
 	wxMenu* mhMenu = new wxMenu;
 	wxTimer mhStatusTimer;
 	wxString mhText_Preface;
@@ -52,6 +43,10 @@ class EntityFrame : public wxFrame
 	void onMHStatusCheck(wxTimerEvent& event);
 	void onSetMHTab(wxCommandEvent& event);
 	void onReloadMH(wxCommandEvent& event);
+	void onGetSpawnPosition(wxCommandEvent &event);
+	void onGetSpawnOrientation(wxCommandEvent &event);
+	void onSpawnOffsetCheck(wxCommandEvent &event);
+
 	void RefreshMHMenu();
 	void onSpecial_PropMovers(wxCommandEvent &event);
 

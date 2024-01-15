@@ -66,6 +66,9 @@ class EntityTab : public wxPanel
 	void onPaste(wxCommandEvent& event);
 	void onSelectAllEntities(wxCommandEvent &event);
 	void onDeleteSelectedNodes(wxCommandEvent &event);
+	void onSetSpawnPosition(wxCommandEvent &event);
+	void onSetSpawnOrientation(wxCommandEvent &event);
+	void onTeleportToEntity(wxCommandEvent &event);
 
 	void onFilterMenuShowHide(wxCollapsiblePaneEvent& event);
 

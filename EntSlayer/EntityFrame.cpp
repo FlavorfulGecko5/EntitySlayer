@@ -1,3 +1,6 @@
+#pragma warning(disable : 4996) // Deprecation errors
+#include "wx/clipbrd.h"
+#include "Meathook.h"
 #include "Oodle.h"
 #include "EntityFrame.h"
 #include "EntityTab.h"
@@ -20,6 +23,10 @@ enum FrameID
 	MEATHOOK_MAKEACTIVETAB,
 	MEATHOOK_OPENFILE,
 	MEATHOOK_RELOAD,
+	MEATHOOK_GET_SPAWNINFO,
+	MEATHOOK_GET_SPAWNPOSITION,
+	MEATHOOK_GET_SPAWNORIENTATION,
+	MEATHOOK_SPAWNPOS_OFFSET,
 	MEATHOOK_GET_CHECKPOINT,
 	MEATHOOK_GET_ENCOUNTER,
 
@@ -45,6 +52,9 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(MEATHOOK_MAKEACTIVETAB, EntityFrame::onSetMHTab)
 	EVT_MENU(MEATHOOK_OPENFILE, EntityFrame::onMeathookOpen) 
 	EVT_MENU(MEATHOOK_RELOAD, EntityFrame::onReloadMH)
+	EVT_MENU(MEATHOOK_GET_SPAWNPOSITION, EntityFrame::onGetSpawnPosition)
+	EVT_MENU(MEATHOOK_GET_SPAWNORIENTATION, EntityFrame::onGetSpawnOrientation)
+	EVT_MENU(MEATHOOK_SPAWNPOS_OFFSET, EntityFrame::onSpawnOffsetCheck)
 
 	EVT_MENU(SPECIAL_PROPMOVERS, EntityFrame::onSpecial_PropMovers)
 wxEND_EVENT_TABLE()
@@ -71,7 +81,11 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Make Active Tab");
 		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O");
 		mhMenu->Append(MEATHOOK_RELOAD, "Save and Reload Map\tF5");
-		//mhMenu->AppendSeparator();
+		mhMenu->AppendSeparator();
+		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION, "Copy spawnPosition");
+		mhMenu->Append(MEATHOOK_GET_SPAWNORIENTATION, "Copy spawnOrientation");
+		mhMenu->AppendCheckItem(MEATHOOK_SPAWNPOS_OFFSET, "Remove spawnPosition Z Offset",
+			"Subtract the player's height from copied spawnPosition Z");
 		//mhMenu->Append(MEATHOOK_GET_CHECKPOINT, "Goto Checkpoint");
 		//mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Goto Current Encounter");
 
@@ -291,13 +305,13 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 
 void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 {
-	char Path[MAX_PATH];
-	size_t PathSize = sizeof(Path);
-	bool success = meathook.GetEntitiesFile((unsigned char*)Path, &PathSize);
-
 	// This will be a newly created temp. file dumped from meathook,
 	// so we can skip some safety checks we need for ordinary files
-	std::string filePath(Path, PathSize);
+	std::string filePath;
+	if (!Meathook::GetCurrentMap(filePath, false)) {
+		wxMessageBox("Meathook open failed. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+		return;
+	}
 
 	size_t delimiter = filePath.find_last_of('\\') + 1;
 	if (delimiter == std::string::npos)
@@ -373,7 +387,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 8 [Right Click Menu, Multi-File-Select, Fine-Tune Node Auto-Selection]");
+	info.SetVersion("Alpha 9 [Meathook spawnInfo Integration]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -435,10 +449,8 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 		*/
 		{
 			auto start = std::chrono::high_resolution_clock::now();
-			char Path[MAX_PATH];
-			size_t PathSize = sizeof(Path);
-			bool success = meathook.GetEntitiesFile((unsigned char*)Path, &PathSize);
-			if (success) std::remove(Path);
+			std::string dummy;
+			Meathook::GetCurrentMap(dummy, true);
 
 			auto stop = std::chrono::high_resolution_clock::now();
 			auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
@@ -454,24 +466,41 @@ void EntityFrame::onReloadMH(wxCommandEvent& event)
 	wxLogMessage("Reload function called");
 	activeTab->saveFile();
 
-	char Directory[MAX_PATH];
-	std::string pathString = std::string(activeTab->filePath);
-	memcpy(&Directory[0], pathString.data(), pathString.length());
-	Directory[pathString.length()] = '\0';
+	if(!Meathook::ReloadMap(std::string(activeTab->filePath)))
+		wxMessageBox("Map reload failed. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+}
 
-	meathook.PushEntitiesFile(Directory, nullptr, 0);
+void EntityFrame::onGetSpawnPosition(wxCommandEvent &event) 
+{
+	if(!Meathook::CopySpawnPosition())
+		wxMessageBox("Couldn't get spawnPosition. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+}
+
+void EntityFrame::onGetSpawnOrientation(wxCommandEvent& event)
+{
+	if(!Meathook::CopySpawnOrientation())
+		wxMessageBox("Couldn't get spawnOrientation. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+}
+
+void EntityFrame::onSpawnOffsetCheck(wxCommandEvent& event)
+{
+	Meathook::RemoveZOffset(event.IsChecked());
 }
 
 void EntityFrame::RefreshMHMenu()
 {
 	int DEBUG_SIMULATE_ONLINE = 0;
-	bool online = meathook.m_Initialized || DEBUG_SIMULATE_ONLINE;
+	bool online = Meathook::IsOnline() || DEBUG_SIMULATE_ONLINE;
 	statusbar->SetStatusText(mhText_Preface + (online ? mhText_Active : mhText_Inactive));
 
 	mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != ""); // Tabs with no file shouldn't be useable with mh
 	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab->usingMH);
 	mhMenu->Enable(MEATHOOK_OPENFILE, online);
 	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab->usingMH);
+	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION, online);
+	mhMenu->Enable(MEATHOOK_GET_SPAWNORIENTATION, online);
+	mhMenu->Enable(MEATHOOK_SPAWNPOS_OFFSET, online);
+	mhMenu->Check(MEATHOOK_SPAWNPOS_OFFSET, Meathook::RemoveZOffset());
 }
 
 void EntityFrame::onSpecial_PropMovers(wxCommandEvent &event)
