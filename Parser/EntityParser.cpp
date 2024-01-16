@@ -12,6 +12,7 @@ EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
 	// Cannot append a null character to a string? Hence const char* instead
 	const char* rawText = "Version 7\nHierarchyVersion 1\0";
 	textView = std::string_view(rawText, 29);
+	ch = (char*)rawText; // Probably not a very good practice
 
 	parseContentsFile(&root);
 	assertLastType(TokenType::END);
@@ -49,6 +50,7 @@ EntityParser::EntityParser(const std::string& filepath, const bool debug_logPars
 			throw std::runtime_error("Could not decompress .entities file");
 		decompressedText[decompressedSize] = '\0';
 		textView = std::string_view(decompressedText, decompressedSize + 1);
+		ch = decompressedText;
 	}
 	else
 	{
@@ -56,6 +58,7 @@ EntityParser::EntityParser(const std::string& filepath, const bool debug_logPars
 		rawText.push_back('\0');
 		rawText.shrink_to_fit();
 		textView = std::string_view(rawText.data(), rawText.size());
+		ch = rawText.data();
 	}
 
 	if (debug_logParseTime)
@@ -412,8 +415,8 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, NodeType 
 	text.push_back('\0');
 	textView = std::string_view(text);
 	currentLine = 1;
-	it = 0;
-	start = 0;
+	ch = text.data();
+	first = ch;
 
 	try 
 	{
@@ -686,7 +689,7 @@ void EntityParser::setNodeChildren(EntNode* parent, const size_t startIndex)
 
 bool EntityParser::isLetter()
 {
-	return ((unsigned int)(textView[it] | 32) - 97) < 26U;
+	return ((unsigned int)(*ch | 32) - 97) < 26U;
 }
 
 void EntityParser::assertLastType(TokenType requiredType)
@@ -712,15 +715,15 @@ void EntityParser::TokenizeAdjustValue()
 void EntityParser::Tokenize() 
 {
 	LABEL_TOKENIZE_START:
-	switch (textView[it]) // Not auto-incrementing should eliminate unnecessary arithmetic operations
+	switch (*ch) // Not auto-incrementing should eliminate unnecessary arithmetic operations
 	{                     // at the cost of needing to manually it++ in additional areas
 		case '\r':
-		if(textView[++it] != '\n')
+		if(*++ch != '\n')
 			throw Error("Expected line feed after carriage return");
 		case '\n':
 		currentLine++;
 		case ' ': case '\t':
-		it++;
+		ch++;
 		goto LABEL_TOKENIZE_START;
 
 		case '\0': // Appending null character to end of string simplifies this function's bounds-checking
@@ -729,34 +732,34 @@ void EntityParser::Tokenize()
 
 		case ';':
 		lastTokenType = TokenType::TERMINAL;
-		it++;
+		ch++;
 		return;
 
 		case '{':
 		lastTokenType = TokenType::BRACEOPEN;
-		it++;
+		ch++;
 		return;
 
 		case '}':
 		lastTokenType = TokenType::BRACECLOSE;
-		it++;
+		ch++;
 		return;
 
 		case '=':
 		lastTokenType = TokenType::ASSIGNMENT;
-		it++;
+		ch++;
 		return;
 
 		case '/':
-		start = it;
-		if(textView[++it] != '/')
+		first = ch;
+		if(*++ch != '/')
 			throw Error("Comments require two consecutive forward slashes.");
 		LABEL_COMMENT_START:
-		switch (textView[++it])
+		switch (*++ch)
 		{
 			case '\n': case '\r': case '\0':
 			lastTokenType = TokenType::COMMENT;
-			lastUniqueToken = textView.substr(start, it - start);
+			lastUniqueToken = std::string_view(first, (size_t)(ch - first));
 			return;
 
 			default:
@@ -764,13 +767,13 @@ void EntityParser::Tokenize()
 		}
 
 		case '"':
-		start = it;
+		first = ch;
 		LABEL_STRING_START:
-		switch (textView[++it])
+		switch (*++ch)
 		{
 			case '"':
 			lastTokenType = TokenType::VALUE_STRING;
-			lastUniqueToken = textView.substr(start, ++it - start); // Increment past quote to set to next char
+			lastUniqueToken = std::string_view(first, (size_t)(++ch - first)); // Increment past quote to set to next char
 			return;
 
 			case '\r': case '\n': case '\0': // Again, relies on string ending in null character
@@ -788,9 +791,9 @@ void EntityParser::Tokenize()
 		case '5': case '6': case '7': case '8': case '9':
 		{
 			bool hasDot = false;
-			start = it;
+			first = ch;
 			LABEL_NUMBER_START:
-			switch (textView[++it])
+			switch (*++ch)
 			{
 				case '0': case '1': case '2': case '3': case '4':
 				case '5': case '6': case '7': case '8': case '9':
@@ -807,7 +810,7 @@ void EntityParser::Tokenize()
 
 				default:
 				lastTokenType = TokenType::VALUE_NUMBER;
-				lastUniqueToken = textView.substr(start, it - start);
+				lastUniqueToken = std::string_view(first, (size_t)(ch - first));
 				return;
 			}
 			// Unimplemented remnants of previous version
@@ -833,16 +836,16 @@ void EntityParser::Tokenize()
 
 		default:
 		{
-			if (!isLetter() && textView[it] != '_')
+			if (!isLetter() && *ch != '_')
 				throw Error("Unrecognized character");
-			start = it;
+			first = ch;
 
 			LABEL_ID_START:
-			switch (textView[++it])
+			switch (*++ch)
 			{
 				case '[':
 				LABEL_ID_BRACKET_START:
-				switch(textView[++it])
+				switch(*++ch)
 				{
 					case '0': case '1': case '2': case '3': case '4':
 					case '5': case '6': case '7': case '8': case '9':
@@ -850,7 +853,7 @@ void EntityParser::Tokenize()
 					break;
 
 					case ']':
-					if(textView[it++ - 1] != '[')
+					if(*(ch++ - 1) != '[')
 						break;
 					default:
 					throw Error("Improper bracket usage in identifer");
@@ -858,11 +861,11 @@ void EntityParser::Tokenize()
 				break;
 
 				default:
-				if (isLetter() || isdigit(textView[it]) || textView[it] == '_')
+				if (isLetter() || isdigit(*ch) || *ch == '_')
 					goto LABEL_ID_START;
 				break;
 			}
-			lastUniqueToken = textView.substr(start, it - start);
+			lastUniqueToken = std::string_view(first, (size_t)(ch - first));
 			lastTokenType = TokenType::IDENTIFIER;
 			return;
 		}

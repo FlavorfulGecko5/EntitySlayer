@@ -273,6 +273,20 @@ void EntityEditor::OnCharAdded(wxStyledTextEvent& event)
     else if (chr == '{') {
         InsertText(GetCurrentPos(), '}');
     }
+    else if (chr == '[') {
+        InsertText(GetCurrentPos(), ']');
+    }
+    else if (chr == '"') {
+        wxString line = GetLineText(GetCurrentLine());
+
+        int numQuotes = 0;
+        for(char c : line)
+            if(c == '"') 
+                numQuotes++;
+
+        if(numQuotes == 1)
+            InsertText(GetCurrentPos(), "\";");
+    }
 
 
     /*else if (chr == '#') {
