@@ -114,23 +114,6 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	wxDataViewItemArray removedNodes;
 	wxDataViewItemArray addedNodes;
 
-	// -count because we are replacing existing nodes
-	int newNumChildren = parent->childCount + tempRoot.childCount - removeCount;
-	EntNode** newChildBuffer = childAlloc.reserveBlock(newNumChildren);
-
-	// Copy everything into the new child buffer
-	int inc = 0;
-	for(inc = 0; inc < insertionIndex; inc++)
-		newChildBuffer[inc] = parent->children[inc];
-	for (int i = 0; i < tempRoot.childCount; i++)
-	{
-		newChildBuffer[inc++] = tempRoot.children[i];
-		tempRoot.children[i]->populateParentRefs(parent);  // Set the parents of incoming nodes.
-		addedNodes.Add(wxDataViewItem(tempRoot.children[i]));
-	}	
-	for(int i = insertionIndex + removeCount; i < parent->childCount; i++)
-		newChildBuffer[inc++] = parent->children[i];
-
 	// Build the reverse command
 	reverseGroup.emplace_back();
 	ParseCommand& reverse = reverseGroup.back();
@@ -138,23 +121,103 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	root.findPositionalID(parent, reverse.parentID);
 	reverse.insertionIndex = insertionIndex;
 	reverse.removalCount = tempRoot.childCount;
-
-	// Now that we've built the new child buffer, deallocate all old data
-	for (int i = 0; i < removeCount; i++)
-	{
+	for (int i = 0; i < removeCount; i++) {
 		EntNode* n = parent->children[insertionIndex + i];
-		removedNodes.Add(wxDataViewItem(n));
 		n->generateText(reverse.text);
 		reverse.text.push_back('\n');
+
+		// Deallocate deleted nodes
+		removedNodes.Add(wxDataViewItem(n));
 		freeNode(n);
 	}
-			
-	childAlloc.freeBlock(parent->children, parent->childCount);
-	childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
 
-	// Finally, attach new data to the parent
-	parent->childCount = newNumChildren;
-	parent->children = newChildBuffer;
+	// Prep. the new nodes to be fully integrated into the tree
+	for (int i = 0; i < tempRoot.childCount; i++)
+	{
+		EntNode* n = tempRoot.children[i];
+		n->populateParentRefs(parent);
+		addedNodes.Add(wxDataViewItem(n));
+	}
+	
+	/* 
+	* Three Common Steps for each Branch:
+	* 1. Move everything into the new child buffer
+	* 2. Deallocate the old child buffers
+	* 3. Assign the new child buffer/child count to the parent
+	*/
+	int newNumChildren = parent->childCount + tempRoot.childCount - removeCount;
+	if (parent == &root)
+	{ 
+		if (newNumChildren > maxRootChildren) 
+		{
+			int newMaxRootChildren = newNumChildren + 1000;
+			EntNode** newRootChildBuffer = new EntNode*[newMaxRootChildren];
+
+			// Copy everything
+			int inc = 0;
+			for(inc = 0; inc < insertionIndex; inc++)
+				newRootChildBuffer[inc] = rootChildBuffer[inc];
+			for(int i = 0; i < tempRoot.childCount; i++)
+				newRootChildBuffer[inc++] = tempRoot.children[i];
+			for(int i = insertionIndex + removeCount; i < root.childCount; i++)
+				newRootChildBuffer[inc++] = rootChildBuffer[i];
+
+			// Deallocate old data
+			childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
+			delete[] rootChildBuffer;
+
+			// Attach new data
+			root.childCount = newNumChildren;
+			root.children = newRootChildBuffer;
+			maxRootChildren = newMaxRootChildren;
+			rootChildBuffer = newRootChildBuffer;
+		}
+		else 
+		{
+			int difference = newNumChildren - root.childCount;
+			int min = insertionIndex + removeCount;
+			
+			// Must shift to right to expand room
+			if (difference > 0) {
+				for(int i = root.childCount - 1; i >= min; i--)
+					rootChildBuffer[i + difference] = rootChildBuffer[i];
+			}
+			// Must shift to left to contract space
+			else if (newNumChildren < root.childCount) {
+				for(int i = min; i < root.childCount; i++)
+					rootChildBuffer[i + difference] = rootChildBuffer[i];
+			}
+			for(int inc = insertionIndex, i = 0; i < tempRoot.childCount; i++)
+				rootChildBuffer[inc++] = tempRoot.children[i];
+			
+			// Deallocate old data
+			childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
+
+			// Attach new data
+			root.childCount = newNumChildren;
+		}
+	}
+	else 
+	{
+		EntNode** newChildBuffer = childAlloc.reserveBlock(newNumChildren);
+
+		// Copy everything into the new child buffer
+		int inc = 0;
+		for(inc = 0; inc < insertionIndex; inc++)
+			newChildBuffer[inc] = parent->children[inc];
+		for (int i = 0; i < tempRoot.childCount; i++)
+			newChildBuffer[inc++] = tempRoot.children[i];
+		for(int i = insertionIndex + removeCount; i < parent->childCount; i++)
+			newChildBuffer[inc++] = parent->children[i];
+
+		// Deallocate child buffers
+		childAlloc.freeBlock(parent->children, parent->childCount);
+		childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
+
+		// Finally, attach new data to the parent
+		parent->childCount = newNumChildren;
+		parent->children = newChildBuffer;
+	}
 
 	// Must update model AFTER node is given it's new child data
 	wxDataViewItem parentItem(parent);
@@ -390,7 +453,7 @@ EntNode* EntityParser::getRoot() { return &root; }
 
 bool EntityParser::wasFileCompressed() { return fileWasCompressed; }
 
-void EntityParser::logAllocatorInfo(bool includeBlockList)
+void EntityParser::logAllocatorInfo(bool includeBlockList, bool logToLogger, bool logToFile, const std::string filepath)
 {
 	std::string msg = "EntNode Allocator\n=====\n";
 	msg.append(nodeAlloc.toString(includeBlockList));
@@ -398,8 +461,22 @@ void EntityParser::logAllocatorInfo(bool includeBlockList)
 	msg.append(textAlloc.toString(includeBlockList));
 	msg.append("\nChild Buffer Allocator\n=====\n");
 	msg.append(childAlloc.toString(includeBlockList));
+	msg.append("\nRoot Child Buffer: ");
+	msg.append(std::to_string(root.childCount));
+	msg.append(" / ");
+	msg.append(std::to_string(maxRootChildren));
+	msg.append(" Slots Filled");
 	msg.push_back('\n');
-	EntityLogger::log(msg);
+
+	if (logToLogger)
+		EntityLogger::log(msg);
+
+	if(logToFile)
+	{
+		std::ofstream file(filepath, std::ios_base::binary);
+		file.write(msg.data(), msg.length());
+		file.close();
+	}
 }
 
 std::runtime_error EntityParser::Error(std::string msg)
@@ -472,7 +549,21 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	}
 	if (lastTokenType != TokenType::IDENTIFIER)
 	{
-		setNodeChildren(node, childrenStart);
+		if(node != &root)
+			setNodeChildren(node, childrenStart);
+		else {
+			// At this point, only the root children should
+			// be in the temporary vector
+			root.childCount = (int)tempChildren.size();
+
+			maxRootChildren = root.childCount + 1000;
+			rootChildBuffer = new EntNode*[maxRootChildren];
+			root.children = rootChildBuffer;
+			
+			for(int i = 0, max = root.childCount; i < max; i++)
+				rootChildBuffer[i] = tempChildren[i]; // No overflow here, Visual Studio is stupid
+			tempChildren.clear();
+		}
 		return;
 	}
 
@@ -506,6 +597,14 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	if (lastTokenType == TokenType::COMMENT)
 	{
 		tempChildren.push_back(setNodeNameOnly(NodeType::COMMENT));
+		goto LABEL_LOOP;
+	}
+	if (lastTokenType == TokenType::VALUE_STRING) // Need this specifically for pvp_darkmetal
+	{
+		activeID = lastUniqueToken;
+		assertIgnore(TokenType::ASSIGNMENT);
+		assertIgnore(TokenType::VALUE_STRING);
+		tempChildren.push_back(setNodeValue(NodeType::VALUE_DARKMETAL));
 		goto LABEL_LOOP;
 	}
 	if(lastTokenType != TokenType::IDENTIFIER)
@@ -608,9 +707,6 @@ void EntityParser::freeNode(EntNode* node)
 {
 	// Free the allocated text block
 	textAlloc.freeBlock(node->textPtr, node->nameLength + node->valLength);
-	node->textPtr = nullptr;
-	node->nameLength = 0;
-	node->valLength = 0;
 
 	// Free the node's children and the pointer block listing them
 	if (node->childCount > 0)
@@ -618,13 +714,14 @@ void EntityParser::freeNode(EntNode* node)
 		for (int i = 0; i < node->childCount; i++)
 			freeNode(node->children[i]);
 		childAlloc.freeBlock(node->children, node->childCount);
-		node->childCount = 0;
 	}
-	node->children = nullptr;
-	node->parent = nullptr;
 
-	// Free the node memory itself
-	node->TYPE = NodeType::UNDESIGNATED;
+	/*
+	* We should ensure node values are reset to default when freeing them.
+	* Otherwise we must operate under the assumption that some data is inaccurate
+	* when working with EntityNode instance methods.
+	*/
+	new (node) EntNode;
 	nodeAlloc.freeBlock(node, 1);
 }
 

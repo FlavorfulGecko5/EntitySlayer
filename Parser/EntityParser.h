@@ -55,11 +55,31 @@ class EntityParser {
 	wxDataViewCtrl* view = nullptr;
 	EntityModel* model = nullptr; // Must set this after construction
 	private:
+	bool fileWasCompressed;
 	EntNode root;
 	BlockAllocator<char> textAlloc; // Allocator for node name/value buffers
 	BlockAllocator<EntNode> nodeAlloc; // Allocator for the nodes
 	BlockAllocator<EntNode*> childAlloc; // Allocator for node child buffers
-	bool fileWasCompressed;
+
+	// Root node's child count is orders of magnitude larger than any other object node
+	// Repeated single-entity additions will create extremely large free blocks that cannot
+	// come close to being filled faster than they're created. Hence, it's smarter to dedicate
+	// a separate buffer, which we expand when necessary, to root children
+	EntNode** rootChildBuffer = nullptr; 
+	int maxRootChildren = 0;
+
+	/*
+	* MUST TAKE INTO CONSIDERATION THIS ROOT CHILD BUFFER ANYWHERE THE ROOT'S CHILDREN COULD GET EXPANDED:
+	* - On initial parse (done)
+	* - On Edit Tree
+	* 
+	* When filter buffer is introduced, must also ensure synchonization with true child buffer:
+	* - On initial parse
+	* - On Edit Tree
+	* - On Edit Position
+	* - On Fix List Numberings? (Add safeguards to prevent this from operating on the root)
+	* - Will also need to rethink the positional ID system (or maybe not, since we clear history when filters are applied)
+	*/
 
 	/* Variables for tracking command history */
 	const size_t MAX_COMMAND_MEMORY = 100;
@@ -101,11 +121,15 @@ class EntityParser {
 	std::vector<EntNode*> tempChildren;
 
 	public:
+	~EntityParser()
+	{
+		delete[] rootChildBuffer;
+	}
+
 	/*
 	* Constructs an EntityParser with minimal data
 	*/
 	EntityParser();
-
 
 	/*
 	* Constructs an EntityParser containing fully parsed data from the given file
@@ -157,7 +181,7 @@ class EntityParser {
 	/*
 	* DEBUGGING METHODS
 	*/
-	void logAllocatorInfo(bool includeBlockList);
+	void logAllocatorInfo(bool includeBlockList, bool logToLogger, bool logToFile, const std::string filepath = "");
 
 
 	private:
@@ -182,12 +206,6 @@ class EntityParser {
 	* ALLOCATION / DEALLOCATION FUNCTIONS
 	*/
 
-	/*
-	* To prevent bad stuff from happening, we should ensure node values are reset to
-	* default when freeing them.
-	* It would be pretty terrible to have to operate under the assumption that some data
-	* is outdated when working with EntityNode instance methods
-	*/
 	void freeNode(EntNode* node);
 	inline EntNode* setNodeObj(const NodeType p_type);
 	inline EntNode* setNodeValue(const NodeType p_type);

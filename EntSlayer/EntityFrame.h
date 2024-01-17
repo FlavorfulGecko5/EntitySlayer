@@ -39,16 +39,18 @@ class EntityFrame : public wxFrame
 	void onCompressCheck(wxCommandEvent& event);
 	void onNumberListCheck(wxCommandEvent& event);
 	void onAbout(wxCommandEvent& event);
-	void onManual(wxCommandEvent& event);
 	void onMHStatusCheck(wxTimerEvent& event);
 	void onSetMHTab(wxCommandEvent& event);
 	void onReloadMH(wxCommandEvent& event);
+	void onPrintActiveEncounters(wxCommandEvent &event);
 	void onGetSpawnPosition(wxCommandEvent &event);
 	void onGetSpawnOrientation(wxCommandEvent &event);
 	void onSpawnOffsetCheck(wxCommandEvent &event);
 
 	void RefreshMHMenu();
+	bool ClearMHTab();
 	void onSpecial_PropMovers(wxCommandEvent &event);
+	void onSpecial_DumpAllocatorInfo(wxCommandEvent &event);
 
 	private:
 	wxDECLARE_EVENT_TABLE();

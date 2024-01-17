@@ -18,4 +18,5 @@ namespace Meathook
 	bool CopySpawnInfo();
 	bool CopySpawnPosition();
 	bool CopySpawnOrientation();
+	bool GetActiveEncounters(std::string& encounterNames);
 }

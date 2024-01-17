@@ -17,20 +17,19 @@ enum FrameID
 	EDIT_NUMBERLISTS,
 
 	HELP_ABOUT,
-	HELP_MANUAL,
 
 	MEATHOOK_CHECKSTATUS,
 	MEATHOOK_MAKEACTIVETAB,
 	MEATHOOK_OPENFILE,
 	MEATHOOK_RELOAD,
-	MEATHOOK_GET_SPAWNINFO,
 	MEATHOOK_GET_SPAWNPOSITION,
 	MEATHOOK_GET_SPAWNORIENTATION,
 	MEATHOOK_SPAWNPOS_OFFSET,
 	MEATHOOK_GET_CHECKPOINT,
 	MEATHOOK_GET_ENCOUNTER,
 
-	SPECIAL_PROPMOVERS
+	SPECIAL_DEBUG_DUMPBUFFERS,
+	SPECIAL_PROPMOVERS,
 };
 
 wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
@@ -46,16 +45,17 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_COMPRESS, EntityFrame::onCompressCheck)
 	EVT_MENU(EDIT_NUMBERLISTS, EntityFrame::onNumberListCheck)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
-	EVT_MENU(HELP_MANUAL, EntityFrame::onManual)
 
 	EVT_TIMER(MEATHOOK_CHECKSTATUS, EntityFrame::onMHStatusCheck)
 	EVT_MENU(MEATHOOK_MAKEACTIVETAB, EntityFrame::onSetMHTab)
 	EVT_MENU(MEATHOOK_OPENFILE, EntityFrame::onMeathookOpen) 
 	EVT_MENU(MEATHOOK_RELOAD, EntityFrame::onReloadMH)
+	EVT_MENU(MEATHOOK_GET_ENCOUNTER, EntityFrame::onPrintActiveEncounters)
 	EVT_MENU(MEATHOOK_GET_SPAWNPOSITION, EntityFrame::onGetSpawnPosition)
 	EVT_MENU(MEATHOOK_GET_SPAWNORIENTATION, EntityFrame::onGetSpawnOrientation)
 	EVT_MENU(MEATHOOK_SPAWNPOS_OFFSET, EntityFrame::onSpawnOffsetCheck)
 
+	EVT_MENU(SPECIAL_DEBUG_DUMPBUFFERS, EntityFrame::onSpecial_DumpAllocatorInfo)
 	EVT_MENU(SPECIAL_PROPMOVERS, EntityFrame::onSpecial_PropMovers)
 wxEND_EVENT_TABLE()
 
@@ -78,10 +78,12 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 
 		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
 
-		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Make Active Tab");
+		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Make Active Tab",
+			"Set this tab as your Meathook tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT");
 		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O");
 		mhMenu->Append(MEATHOOK_RELOAD, "Save and Reload Map\tF5");
 		mhMenu->AppendSeparator();
+		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Print Active Encounters");
 		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION, "Copy spawnPosition");
 		mhMenu->Append(MEATHOOK_GET_SPAWNORIENTATION, "Copy spawnOrientation");
 		mhMenu->AppendCheckItem(MEATHOOK_SPAWNPOS_OFFSET, "Remove spawnPosition Z Offset",
@@ -92,10 +94,12 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		wxMenu* specialMenu = new wxMenu;
 		specialMenu->Append(SPECIAL_PROPMOVERS, "Bind idProp2 Entities to idMovers",
 			"For Modded Multiplayer developers. Use this to fix idProp2 entity offsets");
+		specialMenu->AppendSeparator();
+		specialMenu->Append(SPECIAL_DEBUG_DUMPBUFFERS, "Write Allocator Data",
+			"For debugging. Writes parser allocation data for the current tab to a file.");
 
 		wxMenu* helpMenu = new wxMenu;
 		helpMenu->Append(HELP_ABOUT, "About");
-		helpMenu->Append(HELP_MANUAL, "&Manual");
 
 		wxMenuBar* bar = new wxMenuBar;
 		bar->Append(fileMenu, "File");
@@ -130,10 +134,11 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 				PickRand_::PickRand("oO0"),
 				PickRand_::PickRand("kK"));
 		}
-		// TODO: field 0 will be overriden with help text upon mousing over a menu option
-		// Consider doing something about this?
+
 		statusbar = CreateStatusBar();
-		statusbar->SetFieldsCount(1);
+		int widths[2] = {175, -1}; // Positive means size in pixels, negative means proportion of remaining space
+		statusbar->SetFieldsCount(2, widths);
+		SetStatusBarPane(1); // Changes what pane help text is written to
 
 		// Start Meathook Status Checking
 		// Initial check performed when first tab is added
@@ -387,7 +392,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 9 [Meathook spawnInfo Integration]");
+	info.SetVersion("Alpha 10 [Various Small Features - Read Patch Notes]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -402,26 +407,30 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 	wxAboutBox(info, this);
 }
 
-void EntityFrame::onManual(wxCommandEvent& event)
-{
-}
-
 void EntityFrame::onMHStatusCheck(wxTimerEvent& event)
 {
 	RefreshMHMenu();
 }
 
-void EntityFrame::onSetMHTab(wxCommandEvent& event)
+// Returns true if a meathook tab was cleared, otherwise false
+bool EntityFrame::ClearMHTab() 
 {
-	// Clear the old mhTab if there is one
 	for (size_t i = 0, max = book->GetPageCount(); i < max; i++)
 	{
 		EntityTab* page = (EntityTab*)book->GetPage(i);
 		if (page->usingMH) {
 			page->usingMH = false;
 			book->SetPageText(i, page->tabName);
+			return true;
 		}
 	}
+	return false;
+}
+
+void EntityFrame::onSetMHTab(wxCommandEvent& event)
+{
+	// Clear the old mhTab if there is one
+	ClearMHTab();
 
 	if (event.IsChecked()) {
 		int activeIndex = book->GetPageIndex(activeTab);
@@ -470,6 +479,18 @@ void EntityFrame::onReloadMH(wxCommandEvent& event)
 		wxMessageBox("Map reload failed. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
 }
 
+void EntityFrame::onPrintActiveEncounters(wxCommandEvent& event)
+{
+	std::string encounters;
+	if(!Meathook::GetActiveEncounters(encounters))
+		wxMessageBox("Couldn't get activeEncounters. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+
+	if(encounters.length() == 0)
+		wxLogMessage("No Active Encounters");
+	else
+		wxLogMessage("Active Encounter Names: %s", encounters);
+}
+
 void EntityFrame::onGetSpawnPosition(wxCommandEvent &event) 
 {
 	if(!Meathook::CopySpawnPosition())
@@ -493,10 +514,15 @@ void EntityFrame::RefreshMHMenu()
 	bool online = Meathook::IsOnline() || DEBUG_SIMULATE_ONLINE;
 	statusbar->SetStatusText(mhText_Preface + (online ? mhText_Active : mhText_Inactive));
 
+	if (!online && ClearMHTab())
+		wxMessageBox("Connection lost with Meathook. Your Meathook tab has been automatically disabled", 
+			"Meathook", wxICON_WARNING | wxOK);
+
 	mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != ""); // Tabs with no file shouldn't be useable with mh
 	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab->usingMH);
 	mhMenu->Enable(MEATHOOK_OPENFILE, online);
 	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab->usingMH);
+	mhMenu->Enable(MEATHOOK_GET_ENCOUNTER, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNORIENTATION, online);
 	mhMenu->Enable(MEATHOOK_SPAWNPOS_OFFSET, online);
@@ -506,4 +532,16 @@ void EntityFrame::RefreshMHMenu()
 void EntityFrame::onSpecial_PropMovers(wxCommandEvent &event)
 {
 	activeTab->action_PropMovers();
+}
+
+void EntityFrame::onSpecial_DumpAllocatorInfo(wxCommandEvent& event)
+{
+	wxFileDialog saveFileDialog(this, "Save File", wxEmptyString, "EntitySlayer_AllocData.txt",
+		"Text Files (*.txt)|*.txt", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+	if(saveFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	std::string path(saveFileDialog.GetPath());
+	activeTab->parser->logAllocatorInfo(true, false, true, path);
 }

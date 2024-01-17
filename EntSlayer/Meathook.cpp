@@ -9,6 +9,8 @@ const float POSITION_Z_OFFSET = 1.65375f;
 
 bool Meathook::IsOnline() 
 {
+	// TODO: At program start, this seems to return true for one cycle on some occassions
+	// When we're not even running Eternal. Why?
 	return mh.m_Initialized;
 }
 
@@ -131,5 +133,17 @@ bool Meathook::CopySpawnOrientation()
 
 	clipboard->SetData(new wxTextDataObject(newString));
 	clipboard->Close();
+	return true;
+}
+
+bool Meathook::GetActiveEncounters(std::string& encounterNames)
+{
+	const size_t MAX = 2048;
+	char buffer[MAX];
+	int resultLength = MAX;
+
+	if(!mh.GetActiveEncounter(&resultLength, buffer))
+		return false;
+	encounterNames.append(buffer, resultLength);
 	return true;
 }

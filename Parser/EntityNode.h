@@ -5,6 +5,7 @@ enum class NodeType : unsigned char {
 	COMMENT,
 	VALUE_LAYER,
 	VALUE_FILE,
+	VALUE_DARKMETAL, // Specifically for pvp_darkmetal "mapSkipsCompile" property - nothing like it in any other file
 	VALUE_COMMON,
 	OBJECT_COMMON,
 	OBJECT_SIMPLE_ENTITY, // Need two simple obj enums for
@@ -351,6 +352,11 @@ class EntNode
 
 			case NodeType::VALUE_FILE:
 			buffer.push_back(' ');
+			buffer.append(textPtr + nameLength, valLength);
+			return;
+
+			case NodeType::VALUE_DARKMETAL:
+			buffer.append(" = ");
 			buffer.append(textPtr + nameLength, valLength);
 			return;
 
