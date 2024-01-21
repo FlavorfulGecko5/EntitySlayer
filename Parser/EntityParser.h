@@ -65,20 +65,29 @@ class EntityParser {
 	// Repeated single-entity additions will create extremely large free blocks that cannot
 	// come close to being filled faster than they're created. Hence, it's smarter to dedicate
 	// a separate buffer, which we expand when necessary, to root children
-	EntNode** rootChildBuffer = nullptr; 
-	int maxRootChildren = 0;
+	EntNode** rootchild_buffer = nullptr;
+	bool* rootchild_filter = nullptr; // Should be same size as child buffer. true = include, false = exclude
+	int rootchild_capacity = 0;
 
 	/*
-	* MUST TAKE INTO CONSIDERATION THIS ROOT CHILD BUFFER ANYWHERE THE ROOT'S CHILDREN COULD GET EXPANDED:
-	* - On initial parse (done)
-	* - On Edit Tree
+	* Initial Parse: (done)
+	* - Ensure child buffer is initialized and filled
+	* - Ensure filter buffer is initialized and everything set to true
 	* 
-	* When filter buffer is introduced, must also ensure synchonization with true child buffer:
-	* - On initial parse
-	* - On Edit Tree
-	* - On Edit Position
-	* - On Fix List Numberings? (Add safeguards to prevent this from operating on the root)
-	* - Will also need to rethink the positional ID system (or maybe not, since we clear history when filters are applied)
+	* Edit Tree: (done)
+	* - Ensure child buffer is updated properly (done)
+	* - Ensure filter buffer is updated properly (done)
+	* - Create boolean logic for determining whether or not to alert the model of changes
+	* 
+	* Edit Position: (done)
+	* - Ensure child buffer is updated properly
+	* - Ensure filter buffer is updated properly
+	* - Create logic for determining whether or not to alert the model of changes
+	* 
+	* Edit Text: (done)
+	* - No updates needed for child buffer
+	* - No updates needed for filter buffer
+	* - Need logic for determining whether to alert model
 	*/
 
 	/* Variables for tracking command history */
@@ -121,9 +130,11 @@ class EntityParser {
 	std::vector<EntNode*> tempChildren;
 
 	public:
+
 	~EntityParser()
 	{
-		delete[] rootChildBuffer;
+		delete[] rootchild_buffer;
+		delete[] rootchild_filter;
 	}
 
 	/*

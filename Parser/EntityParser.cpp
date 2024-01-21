@@ -140,65 +140,77 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	}
 	
 	/* 
-	* Three Common Steps for each Branch:
-	* 1. Move everything into the new child buffer
-	* 2. Deallocate the old child buffers
-	* 3. Assign the new child buffer/child count to the parent
+	* Common Steps for Each Branch:
+	* 1. Determine if we should alert the model
+	* 2. Move everything into the new child buffer
+	* 3. Deallocate the old child buffers
+	* 4. Assign the new child buffer/child count to the parent
 	*/
+	bool alertModel = true;
 	int newNumChildren = parent->childCount + tempRoot.childCount - removeCount;
 	if (parent == &root)
 	{ 
-		if (newNumChildren > maxRootChildren) 
+		// If it's the root node, we always alert the model.
+		// However, not every entity we're removing may be filtered in, so we must check them
+		removedNodes.clear();
+		for (int i = 0; i < removeCount; i++)
 		{
-			int newMaxRootChildren = newNumChildren + 1000;
-			EntNode** newRootChildBuffer = new EntNode*[newMaxRootChildren];
-
-			// Copy everything
-			int inc = 0;
-			for(inc = 0; inc < insertionIndex; inc++)
-				newRootChildBuffer[inc] = rootChildBuffer[inc];
-			for(int i = 0; i < tempRoot.childCount; i++)
-				newRootChildBuffer[inc++] = tempRoot.children[i];
-			for(int i = insertionIndex + removeCount; i < root.childCount; i++)
-				newRootChildBuffer[inc++] = rootChildBuffer[i];
-
-			// Deallocate old data
-			childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
-			delete[] rootChildBuffer;
-
-			// Attach new data
-			root.childCount = newNumChildren;
-			root.children = newRootChildBuffer;
-			maxRootChildren = newMaxRootChildren;
-			rootChildBuffer = newRootChildBuffer;
+			int index = insertionIndex + i;
+			if(rootchild_filter[index])
+				removedNodes.Add(wxDataViewItem(rootchild_buffer[index]));
 		}
-		else 
-		{
-			int difference = newNumChildren - root.childCount;
-			int min = insertionIndex + removeCount;
-			
-			// Must shift to right to expand room
-			if (difference > 0) {
-				for(int i = root.childCount - 1; i >= min; i--)
-					rootChildBuffer[i + difference] = rootChildBuffer[i];
-			}
-			// Must shift to left to contract space
-			else if (newNumChildren < root.childCount) {
-				for(int i = min; i < root.childCount; i++)
-					rootChildBuffer[i + difference] = rootChildBuffer[i];
-			}
-			for(int inc = insertionIndex, i = 0; i < tempRoot.childCount; i++)
-				rootChildBuffer[inc++] = tempRoot.children[i];
-			
-			// Deallocate old data
-			childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
 
-			// Attach new data
-			root.childCount = newNumChildren;
+		if (newNumChildren > rootchild_capacity) 
+		{ // Rare enough that we don't care about optimizing recopy versus bloating this branch with more code
+			rootchild_capacity = newNumChildren + 1000;
+
+			EntNode** newBuffer = new EntNode*[rootchild_capacity];
+			bool* newFilter = new bool[rootchild_capacity];
+			for (int i = 0, max = root.childCount; i < max; i++) {
+				newBuffer[i] = rootchild_buffer[i];
+				newFilter[i] = rootchild_filter[i];
+			}
+				
+			delete[] rootchild_buffer;
+			delete[] rootchild_filter;
+			rootchild_buffer = newBuffer;
+			rootchild_filter = newFilter;
+			root.children = rootchild_buffer;
 		}
+		int difference = newNumChildren - root.childCount;
+		int min = insertionIndex + removeCount;
+		if (difference > 0) // Must shift to right to expand room
+			for (int i = root.childCount - 1; i >= min; i--) {
+				rootchild_buffer[i + difference] = rootchild_buffer[i];
+				rootchild_filter[i + difference] = rootchild_filter[i];
+			}
+				
+		if (difference < 0) // Must shift left to contract space
+			for (int i = min, max = root.childCount; i < max; i++) {
+				rootchild_buffer[i + difference] = rootchild_buffer[i];
+				rootchild_filter[i + difference] = rootchild_filter[i];
+			}
+
+		for (int inc = insertionIndex, i = 0, max = tempRoot.childCount; i < max; inc++, i++) {
+			rootchild_buffer[inc] = tempRoot.children[i];
+			rootchild_filter[inc] = true; // New nodes will be filtered-in and shown to the user
+			// Possible future development: first test whether they pass the filters?
+		}
+
+		// Deallocate old data
+		childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
+
+		// Attach new data
+		root.childCount = newNumChildren;
 	}
 	else 
 	{
+		// For a non-root parent, we should only alert the model if it's
+		// entity ancestor is filtered in
+		EntNode* entity = parent->getEntity();
+		int entityIndex = root.getChildIndex(entity);
+		if(!rootchild_filter[entityIndex]) alertModel = false;
+
 		EntNode** newChildBuffer = childAlloc.reserveBlock(newNumChildren);
 
 		// Copy everything into the new child buffer
@@ -220,12 +232,15 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	}
 
 	// Must update model AFTER node is given it's new child data
-	wxDataViewItem parentItem(parent);
-	model->ItemsDeleted(parentItem, removedNodes);
-	model->ItemsAdded(parentItem, addedNodes);
-	if (highlightNew)
-		for (wxDataViewItem& i : addedNodes) // Must use Select() instead of SetSelections()
-			view->Select(i);                // because the latter deselects everything else
+	if (alertModel)
+	{
+		wxDataViewItem parentItem(parent);
+		model->ItemsDeleted(parentItem, removedNodes);
+		model->ItemsAdded(parentItem, addedNodes);
+		if (highlightNew)
+			for (wxDataViewItem& i : addedNodes) // Must use Select() instead of SetSelections()
+				view->Select(i);                // because the latter deselects everything else
+	}
 
 	if (renumberLists)
 	{
@@ -261,11 +276,20 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 	node->nameLength = nameLength;
 	node->valLength = (int)text.length() - nameLength;
 
+	// Determine whether to alert model
+	bool alertModel = true;
+	EntNode* entity = node->getEntity(); // Todo: add safeguards so node can't be the root
+	int entityIndex = root.getChildIndex(entity);
+	if(!rootchild_filter[entityIndex]) alertModel = false;
+
 	// Alert model
-	wxDataViewItem item(node);
-	model->ItemChanged(item);
-	if(highlight)
-		view->Select(item);
+	if (alertModel)
+	{
+		wxDataViewItem item(node);
+		model->ItemChanged(item);
+		if (highlight)
+			view->Select(item);
+	}
 }
 
 /* 
@@ -282,23 +306,53 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 	reverse.removalCount = insertionIndex;
 	root.findPositionalID(parent, reverse.parentID);
 
-	// Shift nodes around
+	// Assemble data
 	EntNode** buffer = parent->children;
 	EntNode* child = buffer[childIndex];
-	if (childIndex < insertionIndex) // Shift middle elements up
-		for(int i = childIndex; i < insertionIndex; i++)
-			buffer[i] = buffer[i+1];
-	else for(int i = childIndex; i > insertionIndex; i--) // Shift middle elements down
-			buffer[i] = buffer[i-1];
-	buffer[insertionIndex] = child;
+	bool parentIsRoot = parent == &root;
+	bool alertModel = true;
+	{
+		/*
+		* We should alert the model when:
+		* Parent is Root: Only if the node is filtered in
+		* Parent isn't Root: Only if the entity ancestor is filtered in
+		* Root will never be the node we're moving, so that simplifies our boolean logic
+		*/
+		EntNode* entity = child->getEntity();
+		int entityIndex = root.getChildIndex(entity);
+		if(!rootchild_filter[entityIndex]) alertModel = false;
+	}
 
+	// Shift nodes around
+	if (childIndex < insertionIndex)  { // Shift middle elements up
+		for (int i = childIndex; i < insertionIndex; i++)
+			buffer[i] = buffer[i + 1];
+		if(parentIsRoot) 
+			for (int i = childIndex; i < insertionIndex; i++)
+				rootchild_filter[i] = rootchild_filter[i+1];
+	}
+
+	else  { // Shift middle elements down
+		for (int i = childIndex; i > insertionIndex; i--)
+			buffer[i] = buffer[i - 1];
+		if(parentIsRoot)
+			for(int i = childIndex; i > insertionIndex; i--)
+				rootchild_filter[i] = rootchild_filter[i-1];
+	}
+	buffer[insertionIndex] = child;
+	if(parentIsRoot)
+		rootchild_filter[insertionIndex] = alertModel;
+	
 	// Notify model
-	wxDataViewItem parentItem(parent);
-	wxDataViewItem childItem(child);
-	model->ItemDeleted(parentItem, childItem);
-	model->ItemAdded(parentItem, childItem);
-	if(highlight)
-		view->Select(childItem);
+	if (alertModel)
+	{
+		wxDataViewItem parentItem(parent);
+		wxDataViewItem childItem(child);
+		model->ItemDeleted(parentItem, childItem);
+		model->ItemAdded(parentItem, childItem);
+		if(highlight)
+			view->Select(childItem);
+	}
 }
 
 void EntityParser::EditName(std::string text, EntNode* node)
@@ -464,7 +518,7 @@ void EntityParser::logAllocatorInfo(bool includeBlockList, bool logToLogger, boo
 	msg.append("\nRoot Child Buffer: ");
 	msg.append(std::to_string(root.childCount));
 	msg.append(" / ");
-	msg.append(std::to_string(maxRootChildren));
+	msg.append(std::to_string(rootchild_capacity));
 	msg.append(" Slots Filled");
 	msg.push_back('\n');
 
@@ -555,13 +609,16 @@ void EntityParser::parseContentsFile(EntNode* node) {
 			// At this point, only the root children should
 			// be in the temporary vector
 			root.childCount = (int)tempChildren.size();
-
-			maxRootChildren = root.childCount + 1000;
-			rootChildBuffer = new EntNode*[maxRootChildren];
-			root.children = rootChildBuffer;
+			rootchild_capacity = root.childCount + 1000;
+			rootchild_filter = new bool[rootchild_capacity];
+			rootchild_buffer = new EntNode*[rootchild_capacity];
+			root.children = rootchild_buffer;
 			
-			for(int i = 0, max = root.childCount; i < max; i++)
-				rootChildBuffer[i] = tempChildren[i]; // No overflow here, Visual Studio is stupid
+			for (int i = 0, max = root.childCount; i < max; i++) {
+				rootchild_buffer[i] = tempChildren[i];
+				rootchild_filter[i] = true;
+			}
+				
 			tempChildren.clear();
 		}
 		return;
