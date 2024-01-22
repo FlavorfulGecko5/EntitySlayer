@@ -86,9 +86,6 @@
     <ClInclude Include="EntSlayer\EntityFrame.h">
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
-    <ClInclude Include="EntSlayer\EntityModel.h">
-      <Filter>Source Files\EntSlayer</Filter>
-    </ClInclude>
     <ClInclude Include="EntSlayer\FilterMenus.h">
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>

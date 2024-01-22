@@ -1,10 +1,17 @@
 #include <string_view>
 #include <vector>
+#include <set>
+#include "wx/wx.h"
+#include "wx/dataview.h"
 #include "EntityNode.h"
 #include "GenericBlockAllocator.h"
 
-class EntityModel;
-class wxDataViewCtrl;
+struct Sphere {
+	float x = 0;
+	float y = 0;
+	float z = 0;
+	float r = 0; // Radius
+};
 
 struct ParseResult {
 	bool success = true;
@@ -12,7 +19,7 @@ struct ParseResult {
 	std::string errorMessage;
 };
 
-class EntityParser {
+class EntityParser : public wxDataViewModel {
 	private:
 	enum class CommandType : unsigned char
 	{
@@ -47,13 +54,14 @@ class EntityParser {
 		VALUE_KEYWORD = 0xF3
 	};
 
+	static const std::string FILTER_NOLAYERS;
+
 	/*
 	* Fields for longterm storage
 	* of the parsed data
 	*/
 	public:
-	wxDataViewCtrl* view = nullptr;
-	EntityModel* model = nullptr; // Must set this after construction
+	wxDataViewCtrl* view = nullptr; // Must set this after construction
 	private:
 	bool fileWasCompressed;
 	EntNode root;
@@ -65,30 +73,23 @@ class EntityParser {
 	// Repeated single-entity additions will create extremely large free blocks that cannot
 	// come close to being filled faster than they're created. Hence, it's smarter to dedicate
 	// a separate buffer, which we expand when necessary, to root children
+	//
+	// To represent filtering we have a buffer of booleans, the same length as the root child buffer
+	// If a node passes all the filters, it's boolean value is true. If a node is filtered out, it's value is false
+	// We refactored the filter system to this, replacing it's integration into the wxDataViewModel's GetChildren function
+	// for a multitude of reasons:
+	// 1. Performance - GetChildren is called a lot, resulting in many wasteful filter evaluations on all root children
+	//	These become very problematic for large operations that add lots of entities at once
+	// 2. Prevents debug errors and (possibly) memory leaks. If a new entity was created that didn't pass the filters, it would
+	// be filtered out on-committ and a debug error throne from trying to add it to the tree.
+	// 3. It's a relatively simple solution that will stay localized to the parser's core command-execution functions.
+	// 
+	// Using this new system we have full control over when we notify the control of changes - allowing us to cancel alerts
+	// for filtered-out nodes. With debug errors gone, we also no longer need to clear the parser's undo/redo history
+	// whenever we change filters
 	EntNode** rootchild_buffer = nullptr;
 	bool* rootchild_filter = nullptr; // Should be same size as child buffer. true = include, false = exclude
 	int rootchild_capacity = 0;
-
-	/*
-	* Initial Parse: (done)
-	* - Ensure child buffer is initialized and filled
-	* - Ensure filter buffer is initialized and everything set to true
-	* 
-	* Edit Tree: (done)
-	* - Ensure child buffer is updated properly (done)
-	* - Ensure filter buffer is updated properly (done)
-	* - Create boolean logic for determining whether or not to alert the model of changes
-	* 
-	* Edit Position: (done)
-	* - Ensure child buffer is updated properly
-	* - Ensure filter buffer is updated properly
-	* - Create logic for determining whether or not to alert the model of changes
-	* 
-	* Edit Text: (done)
-	* - No updates needed for child buffer
-	* - No updates needed for filter buffer
-	* - Need logic for determining whether to alert model
-	*/
 
 	/* Variables for tracking command history */
 	const size_t MAX_COMMAND_MEMORY = 100;
@@ -257,4 +258,115 @@ class EntityParser {
 	* Parses raw text for the next token
 	*/
 	void Tokenize();
+
+	/*
+	* FILTER FUNCTIONS
+	*/
+	public:
+
+	/* 
+	* Checks for newly created layers/classes/inherits and adds them to their respective filter checklists
+	* Previously identified values are NOT removed from the checklists
+	*/
+	void refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu);
+
+	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu,
+		bool filterSpawnPosition, Sphere spawnSphere, wxCheckListBox* textMenu, bool caseSensitiveText);
+
+	/*
+	* wxDataViewModel Functions
+	*/
+
+	// wxWidgets calls this function very frequently, on every visible node, if you so much as breathe on the dataview
+	void GetValue(wxVariant& variant, const wxDataViewItem& item, unsigned int col) const override
+	{
+		wxASSERT(item.IsOk());
+		EntNode* node = (EntNode*)item.GetID();
+
+		if (col == 0) {
+			// Use value in entityDef node instead of "entity"
+			if (node->parent == &root)
+			{
+				EntNode& entityDef = (*node)["entityDef"];
+				if (&entityDef != EntNode::SEARCH_404)
+				{
+					variant = entityDef.getValueWX();
+					return;
+				}
+			}
+			variant = node->getNameWX();
+		}
+		else {
+			variant = node->getValueWX();
+		}
+	}
+
+	unsigned int GetChildren(const wxDataViewItem& parent, wxDataViewItemArray& array) const override
+	{
+		EntNode* node = (EntNode*)parent.GetID();
+
+		if (!node) // There is our root node (which we shouldn't delete), and wx's invisible root node
+		{
+			array.Add(wxDataViewItem((void*)&root)); // !! This is how wxDataViewCtrl finds the root variable
+			return 1;
+		}
+
+		if (node == &root)
+		{
+			bool* boolInc = rootchild_filter;
+			EntNode** childInc = rootchild_buffer;
+			for (int i = 0, max = root.childCount; i < max; i++, childInc++, boolInc++)
+				if (*boolInc)
+					array.Add(wxDataViewItem(*childInc));
+			return array.size();
+		}
+
+		EntNode** childBuffer = node->getChildBuffer();
+		int childCount = node->getChildCount();
+		for (int i = 0; i < childCount; i++)
+			array.Add(wxDataViewItem((void*)childBuffer[i]));
+		return childCount;
+	}
+
+	wxDataViewItem GetParent(const wxDataViewItem& item) const override
+	{
+		if (!item.IsOk()) // Invisible root node
+			return wxDataViewItem(0);
+
+		EntNode* node = (EntNode*)item.GetID();
+		return wxDataViewItem((void*)node->parent);
+	}
+
+	bool IsContainer(const wxDataViewItem& item) const override
+	{
+		if (!item.IsOk()) // Need this for invisible root node
+			return true;
+
+		EntNode* node = (EntNode*)item.GetID();
+
+		return node->TYPE > NodeType::VALUE_COMMON; // Todo: ensure this is safe
+	}
+
+	/* These can probably stay defined in the header */
+
+	wxString GetColumnType(unsigned int col) const override
+	{
+		return "string";
+	}
+
+	unsigned int GetColumnCount() const override
+	{
+		return 2;
+	}
+
+	bool SetValue(const wxVariant& variant, const wxDataViewItem& item, unsigned int col) override
+	{
+		// Changes to fields will not be saved when double clicked/edited
+		return false;
+	}
+
+	bool HasContainerColumns(const wxDataViewItem& item) const override
+	{
+		return true;
+	}
 };

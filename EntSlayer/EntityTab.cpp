@@ -54,13 +54,11 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 {
 	/* Initialize parser */
 	if (path == "")
-		parser = new EntityParser();
+		Parser = new EntityParser();
 	else
-		parser = new EntityParser(std::string(path));
-	compressOnSave = parser->wasFileCompressed();
-	root = parser->getRoot();
-	model = new EntityModel(root);
-	parser->model = model.get();
+		Parser = new EntityParser(std::string(path));
+	compressOnSave = Parser->wasFileCompressed();
+	root = Parser->getRoot();
 
 	/* Filter Menu (should be initialized before model is associated with view) */
 	wxGenericCollapsiblePane* topWrapper = new wxGenericCollapsiblePane(this, wxID_ANY, "Filter Menu",
@@ -133,7 +131,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	wxSplitterWindow* splitter = new wxSplitterWindow(this);
 	editor = new EntityEditor(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
 	view = new wxDataViewCtrl(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300), wxDV_MULTIPLE);
-	parser->view = view;
+	Parser->view = view;
 	view->GetMainWindow()->Bind(wxEVT_RIGHT_DOWN, &EntityTab::onViewRightMouseDown, this);
 	/* View right click menu and accelerator table */
 	{
@@ -185,7 +183,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		//e_ctrl->EnableDragSource(wxDF_UNICODETEXT);
 		//e_ctrl->EnableDropTarget(wxDF_UNICODETEXT);
 		//#endif
-		view->AssociateModel(model.get());
+		view->AssociateModel(Parser.get());
 		view->Expand(wxDataViewItem(root));
 	}
 
@@ -197,11 +195,6 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	sizer->Add(topWrapper, 0, wxEXPAND | wxALL, 5);
 	sizer->Add(splitter, 1, wxEXPAND | wxALL, 5);
 	SetSizerAndFit(sizer);
-}
-
-EntityTab::~EntityTab()
-{
-	delete parser;
 }
 
 bool EntityTab::IsNewAndUntouched()
@@ -221,7 +214,7 @@ void EntityTab::onFilterRefresh(wxCommandEvent& event)
 }
 
 void EntityTab::refreshFilters() {
-	model->refreshFilterMenus(layerMenu->list, classMenu->list, inheritMenu->list);
+	Parser->refreshFilterMenus(layerMenu->list, classMenu->list, inheritMenu->list);
 	layerMenu->refreshAutocomplete();
 	classMenu->refreshAutocomplete();
 	inheritMenu->refreshAutocomplete();
@@ -246,13 +239,6 @@ void EntityTab::onFilterClearAll(wxCommandEvent& event)
 bool EntityTab::applyFilters(bool clearAll)
 {
 	/*
-	* It should be safe to apply filters without a commit check.
-	* However, in debug builds, committing a root child that was filtered out
-	* of the view creates a debug error popup accompanied by small memory leaks.
-	*
-	* Unclear if these leaks are present in release builds. However, better to be
-	* safe than sorry for preventing unclear behavior.
-	* 
 	* TODO: if there is an error, the new responsive filter menus will become desynced
 	* with the actual applied filters. Adjust for this later
 	*/
@@ -263,7 +249,7 @@ bool EntityTab::applyFilters(bool clearAll)
 		return false;
 	}
 	else editor->SetActiveNode(nullptr);
-	parser->ClearHistory(); // Must clear undo stack for the same reason as above
+	//Parser->ClearHistory(); // Must clear undo stack for the same reason as above
 
 	if (clearAll)
 	{
@@ -277,12 +263,12 @@ bool EntityTab::applyFilters(bool clearAll)
 	Sphere newSphere;
 	bool filterSpawns = spawnMenu->activated() && spawnMenu->getData(newSphere);
 
-	model->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list,
+	Parser->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list,
 		filterSpawns, newSphere, keyMenu->list, caseSensCheck->IsChecked());
 	wxDataViewItem p(nullptr); // Todo: should try to improve this so we don't destroy entire root
 	wxDataViewItem r(root);
-	model->ItemDeleted(p, r);
-	model->ItemAdded(p, r);
+	Parser->ItemDeleted(p, r);
+	Parser->ItemAdded(p, r);
 	view->Expand(r);
 	return true;
 }
@@ -319,13 +305,13 @@ int EntityTab::CommitEdits()
 	EntNode* parent = replacing->getParent();
 	int replacingIndex = parent->getChildIndex(replacing);
 
-	ParseResult outcome = parser->EditTree(std::string(editor->GetText()), parent, replacingIndex, 1, autoNumberLists, false);
+	ParseResult outcome = Parser->EditTree(std::string(editor->GetText()), parent, replacingIndex, 1, autoNumberLists, false);
 	if (!outcome.success)
 	{
 		editor->setAnnotationError(outcome.errorLineNum, outcome.errorMessage);
 		return -1;
 	}
-	parser->PushGroupCommand();
+	Parser->PushGroupCommand();
 
 	// Brainstorming:
 	//if (loadFirstNode)
@@ -353,7 +339,7 @@ void EntityTab::UndoRedo(bool undo)
 		msg, wxICON_WARNING | wxYES_NO | wxNO_DEFAULT, this) != wxYES)
 		return;
 
-	bool result = undo? parser->Undo() : parser->Redo();
+	bool result = undo? Parser->Undo() : Parser->Redo();
 	if (!result)
 	{
 		wxMessageBox("Nothing to " + msg, msg, wxOK | wxICON_INFORMATION);
@@ -564,11 +550,11 @@ void EntityTab::onPaste(wxCommandEvent& event)
 
 			std::string text(data.GetText());
 			
-			ParseResult outcome = parser->EditTree(text, parent, parent->getChildIndex(node) + 1, 0, autoNumberLists, true);
+			ParseResult outcome = Parser->EditTree(text, parent, parent->getChildIndex(node) + 1, 0, autoNumberLists, true);
 			if (!outcome.success)
 				wxMessageBox(outcome.errorMessage, "Paste Failed ", wxICON_ERROR | wxOK);
 			else {
-				parser->PushGroupCommand();
+				Parser->PushGroupCommand();
 				editor->SetActiveNode(nullptr); // Adjust this?
 				fileUpToDate = false;
 			}
@@ -583,7 +569,7 @@ void EntityTab::onPaste(wxCommandEvent& event)
 void EntityTab::onSelectAllEntities(wxCommandEvent& event)
 {
 	wxDataViewItemArray rootChildren;
-	model->GetChildren(wxDataViewItem(root), rootChildren);
+	Parser->GetChildren(wxDataViewItem(root), rootChildren);
 	view->SetSelections(rootChildren);
 }
 
@@ -601,11 +587,11 @@ void EntityTab::onDeleteSelectedNodes(wxCommandEvent& event)
 			wxLogMessage("Cannot delete the root node");
 		else if (view->IsSelected(item)) { // Tests if the node was removed in a previous deletion
 			EntNode* parent = node->getParent();
-			parser->EditTree("", parent, parent->getChildIndex(node), 1, autoNumberLists, false);
+			Parser->EditTree("", parent, parent->getChildIndex(node), 1, autoNumberLists, false);
 			numDeletions++;
 		}
 	}
-	parser->PushGroupCommand();
+	Parser->PushGroupCommand();
 	fileUpToDate = false;
 	wxLogMessage("Deleted %i nodes and their children", numDeletions);
 }
@@ -635,10 +621,10 @@ void EntityTab::onSetSpawnPosition(wxCommandEvent& event)
 	// Perform Edit operation
 	EntNode& spawnPosition = edit["spawnPosition"];
 	if (&spawnPosition == EntNode::SEARCH_404)
-		parser->EditTree(text, &edit, 0, 0, false, true);
-	else parser->EditTree(text, &edit, edit.getChildIndex(&spawnPosition), 1, false, true);
+		Parser->EditTree(text, &edit, 0, 0, false, true);
+	else Parser->EditTree(text, &edit, edit.getChildIndex(&spawnPosition), 1, false, true);
 
-	parser->PushGroupCommand();
+	Parser->PushGroupCommand();
 	fileUpToDate = false;
 }
 
@@ -667,10 +653,10 @@ void EntityTab::onSetSpawnOrientation(wxCommandEvent& event)
 	// Perform Edit operation
 	EntNode& spawnOrientation = edit["spawnOrientation"];
 	if (&spawnOrientation == EntNode::SEARCH_404)
-		parser->EditTree(text, &edit, 0, 0, false, true);
-	else parser->EditTree(text, &edit, edit.getChildIndex(&spawnOrientation), 1, false, true);
+		Parser->EditTree(text, &edit, 0, 0, false, true);
+	else Parser->EditTree(text, &edit, edit.getChildIndex(&spawnOrientation), 1, false, true);
 
-	parser->PushGroupCommand();
+	Parser->PushGroupCommand();
 	fileUpToDate = false;
 }
 
@@ -822,7 +808,7 @@ void EntityTab::action_PropMovers()
 	wxLogMessage("Creating idMovers for %zu idProp2 entities. This may take some time - please be patient.", propsUsed.size());
 
 	EntNode* version = root->ChildAt(0);
-	ParseResult result = parser->EditTree(movers, root, 0, 0, false, true);
+	ParseResult result = Parser->EditTree(movers, root, 0, 0, false, true);
 	int moversAdded = root->getChildIndex(version);
 
 	wxLogMessage("%i idMover entities created", moversAdded);
@@ -833,7 +819,7 @@ void EntityTab::action_PropMovers()
 	{
 		EntNode* prop = propsUsed[i];
 		int propIndex = root->getChildIndex(prop);
-		parser->EditPosition(root, 0, propIndex, true); // Should place below the prop
+		Parser->EditPosition(root, 0, propIndex, true); // Should place below the prop
 
 		EntNode& edit = (*prop)["entityDef"]["edit"];
 		EntNode& bindInfo = edit["bindInfo"];
@@ -848,13 +834,13 @@ void EntityTab::action_PropMovers()
 			+ std::string((*prop)["entityDef"].getValue()) 
 			+ MOVER_NAME_APPEND + "\";}";
 			
-		parser->EditTree(bindString, &edit, 0, 0, false, false);
+		Parser->EditTree(bindString, &edit, 0, 0, false, false);
 	}
 	
 	if(manualBindCount > 0)
 		wxLogMessage(manualBindLog, manualBindCount);
 	wxLogMessage("Finished Binding Props to Movers");
 
-	parser->PushGroupCommand();
+	Parser->PushGroupCommand();
 	fileUpToDate = false;
 }

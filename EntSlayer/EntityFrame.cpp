@@ -1,4 +1,5 @@
 #pragma warning(disable : 4996) // Deprecation errors
+#include <chrono>
 #include "wx/clipbrd.h"
 #include "Meathook.h"
 #include "Oodle.h"
@@ -392,7 +393,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 10 [Various Small Features - Read Patch Notes]");
+	info.SetVersion("Alpha 11 [Filter System Refactor]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -543,5 +544,5 @@ void EntityFrame::onSpecial_DumpAllocatorInfo(wxCommandEvent& event)
 		return;
 
 	std::string path(saveFileDialog.GetPath());
-	activeTab->parser->logAllocatorInfo(true, false, true, path);
+	activeTab->Parser->logAllocatorInfo(true, false, true, path);
 }

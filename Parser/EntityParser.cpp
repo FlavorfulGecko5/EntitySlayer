@@ -2,9 +2,9 @@
 #include <fstream>
 #include "Oodle.h"
 #include "EntityLogger.h"
-//#include "EntityParser.h"
-#include "EntityModel.h"
+#include "EntityParser.h"
 
+const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
 
 EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
 	textAlloc(1000000), nodeAlloc(1000), childAlloc(30000)
@@ -235,8 +235,8 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	if (alertModel)
 	{
 		wxDataViewItem parentItem(parent);
-		model->ItemsDeleted(parentItem, removedNodes);
-		model->ItemsAdded(parentItem, addedNodes);
+		ItemsDeleted(parentItem, removedNodes);
+		ItemsAdded(parentItem, addedNodes);
 		if (highlightNew)
 			for (wxDataViewItem& i : addedNodes) // Must use Select() instead of SetSelections()
 				view->Select(i);                // because the latter deselects everything else
@@ -286,7 +286,7 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 	if (alertModel)
 	{
 		wxDataViewItem item(node);
-		model->ItemChanged(item);
+		ItemChanged(item);
 		if (highlight)
 			view->Select(item);
 	}
@@ -348,8 +348,8 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 	{
 		wxDataViewItem parentItem(parent);
 		wxDataViewItem childItem(child);
-		model->ItemDeleted(parentItem, childItem);
-		model->ItemAdded(parentItem, childItem);
+		ItemDeleted(parentItem, childItem);
+		ItemAdded(parentItem, childItem);
 		if(highlight)
 			view->Select(childItem);
 	}
@@ -1025,3 +1025,224 @@ void EntityParser::Tokenize()
 		}
 	}
 };
+
+void EntityParser::refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu)
+{
+	std::set<std::string_view> newLayers;
+	std::set<std::string_view> newClasses;
+	std::set<std::string_view> newInherits;
+
+	EntNode** children = rootchild_buffer;
+	int childCount = root.childCount;
+
+	newLayers.insert(std::string_view(FILTER_NOLAYERS.data() + 1, FILTER_NOLAYERS.length() - 2));
+	for (int i = 0; i < childCount; i++)
+	{
+		EntNode* current = children[i];
+		EntNode& defNode = (*current)["entityDef"];
+		{
+			EntNode& classNode = defNode["class"];
+			if (classNode.ValueLength() > 0)
+				newClasses.insert(classNode.getValueUQ());
+		}
+		{
+			EntNode& inheritNode = defNode["inherit"];
+			if (inheritNode.ValueLength() > 0)
+				newInherits.insert(inheritNode.getValueUQ());
+		}
+		{
+			EntNode& layerNode = (*current)["layers"];
+			if (layerNode.getChildCount() > 0)
+			{
+				EntNode** layerBuffer = layerNode.getChildBuffer();
+				int layerCount = layerNode.getChildCount();
+				for (int currentLayer = 0; currentLayer < layerCount; currentLayer++)
+					newLayers.insert(layerBuffer[currentLayer]->getNameUQ());
+			}
+		}
+	}
+
+	for (std::string_view view : newLayers)
+	{
+		wxString s(view.data(), view.length());
+		if(layerMenu->FindString(s, true) < 0)
+			layerMenu->Append(s);
+	}
+
+	for (std::string_view view : newClasses)
+	{
+		wxString s(view.data(), view.length());
+		if (classMenu->FindString(s, true) < 0)
+			classMenu->Append(s);
+	}
+
+	for (std::string_view view : newInherits)
+	{
+		wxString s(view.data(), view.length());
+		if (inheritMenu->FindString(s, true) < 0)
+			inheritMenu->Append(s);
+	}
+}
+
+void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu,
+	bool filterSpawnPosition, Sphere spawnSphere, wxCheckListBox* textMenu, bool caseSensitiveText)
+{
+	std::set<std::string> layerFilters;
+	std::set<std::string> classFilters;
+	std::set<std::string> inheritFilters;
+	std::vector<std::string> textFilters;
+
+	for (int i = 0, max = layerMenu->GetCount(); i < max; i++)
+		if(layerMenu->IsChecked(i))
+			layerFilters.insert('"' + std::string(layerMenu->GetString(i)) + '"');
+
+	for (int i = 0, max = classMenu->GetCount(); i < max; i++)
+		if (classMenu->IsChecked(i))
+			classFilters.insert('"' + std::string(classMenu->GetString(i)) + '"');
+
+	for (int i = 0, max = inheritMenu->GetCount(); i < max; i++)
+		if (inheritMenu->IsChecked(i))
+			inheritFilters.insert('"' + std::string(inheritMenu->GetString(i)) + '"');
+
+	for(int i = 0, max = textMenu->GetCount(); i < max; i++)
+		if(textMenu->IsChecked(i))
+			textFilters.push_back(std::string(textMenu->GetString(i)));
+
+	// MOVED FROM GetChildren - Apply the filters
+	auto start = std::chrono::high_resolution_clock::now();
+
+	bool filterByClass = classFilters.size() > 0;
+	bool filterByInherit = inheritFilters.size() > 0;
+	bool filterByLayer = layerFilters.size() > 0;
+	bool noLayerFilter = layerFilters.count(FILTER_NOLAYERS) > 0;
+					
+	size_t numTextFilters = textFilters.size();
+	bool filterByText = numTextFilters > 0;
+	//string textBuffer;
+
+	// Eliminates need to take square root in every distance calculation
+	float maxR2 = spawnSphere.r * spawnSphere.r;
+
+	int childCount = root.childCount;
+	EntNode** childBuffer = rootchild_buffer;
+	for (int i = 0; i < childCount; i++)
+	{
+		EntNode* entity = childBuffer[i];
+		EntNode& entityDef = (*entity)["entityDef"];
+		if (filterByClass)
+		{
+			std::string_view classVal = entityDef["class"].getValue();
+			if (classFilters.count(std::string(classVal)) < 1) // TODO: OPTIMIZE ACCESS CASTING
+			{
+				rootchild_filter[i] = false;
+				continue;
+			}
+				
+		}
+
+		if (filterByInherit)
+		{
+			std::string_view inheritVal = entityDef["inherit"].getValue();
+			if (inheritFilters.count(std::string(inheritVal)) < 1) // TODO: OPTIMIZE CASTING
+			{
+				rootchild_filter[i] = false;
+				continue;
+			}
+		}
+
+		if (filterByLayer)
+		{
+			bool hasLayer = false;
+			EntNode& layerNode = (*entity)["layers"];
+			if (layerNode.getChildCount() == 0 && noLayerFilter)
+				hasLayer = true; // Search_404 also implies 0 layers
+
+			EntNode** layers = layerNode.getChildBuffer();
+			int layerCount = layerNode.getChildCount();
+			for (int currentLayer = 0; currentLayer < layerCount; currentLayer++)
+			{
+				std::string_view l = layers[currentLayer]->getName();
+				if (layerFilters.count(std::string(l)) > 0)
+				{
+					hasLayer = true;
+					break;
+				}
+			}
+			if (!hasLayer)
+			{
+				rootchild_filter[i] = false;
+				continue;
+			}
+		}
+
+		if (filterSpawnPosition)
+		{
+			// If a variable is undefined, we assume default value of 0
+			// If spawnPosition is undefined, we assume (0, 0, 0) instead of excluding
+			EntNode& positionNode = entityDef["edit"]["spawnPosition"];
+			//if(&positionNode == EntNode::SEARCH_404)
+			//	continue;
+			EntNode& xNode = positionNode["x"];
+			EntNode& yNode = positionNode["y"];
+			EntNode& zNode = positionNode["z"];
+
+			float x = 0, y = 0, z = 0;
+			try {
+				// Need comparisons to distinguish between actual formatting exception
+				// and exception from trying to convert "" to a float
+				if(&xNode != EntNode::SEARCH_404)
+					x = std::stof(std::string(xNode.getValue()));
+
+				if (&yNode != EntNode::SEARCH_404)
+					y = std::stof(std::string(yNode.getValue()));
+
+				if (&zNode != EntNode::SEARCH_404)
+					z = std::stof(std::string(zNode.getValue()));
+			}
+			catch (std::exception) {
+				rootchild_filter[i] = false;
+				continue;
+			}
+
+			float deltaX = x - spawnSphere.x,
+					deltaY = y - spawnSphere.y,
+					deltaZ = z - spawnSphere.z;
+			float distance2 = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+
+			if(distance2 > maxR2)
+			{
+				rootchild_filter[i] = false;
+				continue;
+			}
+		}
+
+		if (filterByText)
+		{
+			//textBuffer.clear();
+			//childBuffer[i]->generateText(textBuffer);
+					
+			bool containsText = false;
+			for (const std::string& key : textFilters)
+				if (childBuffer[i]->searchDownwardsLocal(key, caseSensitiveText) != EntNode::SEARCH_404)
+				{
+					containsText = true;
+					break;
+				}
+			//for (size_t filter = 0; filter < numTextFilters; filter++)
+			//	if (textBuffer.find(textFilters[filter]) != string::npos)
+			//	{
+			//		containsText = true;
+			//		break;
+			//	}
+			if(!containsText)
+			{
+				rootchild_filter[i] = false;
+				continue;
+			}
+		}
+
+		// Node has passed all filters and should be included in the filtered tree
+		rootchild_filter[i] = true;
+	}
+	EntityLogger::logTimeStamps("Time to Filter: ", start);
+}

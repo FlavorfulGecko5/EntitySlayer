@@ -154,7 +154,6 @@
     <ClInclude Include="EntSlayer\EntityTab.h" />
     <ClInclude Include="EntSlayer\EntityEditor.h" />
     <ClInclude Include="EntSlayer\EntityFrame.h" />
-    <ClInclude Include="EntSlayer\EntityModel.h" />
     <ClInclude Include="EntSlayer\FilterMenus.h" />
     <ClInclude Include="EntSlayer\Meathook.h" />
     <ClInclude Include="Parser\EntityLogger.h" />

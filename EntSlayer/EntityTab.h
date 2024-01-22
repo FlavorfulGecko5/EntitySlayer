@@ -1,7 +1,7 @@
 #include "wx/wx.h"
 #include "wx/collpane.h"
 #include "wx/splitter.h"
-#include "EntityModel.h"
+#include "EntityParser.h"
 
 class EntityEditor;
 class FilterCtrl;
@@ -25,14 +25,12 @@ class EntityTab : public wxPanel
 
 	wxMenu viewMenu;
 
-	EntityParser* parser;
 	EntNode* root;
-	wxObjectDataPtr<EntityModel> model; // Need this or model leaks when tab destroyed
+	wxObjectDataPtr<EntityParser> Parser; // Need this or model leaks when tab destroyed
 	wxDataViewCtrl* view;
 	EntityEditor* editor;
 
 	EntityTab(wxWindow* parent, const wxString name, const wxString& path = "");
-	virtual ~EntityTab();
 	bool IsNewAndUntouched();
 	bool UnsavedChanges();
 	void refreshFilters();
