@@ -42,6 +42,7 @@ class EntityTab : public wxPanel
 	void saveFile();
 	int CommitEdits();
 	void UndoRedo(bool undo);
+	void onDataviewChar(wxKeyEvent &event);
 	bool dataviewMouseAction(wxDataViewItem item);
 	void onNodeSelection(wxDataViewEvent& event);
 	void onViewRightMouseDown(wxMouseEvent& event);

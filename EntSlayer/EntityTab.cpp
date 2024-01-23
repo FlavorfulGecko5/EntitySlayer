@@ -132,6 +132,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	editor = new EntityEditor(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
 	view = new wxDataViewCtrl(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300), wxDV_MULTIPLE);
 	Parser->view = view;
+	view->GetMainWindow()->Bind(wxEVT_CHAR, &EntityTab::onDataviewChar, this);
 	view->GetMainWindow()->Bind(wxEVT_RIGHT_DOWN, &EntityTab::onViewRightMouseDown, this);
 	/* View right click menu and accelerator table */
 	{
@@ -143,7 +144,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		viewMenu.Append(NODEVIEW_PASTE, "Paste\tCtrl+V");
 		viewMenu.AppendSeparator();
 		viewMenu.Append(NODEVIEW_SELECTALLENTS, "Select All Entities\tCtrl+A");
-		viewMenu.Append(NODEVIEW_DELETESELECTED, "Delete Selected\tDel");
+		viewMenu.Append(NODEVIEW_DELETESELECTED, "Delete Selected\tCtrl+D");
 		viewMenu.AppendSeparator();
 		viewMenu.Append(NODEVIEW_SETPOSITION, "Copy and Set spawnPosition\tCtrl+E");
 		viewMenu.Append(NODEVIEW_SETORIENTATION, "Copy and Set spawnOrientation\tCtrl+R");
@@ -156,7 +157,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 			wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPYSELECTED_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'V', NODEVIEW_PASTE_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'A', NODEVIEW_SELECTALLENTS_ACCEL),
-			wxAcceleratorEntry(wxACCEL_NORMAL, WXK_DELETE, NODEVIEW_DELETESELECTED_ACCEL),
+			wxAcceleratorEntry(wxACCEL_CTRL, 'D', NODEVIEW_DELETESELECTED_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'E', NODEVIEW_SETPOSITION_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'R', NODEVIEW_SETORIENTATION_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'W', NODEVIEW_TELEPORTPOSITION_ACCEL)
@@ -178,7 +179,6 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		col->SetMinWidth(FromDIP(150));
 		view->AppendColumn(col);
 
-		//view->Bind(wxEVT_CHAR, &MyFrame::OnDataViewChar, this);
 		//#if wxUSE_DRAG_AND_DROP && wxUSE_UNICODE
 		//e_ctrl->EnableDragSource(wxDF_UNICODETEXT);
 		//e_ctrl->EnableDropTarget(wxDF_UNICODETEXT);
@@ -363,6 +363,40 @@ void EntityTab::UndoRedo(bool undo)
 	//	view->Select(parentItem);
 	//	editor->SetActiveNode(outcome.parent);
 	//}
+}
+
+void EntityTab::onDataviewChar(wxKeyEvent& event)
+{
+	/*
+	* The dataview control's normal behavior with shift + up/down navigation is inadequate.
+	* The selection events generated when navigating in this manner always contain the top-most
+	* selected item, instead of the item we actually navigated to. This means the current item
+	* is forcibly set to the highest selected item, making shift + down navigation unusable
+	* and shift + up multi-selection less flexible than it could be.
+	* 
+	* We remedy this by catching these events, and swapping the shift behavior with control behavior
+	* This lets us simulate ordinary selection event behavior to make shift up/down navigation function as desired
+	* 
+	* Todo: Do we want shift + up/down onto an already-selected node to deselect it?
+	*/
+	int c = event.GetKeyCode();
+	if ((c == WXK_UP || c == WXK_DOWN) && event.ShiftDown()) 
+	{
+		event.SetShiftDown(false);
+		event.SetControlDown(true);
+
+		/*
+		* If we just use event.skip(), the wxDataViewItem returned by
+		* GetCurrentItem() will be the one from before this key event is processed
+		* To get the updated data, we must forcibly process our reconfigured event right now
+		*/
+		view->GetMainWindow()->GetEventHandler()->ProcessEvent(event);
+
+		wxDataViewItem current = view->GetCurrentItem();
+		view->Select(current);
+		dataviewMouseAction(current);
+	}
+	else event.Skip();
 }
 
 /* Returns true if it's safe to show the right click menu or perform accelerator actions */
