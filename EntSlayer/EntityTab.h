@@ -37,7 +37,7 @@ class EntityTab : public wxPanel
 	void onFilterDelKeys(wxCommandEvent& event);
 	void onFilterRefresh(wxCommandEvent& event);
 	void onFilterClearAll(wxCommandEvent& event);
-	bool applyFilters(bool clearAll);
+	void applyFilters(bool clearAll);
 	void saveFile();
 	int CommitEdits();
 	void UndoRedo(bool undo);

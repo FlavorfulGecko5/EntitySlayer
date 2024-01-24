@@ -222,8 +222,7 @@ void EntityTab::refreshFilters() {
 
 void EntityTab::onFilterCaseCheck(wxCommandEvent& event)
 {
-	if (!applyFilters(false))
-		caseSensCheck->SetValue(!event.IsChecked());
+	applyFilters(false);
 }
 
 void EntityTab::onFilterDelKeys(wxCommandEvent& event)
@@ -236,20 +235,12 @@ void EntityTab::onFilterClearAll(wxCommandEvent& event)
 	applyFilters(true);
 }
 
-bool EntityTab::applyFilters(bool clearAll)
+void EntityTab::applyFilters(bool clearAll)
 {
 	/*
-	* TODO: if there is an error, the new responsive filter menus will become desynced
-	* with the actual applied filters. Adjust for this later
+	* With the refactored filter system, it should no longer be necessary to force a commit,
+	* clear the editor, or clear undo/redo history before changing filters
 	*/
-	if (CommitEdits() < 0)
-	{
-		wxMessageBox("Please fix syntax errors before applying new filters.", "Cannot Change Filters",
-			wxICON_WARNING | wxOK);
-		return false;
-	}
-	else editor->SetActiveNode(nullptr);
-	//Parser->ClearHistory(); // Must clear undo stack for the same reason as above
 
 	if (clearAll)
 	{
@@ -270,7 +261,6 @@ bool EntityTab::applyFilters(bool clearAll)
 	Parser->ItemDeleted(p, r);
 	Parser->ItemAdded(p, r);
 	view->Expand(r);
-	return true;
 }
 
 void EntityTab::saveFile()

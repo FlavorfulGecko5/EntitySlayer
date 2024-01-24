@@ -51,13 +51,7 @@ void FilterCtrl::onListLeftDown(wxMouseEvent& event)
 	if (index > -1)
 	{
 		list->Check(index, !list->IsChecked(index));
-
-		if (!owner->applyFilters(false))
-		{
-			list->Check(index, !list->IsChecked(index));
-			return;
-		}
-
+		owner->applyFilters(false);
 		SetText(list->GetStringValue());
 	}
 }
@@ -84,11 +78,7 @@ void FilterCtrl::onQuickInputEnter(wxCommandEvent& event)
 	quickInput->Clear();
 
 	list->Check(index, !list->IsChecked(index));
-	if (!owner->applyFilters(false))
-	{
-		list->Check(index, !list->IsChecked(index));
-		return;
-	}
+	owner->applyFilters(false);
 
 	SetText(list->GetStringValue());
 }
@@ -146,13 +136,10 @@ bool SpawnFilter::getData(Sphere& sphere)
 }
 
 void SpawnFilter::onCheckbox(wxCommandEvent& event) {
-	if(!owner->applyFilters(false))
-		toggle->SetValue(!event.IsChecked());
+	owner->applyFilters(false);
 }
 
 void SpawnFilter::onInputText(wxCommandEvent& event) {
-	// Edge Case: If applying filters fails due to error, the text box
-	// still has it's value updated. Prevent this somehow?
 	if (toggle->IsChecked())
 		owner->applyFilters(false);
 	event.Skip();
