@@ -14,7 +14,6 @@ class EntityTab : public wxPanel
 	bool fileUpToDate = true;
 	bool compressOnSave;
 	bool autoNumberLists = true;
-	bool usingMH = false;
 
 	FilterCtrl* layerMenu;
 	FilterCtrl* classMenu;

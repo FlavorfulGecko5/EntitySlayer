@@ -21,8 +21,8 @@ enum FrameID
 
 	MEATHOOK_CHECKSTATUS,
 	MEATHOOK_MAKEACTIVETAB,
-	MEATHOOK_OPENFILE,
 	MEATHOOK_RELOAD,
+	MEATHOOK_OPENFILE,
 	MEATHOOK_GET_SPAWNPOSITION,
 	MEATHOOK_GET_SPAWNORIENTATION,
 	MEATHOOK_SPAWNPOS_OFFSET,
@@ -49,8 +49,8 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 
 	EVT_TIMER(MEATHOOK_CHECKSTATUS, EntityFrame::onMHStatusCheck)
 	EVT_MENU(MEATHOOK_MAKEACTIVETAB, EntityFrame::onSetMHTab)
-	EVT_MENU(MEATHOOK_OPENFILE, EntityFrame::onMeathookOpen) 
 	EVT_MENU(MEATHOOK_RELOAD, EntityFrame::onReloadMH)
+	EVT_MENU(MEATHOOK_OPENFILE, EntityFrame::onMeathookOpen) 
 	EVT_MENU(MEATHOOK_GET_ENCOUNTER, EntityFrame::onPrintActiveEncounters)
 	EVT_MENU(MEATHOOK_GET_SPAWNPOSITION, EntityFrame::onGetSpawnPosition)
 	EVT_MENU(MEATHOOK_GET_SPAWNORIENTATION, EntityFrame::onGetSpawnOrientation)
@@ -63,7 +63,7 @@ wxEND_EVENT_TABLE()
 EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 {
 	if (!Oodle::init())
-		wxMessageBox("You can open uncompressed entities files but must decompress them separately.\nPut oo2core_8_win64.dll in the same folder as EntityHero.exe",
+		wxMessageBox("You can open uncompressed entities files but must decompress them separately.\nPut oo2core_8_win64.dll in the same folder as EntitySlayer.exe",
 			"Warning: oo2core_8_win64.dll is missing or corrupted.",
 			wxICON_WARNING | wxOK);
 
@@ -79,11 +79,13 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 
 		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
 
-		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Make Active Tab",
-			"Set this tab as your Meathook tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT");
-		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O");
-		mhMenu->Append(MEATHOOK_RELOAD, "Save and Reload Map\tF5");
+		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Use as Reload Tab",
+			"Enables level reloads using this tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT!");
+		mhMenu->Append(MEATHOOK_RELOAD, "Save and Reload Map\tF5",
+			"Have Meathook reload the level using your Reload Tab");
 		mhMenu->AppendSeparator();
+		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O",
+			"Write's the current level's entities to a temporary file and opens it in a new tab");
 		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Print Active Encounters");
 		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION, "Copy spawnPosition");
 		mhMenu->Append(MEATHOOK_GET_SPAWNORIENTATION, "Copy spawnOrientation");
@@ -237,6 +239,9 @@ void EntityFrame::onTabClosing(wxAuiNotebookEvent& event)
 		return;
 	}
 
+	if(page == mhTab)
+		mhTab = nullptr;
+
 	if (book->GetPageCount() == 1)
 	{
 		if (activeTab->IsNewAndUntouched())
@@ -248,7 +253,7 @@ void EntityFrame::onTabClosing(wxAuiNotebookEvent& event)
 void EntityFrame::onTabChanged(wxAuiNotebookEvent& event)
 {
 	int i = event.GetSelection();
-	wxLogMessage("Switching to page %i out of %zu", i + 1, book->GetPageCount());
+	//wxLogMessage("Switching to page %i out of %zu", i + 1, book->GetPageCount());
 	activeTab = (EntityTab*)book->GetPage(i);
 	if (activeTab->filePath == "") {
 		SetTitle("EntitySlayer");
@@ -363,7 +368,7 @@ void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 
 	// Reconfigure Book's perspective of tab
 	int tabIndex = book->GetSelection();
-	if (activeTab->usingMH) book->SetPageText(tabIndex, "[Meathook] " + activeTab->tabName);
+	if (activeTab == mhTab) book->SetPageText(tabIndex, "[Meathook] " + activeTab->tabName);
 	else book->SetPageText(tabIndex, activeTab->tabName);
 	SetTitle(activeTab->filePath + " - EntitySlayer");
 	fileMenu->Enable(FILE_SAVE, true);
@@ -371,7 +376,7 @@ void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 
 void EntityFrame::onCompressCheck(wxCommandEvent& event)
 {
-	if (activeTab->usingMH)
+	if (activeTab == mhTab)
 	{
 		wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
 			"Oodle Compression", wxICON_WARNING | wxOK);
@@ -416,14 +421,12 @@ void EntityFrame::onMHStatusCheck(wxTimerEvent& event)
 // Returns true if a meathook tab was cleared, otherwise false
 bool EntityFrame::ClearMHTab() 
 {
-	for (size_t i = 0, max = book->GetPageCount(); i < max; i++)
+	if(mhTab != nullptr) 
 	{
-		EntityTab* page = (EntityTab*)book->GetPage(i);
-		if (page->usingMH) {
-			page->usingMH = false;
-			book->SetPageText(i, page->tabName);
-			return true;
-		}
+		size_t index = book->GetPageIndex(mhTab);
+		book->SetPageText(index, mhTab->tabName);
+		mhTab = nullptr;
+		return true;
 	}
 	return false;
 }
@@ -436,7 +439,7 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 	if (event.IsChecked()) {
 		int activeIndex = book->GetPageIndex(activeTab);
 		book->SetPageText(activeIndex, "[Meathook] " + activeTab->tabName);
-		activeTab->usingMH = true;
+		mhTab = activeTab;
 
 		if (activeTab->compressOnSave) {
 			wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
@@ -474,9 +477,9 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 void EntityFrame::onReloadMH(wxCommandEvent& event)
 {
 	wxLogMessage("Reload function called");
-	activeTab->saveFile();
+	mhTab->saveFile();
 
-	if(!Meathook::ReloadMap(std::string(activeTab->filePath)))
+	if(!Meathook::ReloadMap(std::string(mhTab->filePath)))
 		wxMessageBox("Map reload failed. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
 }
 
@@ -520,9 +523,9 @@ void EntityFrame::RefreshMHMenu()
 			"Meathook", wxICON_WARNING | wxOK);
 
 	mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != ""); // Tabs with no file shouldn't be useable with mh
-	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab->usingMH);
+	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab == mhTab);
+	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab == mhTab); // For simplicity, only enable this option when mhTab is the activeTab
 	mhMenu->Enable(MEATHOOK_OPENFILE, online);
-	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab->usingMH);
 	mhMenu->Enable(MEATHOOK_GET_ENCOUNTER, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNORIENTATION, online);

@@ -474,9 +474,9 @@ void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 		viewMenu.Enable(NODEVIEW_DELETESELECTED, view->HasSelection());
 
 		// Todo: Verify edit node exists
-		viewMenu.Enable(NODEVIEW_SETPOSITION, online && usingMH && node != nullptr && node != root);
-		viewMenu.Enable(NODEVIEW_SETORIENTATION, online && usingMH && node != nullptr && node != root);
-		viewMenu.Enable(NODEVIEW_TELEPORTPOSITION, online && usingMH && node != nullptr && node != root);
+		viewMenu.Enable(NODEVIEW_SETPOSITION, online && node != nullptr && node != root);
+		viewMenu.Enable(NODEVIEW_SETORIENTATION, online && node != nullptr && node != root);
+		viewMenu.Enable(NODEVIEW_TELEPORTPOSITION, online && node != nullptr && node != root);
 
 
 		view->PopupMenu(&viewMenu);

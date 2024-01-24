@@ -17,6 +17,7 @@ class EntityFrame : public wxFrame
 	wxStatusBar* statusbar = nullptr;
 
 	// Meathook
+	EntityTab* mhTab = nullptr;
 	wxMenu* mhMenu = new wxMenu;
 	wxTimer mhStatusTimer;
 	wxString mhText_Preface;
