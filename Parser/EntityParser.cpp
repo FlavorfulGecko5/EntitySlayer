@@ -1026,6 +1026,49 @@ void EntityParser::Tokenize()
 	}
 };
 
+void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool caseSensitive) 
+{
+	EntNode* startAfter = (EntNode*)view->GetCurrentItem().GetID();
+	if(startAfter == nullptr)
+		startAfter = &root;
+	
+	EntNode* firstResult = nullptr; // Use this to prevent infinite loops from rejection of filtered results
+	EntNode* result;
+	while (true)
+	{
+		/*
+		* TODO: Ideally, we shouldn't be searching through filtered out nodes in the first place. If a massive
+		* amount of nodes are filtered out on large files, search can take significant time to complete
+		*/
+		if (backwards)
+			result = startAfter->searchUpwards(key, caseSensitive);
+		else result = startAfter->searchDownwards(key, caseSensitive, nullptr);
+
+		if (result == EntNode::SEARCH_404 || result == firstResult) {
+			EntityLogger::log("Could not find key");
+			return;
+		}
+		//wxLogMessage("%s", result->getNameWX());
+
+		// Root should never have text, so this should be safe
+		EntNode* entity = result->getEntity(); 
+		int entityIndex = root.getChildIndex(entity);
+
+		if (rootchild_filter[entityIndex]) {
+			wxDataViewItem item(result);
+			view->UnselectAll();
+			view->Select(item);
+			view->EnsureVisible(item);
+			//wxLogMessage("Found");
+			return;
+		}
+
+		if(firstResult == nullptr) 
+			firstResult = result;
+		startAfter = result;
+	}
+}
+
 void EntityParser::refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu)
 {
 	std::set<std::string_view> newLayers;

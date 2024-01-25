@@ -116,9 +116,13 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		compact->Add(spawnMenu);
 		compact->Add(otherButtons, 0, wxLEFT, 5);
 
+		/* Search Bar */
+		searchBar = new SearchBar(this, topWindow);
+
 		wxBoxSizer* secondRowSizer = new wxBoxSizer(wxHORIZONTAL);
 		secondRowSizer->Add(textFilterSizer, 1, wxALL, 10);
-		secondRowSizer->Add(compact, 2, wxALL, 10);
+		secondRowSizer->Add(compact, 1, wxALL, 10);
+		secondRowSizer->Add(searchBar, 1, wxALL, 10);
 
 		/* Put everything together */
 		wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);

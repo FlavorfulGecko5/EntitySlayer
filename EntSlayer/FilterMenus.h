@@ -69,3 +69,17 @@ class SpawnFilter : public wxBoxSizer
 	void onCheckbox(wxCommandEvent &event);
 	void onInputText(wxCommandEvent &event);
 };
+
+class SearchBar : public wxBoxSizer
+{
+	private:
+	EntityTab* owner;
+	wxTextCtrl* input;
+	wxCheckBox* caseSensitiveCheck;
+
+	public:
+	SearchBar(EntityTab* tab, wxWindow* parent);
+	void initiateSearch(bool backwards);
+	void onButtonNext(wxCommandEvent& event);
+	void onButtonBack(wxCommandEvent& event);
+};

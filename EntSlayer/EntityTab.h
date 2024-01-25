@@ -6,6 +6,7 @@
 class EntityEditor;
 class FilterCtrl;
 class SpawnFilter;
+class SearchBar;
 class EntityTab : public wxPanel
 {
 	public:
@@ -21,6 +22,7 @@ class EntityTab : public wxPanel
 	FilterCtrl* keyMenu;
 	wxCheckBox* caseSensCheck;
 	SpawnFilter* spawnMenu;
+	SearchBar* searchBar;
 
 	wxMenu viewMenu;
 

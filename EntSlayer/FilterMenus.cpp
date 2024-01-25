@@ -144,3 +144,44 @@ void SpawnFilter::onInputText(wxCommandEvent& event) {
 		owner->applyFilters(false);
 	event.Skip();
 }
+
+SearchBar::SearchBar(EntityTab* tab, wxWindow* parent) 
+	: wxBoxSizer(wxVERTICAL), owner(tab)
+{
+	wxStaticText* label = new wxStaticText(parent, wxID_ANY, "Search");
+	input = new wxTextCtrl(parent, wxID_ANY, wxEmptyString, wxDefaultPosition,
+		wxDefaultSize, wxTE_PROCESS_ENTER);
+	wxButton* btnNext = new wxButton(parent, wxID_ANY, ">", wxDefaultPosition, wxSize(23, 23));
+	wxButton* btnBack = new wxButton(parent, wxID_ANY, "<", wxDefaultPosition, wxSize(23, 23));
+	caseSensitiveCheck = new wxCheckBox(parent, wxID_ANY, "Case Sensitive");
+
+	input->Bind(wxEVT_TEXT_ENTER, &SearchBar::onButtonNext, this);
+	btnNext->Bind(wxEVT_BUTTON, &SearchBar::onButtonNext, this);
+	btnBack->Bind(wxEVT_BUTTON, &SearchBar::onButtonBack, this);
+
+	wxSizer* topRow = new wxBoxSizer(wxHORIZONTAL);
+	topRow->Add(label, 0);
+	topRow->Add(input, 1, wxEXPAND | wxLEFT, 5);
+	topRow->Add(btnBack);
+	topRow->Add(btnNext);
+	Add(topRow, 1, wxEXPAND);
+	Add(caseSensitiveCheck);
+}
+
+void SearchBar::initiateSearch(bool backwards) 
+{
+	const std::string key(input->GetValue());
+	
+	if(!key.empty())
+		owner->Parser->FilteredSearch(key, backwards, caseSensitiveCheck->IsChecked());
+}
+
+void SearchBar::onButtonNext(wxCommandEvent& event)
+{
+	initiateSearch(false);
+}
+
+void SearchBar::onButtonBack(wxCommandEvent& event)
+{
+	initiateSearch(true);
+}
