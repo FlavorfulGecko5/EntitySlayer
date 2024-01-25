@@ -16,6 +16,8 @@ enum FrameID
 	FILE_COMPRESS,
 
 	EDIT_NUMBERLISTS,
+	EDIT_SEARCHFORWARD,
+	EDIT_SEARCHBACKWARD,
 
 	HELP_ABOUT,
 
@@ -45,6 +47,8 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
 	EVT_MENU(FILE_COMPRESS, EntityFrame::onCompressCheck)
 	EVT_MENU(EDIT_NUMBERLISTS, EntityFrame::onNumberListCheck)
+	EVT_MENU(EDIT_SEARCHFORWARD, EntityFrame::onSearchForward)
+	EVT_MENU(EDIT_SEARCHBACKWARD, EntityFrame::onSearchBackward)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
 
 	EVT_TIMER(MEATHOOK_CHECKSTATUS, EntityFrame::onMHStatusCheck)
@@ -78,6 +82,9 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save");
 
 		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
+		editMenu->AppendSeparator();
+		editMenu->Append(EDIT_SEARCHFORWARD, "Search Forward\tCtrl+F");
+		editMenu->Append(EDIT_SEARCHBACKWARD, "Search Backward\tCtrl+Space");
 
 		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Use as Reload Tab",
 			"Enables level reloads using this tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT!");
@@ -392,6 +399,17 @@ void EntityFrame::onCompressCheck(wxCommandEvent& event)
 void EntityFrame::onNumberListCheck(wxCommandEvent& event)
 {
 	activeTab->autoNumberLists = event.IsChecked();
+}
+
+void EntityFrame::onSearchForward(wxCommandEvent& event)
+{
+	// A little boiler plate so we don't have to introduce the filter menu header into this file
+	activeTab->SearchForward();
+}
+
+void EntityFrame::onSearchBackward(wxCommandEvent& event)
+{
+	activeTab->SearchBackward();
 }
 
 void EntityFrame::onAbout(wxCommandEvent& event)

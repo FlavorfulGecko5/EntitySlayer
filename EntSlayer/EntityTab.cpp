@@ -6,6 +6,9 @@
 
 enum TabID 
 {
+	// wxPanel will not use an accelerator entry whose integer value is 1....WTF?
+	TABID_MINIMUM = wxID_HIGHEST + 1,
+
 	NODEVIEW_UNDO,
 	NODEVIEW_REDO,
 	NODEVIEW_COPYSELECTED,
@@ -265,6 +268,16 @@ void EntityTab::applyFilters(bool clearAll)
 	Parser->ItemDeleted(p, r);
 	Parser->ItemAdded(p, r);
 	view->Expand(r);
+}
+
+void EntityTab::SearchForward()
+{
+	searchBar->initiateSearch(false);
+}
+
+void EntityTab::SearchBackward()
+{
+	searchBar->initiateSearch(true);
 }
 
 void EntityTab::saveFile()

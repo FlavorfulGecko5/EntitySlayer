@@ -40,6 +40,8 @@ class EntityTab : public wxPanel
 	void onFilterRefresh(wxCommandEvent& event);
 	void onFilterClearAll(wxCommandEvent& event);
 	void applyFilters(bool clearAll);
+	void SearchForward();
+	void SearchBackward();
 	void saveFile();
 	int CommitEdits();
 	void UndoRedo(bool undo);

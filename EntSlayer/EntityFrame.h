@@ -39,6 +39,8 @@ class EntityFrame : public wxFrame
 	void onFileSaveAs(wxCommandEvent& event);
 	void onCompressCheck(wxCommandEvent& event);
 	void onNumberListCheck(wxCommandEvent& event);
+	void onSearchForward(wxCommandEvent &event);
+	void onSearchBackward(wxCommandEvent &event);
 	void onAbout(wxCommandEvent& event);
 	void onMHStatusCheck(wxTimerEvent& event);
 	void onSetMHTab(wxCommandEvent& event);
