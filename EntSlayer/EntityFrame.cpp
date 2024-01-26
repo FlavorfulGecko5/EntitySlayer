@@ -26,6 +26,7 @@ enum FrameID
 	MEATHOOK_RELOAD,
 	MEATHOOK_OPENFILE,
 	MEATHOOK_GET_SPAWNPOSITION,
+	MEATHOOK_GET_SPAWNPOSITION_FILTER,
 	MEATHOOK_GET_SPAWNORIENTATION,
 	MEATHOOK_SPAWNPOS_OFFSET,
 	MEATHOOK_GET_CHECKPOINT,
@@ -57,6 +58,7 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(MEATHOOK_OPENFILE, EntityFrame::onMeathookOpen) 
 	EVT_MENU(MEATHOOK_GET_ENCOUNTER, EntityFrame::onPrintActiveEncounters)
 	EVT_MENU(MEATHOOK_GET_SPAWNPOSITION, EntityFrame::onGetSpawnPosition)
+	EVT_MENU(MEATHOOK_GET_SPAWNPOSITION_FILTER, EntityFrame::onGetSpawnPosition)
 	EVT_MENU(MEATHOOK_GET_SPAWNORIENTATION, EntityFrame::onGetSpawnOrientation)
 	EVT_MENU(MEATHOOK_SPAWNPOS_OFFSET, EntityFrame::onSpawnOffsetCheck)
 
@@ -96,6 +98,8 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Print Active Encounters");
 		mhMenu->AppendSeparator();
 		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION, "Copy spawnPosition");
+		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION_FILTER, "Copy spawnPosition and Set Filter",
+			"Sets this tab's Spawn Position Distance filter using Meathook's spawnInfo");
 		mhMenu->Append(MEATHOOK_GET_SPAWNORIENTATION, "Copy spawnOrientation");
 		mhMenu->AppendCheckItem(MEATHOOK_SPAWNPOS_OFFSET, "Remove spawnPosition Z Offset",
 			"Subtract the player's height from copied spawnPosition Z");
@@ -418,7 +422,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Alpha 11 [Filter System Refactor]");
+	info.SetVersion("Beta 1 [Search Bar and Lots More");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -520,6 +524,9 @@ void EntityFrame::onGetSpawnPosition(wxCommandEvent &event)
 {
 	if(!Meathook::CopySpawnPosition())
 		wxMessageBox("Couldn't get spawnPosition. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+
+	if(event.GetId() == MEATHOOK_GET_SPAWNPOSITION_FILTER)
+		activeTab->filterSetSpawninfo();
 }
 
 void EntityFrame::onGetSpawnOrientation(wxCommandEvent& event)
@@ -549,6 +556,7 @@ void EntityFrame::RefreshMHMenu()
 	mhMenu->Enable(MEATHOOK_OPENFILE, online);
 	mhMenu->Enable(MEATHOOK_GET_ENCOUNTER, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION, online);
+	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION_FILTER, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNORIENTATION, online);
 	mhMenu->Enable(MEATHOOK_SPAWNPOS_OFFSET, online);
 	mhMenu->Check(MEATHOOK_SPAWNPOS_OFFSET, Meathook::RemoveZOffset());

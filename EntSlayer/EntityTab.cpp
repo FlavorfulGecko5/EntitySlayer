@@ -242,6 +242,32 @@ void EntityTab::onFilterClearAll(wxCommandEvent& event)
 	applyFilters(true);
 }
 
+/* Populates the Spawn Position Filter data from mh_spawninfo spawnposition clipboard data*/
+void EntityTab::filterSetSpawninfo()
+{
+	// Todo: should probably add more safety checks
+	wxClipboard* clipboard = wxTheClipboard->Get();
+	wxTextDataObject data;
+	clipboard->GetData(data);
+	std::string text(data.GetText());
+	clipboard->Close();
+
+	// We assume the clipboard only contains spawnPosition, not spawnOrientation too
+	size_t xIndex = text.find("x = ") + 4;
+	size_t xLen = text.find(';', xIndex) - xIndex;
+	std::string x = text.substr(xIndex, xLen);
+
+	size_t yIndex = text.find("y = ") + 4;
+	size_t yLen = text.find(';', yIndex) - yIndex;
+	std::string y = text.substr(yIndex, yLen);
+
+	size_t zIndex = text.find("z = ") + 4;
+	size_t zLen = text.find(';', zIndex) - zIndex;
+	std::string z = text.substr(zIndex, zLen);
+
+	spawnMenu->setData(x, y, z);
+}
+
 void EntityTab::applyFilters(bool clearAll)
 {
 	/*

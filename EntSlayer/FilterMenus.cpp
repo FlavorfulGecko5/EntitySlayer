@@ -135,6 +135,16 @@ bool SpawnFilter::getData(Sphere& sphere)
 	return true;
 }
 
+void SpawnFilter::setData(const std::string& x, const std::string& y, const std::string& z)
+{
+	inputs[0]->SetValue(x);
+	inputs[1]->SetValue(y);
+	inputs[2]->SetValue(z);
+	
+	if(toggle->IsChecked())
+		owner->applyFilters(false);
+}
+
 void SpawnFilter::onCheckbox(wxCommandEvent& event) {
 	owner->applyFilters(false);
 }

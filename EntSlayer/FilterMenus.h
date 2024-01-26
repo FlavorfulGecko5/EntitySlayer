@@ -63,6 +63,7 @@ class SpawnFilter : public wxBoxSizer
 	public:
 	SpawnFilter(EntityTab* tab, wxWindow* parent);
 	bool getData(Sphere& sphere);
+	void setData(const std::string& x, const std::string& y, const std::string &z);
 	bool activated();
 	void deactivate();
 

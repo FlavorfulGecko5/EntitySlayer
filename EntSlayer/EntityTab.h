@@ -39,6 +39,7 @@ class EntityTab : public wxPanel
 	void onFilterDelKeys(wxCommandEvent& event);
 	void onFilterRefresh(wxCommandEvent& event);
 	void onFilterClearAll(wxCommandEvent& event);
+	void filterSetSpawninfo();
 	void applyFilters(bool clearAll);
 	void SearchForward();
 	void SearchBackward();
