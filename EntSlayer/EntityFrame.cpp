@@ -30,7 +30,7 @@ enum FrameID
 	MEATHOOK_SPAWNPOS_OFFSET,
 	MEATHOOK_GET_CHECKPOINT,
 	MEATHOOK_GET_ENCOUNTER,
-
+	
 	SPECIAL_DEBUG_DUMPBUFFERS,
 	SPECIAL_PROPMOVERS,
 };
@@ -81,10 +81,10 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->AppendSeparator();
 		fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save");
 
-		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
-		editMenu->AppendSeparator();
 		editMenu->Append(EDIT_SEARCHFORWARD, "Search Forward\tCtrl+F");
 		editMenu->Append(EDIT_SEARCHBACKWARD, "Search Backward\tCtrl+Space");
+		editMenu->AppendSeparator();
+		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
 
 		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Use as Reload Tab",
 			"Enables level reloads using this tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT!");
@@ -94,6 +94,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O",
 			"Write's the current level's entities to a temporary file and opens it in a new tab");
 		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Print Active Encounters");
+		mhMenu->AppendSeparator();
 		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION, "Copy spawnPosition");
 		mhMenu->Append(MEATHOOK_GET_SPAWNORIENTATION, "Copy spawnOrientation");
 		mhMenu->AppendCheckItem(MEATHOOK_SPAWNPOS_OFFSET, "Remove spawnPosition Z Offset",
@@ -113,7 +114,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 
 		wxMenuBar* bar = new wxMenuBar;
 		bar->Append(fileMenu, "File");
-		bar->Append(editMenu, "Edit");
+		bar->Append(editMenu, "Tab");
 		bar->Append(mhMenu, "Meathook");
 		bar->Append(specialMenu, "Advanced");
 		bar->Append(helpMenu, "Help");
@@ -180,7 +181,8 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		wxDisplay screen((unsigned)0);
 		wxRect screenSize = screen.GetClientArea();
 		SetSize(screenSize.width * 3 / 5, screenSize.height * 3 / 5);
-		CenterOnScreen();
+		SetMinSize(wxSize(1000, 600)); // Minimum width for filter menus to not get offset or cut off
+		CenterOnScreen(); // Todo: Is there a better way to enforce this without setting the entire application's minimum size?
 	}
 }
 
@@ -422,6 +424,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
 		"Developed by FlavorfulGecko5\n\n"
 		"Credits:\n"
+		"Velser - Extensive Alpha testing, feedback and feature suggestions\n"
 		"Scorp0rX0r - Author of EntityHero, the chief source of inspiration for this project.\n"
 		"Alveraan - Author of Elena, which inspired this program's filtering systems.\n"
 		"Chrispy - Developer of Meathook\n"
