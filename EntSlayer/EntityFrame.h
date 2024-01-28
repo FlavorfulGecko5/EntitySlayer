@@ -15,6 +15,7 @@ class EntityFrame : public wxFrame
 	EntityTab* activeTab = nullptr;
 	wxTextCtrl* log = nullptr;
 	wxStatusBar* statusbar = nullptr;
+	std::vector<std::string> activeEncounters;
 
 	// Meathook
 	EntityTab* mhTab = nullptr;
@@ -46,6 +47,7 @@ class EntityFrame : public wxFrame
 	void onSetMHTab(wxCommandEvent& event);
 	void onReloadMH(wxCommandEvent& event);
 	void onPrintActiveEncounters(wxCommandEvent &event);
+	void onActiveEncounterMenu(wxCommandEvent &event);
 	void onGetSpawnPosition(wxCommandEvent &event);
 	void onGetSpawnOrientation(wxCommandEvent &event);
 	void onSpawnOffsetCheck(wxCommandEvent &event);

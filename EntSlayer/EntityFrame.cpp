@@ -95,7 +95,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		mhMenu->AppendSeparator();
 		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O",
 			"Write's the current level's entities to a temporary file and opens it in a new tab");
-		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Print Active Encounters\tF3");
+		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Find Active Encounters\tF3");
 		mhMenu->AppendSeparator();
 		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION, "Copy spawnPosition");
 		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION_FILTER, "Copy spawnPosition and Set Filter\tF2",
@@ -422,7 +422,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 1.1 [Search Bar and Lots More]");
+	info.SetVersion("Beta 2 [Search Fixes, eventDef visualization, Find Active Encounter]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -510,14 +510,47 @@ void EntityFrame::onReloadMH(wxCommandEvent& event)
 
 void EntityFrame::onPrintActiveEncounters(wxCommandEvent& event)
 {
-	std::string encounters;
-	if(!Meathook::GetActiveEncounters(encounters))
+	activeEncounters.clear();
+	std::string encounterString;
+	if (!Meathook::GetActiveEncounters(encounterString)) {
 		wxMessageBox("Couldn't get activeEncounters. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
-
-	if(encounters.length() == 0)
+		return;
+	}
+		
+	if (encounterString.length() == 0) {
 		wxLogMessage("No Active Encounters");
-	else
-		wxLogMessage("Active Encounter Names: %s", encounters);
+		return;
+	}
+	wxLogMessage("Active Encounter Names: %s", encounterString);
+
+	size_t index = encounterString.find(';');
+	if (index == std::string::npos) { // Only one encounter, find it immediately
+		wxLogMessage("Found one active encounter, searching for it now...");
+		activeTab->Parser->FilteredSearch("entityDef" + encounterString, false, true);
+		return;
+	}
+
+	// Multiple active encounters, we must prompt the user to choose one to jump to
+	size_t lastIndex = 0;
+	while (index != std::string::npos) {
+		activeEncounters.emplace_back(encounterString.substr(lastIndex, index - lastIndex));
+		lastIndex = index + 1;
+		index = encounterString.find(';', lastIndex);
+	}
+	activeEncounters.emplace_back(encounterString.substr(lastIndex, encounterString.length() - lastIndex));
+
+	wxMenu encounterMenu;
+	for(int i = 0, max = activeEncounters.size(); i < max; i++)
+		encounterMenu.Append(i, activeEncounters[i]);
+
+	encounterMenu.Bind(wxEVT_COMMAND_MENU_SELECTED, &EntityFrame::onActiveEncounterMenu, this);
+	PopupMenu(&encounterMenu);
+}
+
+void EntityFrame::onActiveEncounterMenu(wxCommandEvent& event)
+{
+	wxLogMessage("Searching this tab for encounter...");
+	activeTab->Parser->FilteredSearch("entityDef" + activeEncounters[event.GetId()], false, true);
 }
 
 void EntityFrame::onGetSpawnPosition(wxCommandEvent &event) 
