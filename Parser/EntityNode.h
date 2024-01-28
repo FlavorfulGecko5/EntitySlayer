@@ -303,7 +303,7 @@ class EntNode
 		while(startIndex > -1)
 			if(parent->children[startIndex--] == this) break;
 
-		for (int i = startIndex; startIndex > -1; startIndex--)
+		for (int i = startIndex; i > -1; i--)
 		{
 			EntNode* result = parent->children[i]->searchUpwardsLocal(key, caseSensitive);
 			if(result != SEARCH_404) return result;

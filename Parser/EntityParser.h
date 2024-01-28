@@ -299,7 +299,10 @@ class EntityParser : public wxDataViewModel {
 			variant = node->getNameWX();
 		}
 		else {
-			variant = node->getValueWX();
+			
+			if (node->TYPE == NodeType::OBJECT_COMMON)
+				variant = (*node)["eventCall"]["eventDef"].getValueWX();
+			else variant = node->getValueWX();
 		}
 	}
 

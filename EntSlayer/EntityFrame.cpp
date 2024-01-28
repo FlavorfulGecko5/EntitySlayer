@@ -81,24 +81,24 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->Append(FILE_SAVE, "&Save\tCtrl+S");
 		fileMenu->Append(FILE_SAVEAS, "Save As\tCtrl+Shift+S");
 		fileMenu->AppendSeparator();
-		fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save");
+		fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save\tF1");
 
 		editMenu->Append(EDIT_SEARCHFORWARD, "Search Forward\tCtrl+F");
 		editMenu->Append(EDIT_SEARCHBACKWARD, "Search Backward\tCtrl+Space");
 		editMenu->AppendSeparator();
 		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
 
-		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Use as Reload Tab",
+		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Use as Reload Tab\tF4",
 			"Enables level reloads using this tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT!");
 		mhMenu->Append(MEATHOOK_RELOAD, "Save and Reload Map\tF5",
 			"Have Meathook reload the level using your Reload Tab");
 		mhMenu->AppendSeparator();
 		mhMenu->Append(MEATHOOK_OPENFILE, "Open Current Map\tCtrl+Shift+O",
 			"Write's the current level's entities to a temporary file and opens it in a new tab");
-		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Print Active Encounters");
+		mhMenu->Append(MEATHOOK_GET_ENCOUNTER, "Print Active Encounters\tF3");
 		mhMenu->AppendSeparator();
 		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION, "Copy spawnPosition");
-		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION_FILTER, "Copy spawnPosition and Set Filter",
+		mhMenu->Append(MEATHOOK_GET_SPAWNPOSITION_FILTER, "Copy spawnPosition and Set Filter\tF2",
 			"Sets this tab's Spawn Position Distance filter using Meathook's spawnInfo");
 		mhMenu->Append(MEATHOOK_GET_SPAWNORIENTATION, "Copy spawnOrientation");
 		mhMenu->AppendCheckItem(MEATHOOK_SPAWNPOS_OFFSET, "Remove spawnPosition Z Offset",
@@ -422,7 +422,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 1 [Search Bar and Lots More");
+	info.SetVersion("Beta 1.1 [Search Bar and Lots More]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

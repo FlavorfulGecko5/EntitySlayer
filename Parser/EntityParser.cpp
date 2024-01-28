@@ -1058,6 +1058,8 @@ void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool c
 			wxDataViewItem item(result);
 			view->UnselectAll();
 			view->Select(item);
+			if(result->childCount > 0)
+				view->Expand(item);
 			view->EnsureVisible(item);
 			//wxLogMessage("Found");
 			return;

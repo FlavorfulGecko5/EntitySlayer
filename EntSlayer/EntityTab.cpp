@@ -151,13 +151,13 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		viewMenu.Append(NODEVIEW_PASTE, "Paste\tCtrl+V");
 		viewMenu.AppendSeparator();
 		viewMenu.Append(NODEVIEW_SELECTALLENTS, "Select All Entities\tCtrl+A");
-		viewMenu.Append(NODEVIEW_DELETESELECTED, "Delete Selected\tCtrl+D");
+		viewMenu.Append(NODEVIEW_DELETESELECTED, "Delete Selected\tCtrl+D or Del");
 		viewMenu.AppendSeparator();
 		viewMenu.Append(NODEVIEW_SETPOSITION, "Copy and Set spawnPosition\tCtrl+E");
 		viewMenu.Append(NODEVIEW_SETORIENTATION, "Copy and Set spawnOrientation\tCtrl+R");
 		viewMenu.Append(NODEVIEW_TELEPORTPOSITION, "Teleport to spawnPosition\tCtrl+W");
 
-		const size_t BINDCOUNT = 9;
+		const size_t BINDCOUNT = 10;
 		wxAcceleratorEntry entries[BINDCOUNT] {
 			wxAcceleratorEntry(wxACCEL_CTRL, 'Z', NODEVIEW_UNDO),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'Y', NODEVIEW_REDO),
@@ -165,6 +165,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 			wxAcceleratorEntry(wxACCEL_CTRL, 'V', NODEVIEW_PASTE_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'A', NODEVIEW_SELECTALLENTS_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'D', NODEVIEW_DELETESELECTED_ACCEL),
+			wxAcceleratorEntry(wxACCEL_NORMAL, WXK_DELETE, NODEVIEW_DELETESELECTED_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'E', NODEVIEW_SETPOSITION_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'R', NODEVIEW_SETORIENTATION_ACCEL),
 			wxAcceleratorEntry(wxACCEL_CTRL, 'W', NODEVIEW_TELEPORTPOSITION_ACCEL)
@@ -294,6 +295,19 @@ void EntityTab::applyFilters(bool clearAll)
 	Parser->ItemDeleted(p, r);
 	Parser->ItemAdded(p, r);
 	view->Expand(r);
+
+	/*
+	* Weird issue reproduced by using shift-click to select a large block of nodes,
+	* deleting them, then changing the filters. Large block of unrelated nodes would
+	* become selected afterwards, and would be more "difficult" to deselect than normal
+	* (i.e. simply left clicking on one wouldn't deselect all the others). UnselectAll
+	* also doesn't seem to work on these, must instead set selections to nothing.
+	* 
+	* Todo: Monitor for more reports of this issue, see if it crops up elsewhere.
+	* Try to find the actual root cause instead of applying this bandaid fix
+	*/
+	wxDataViewItemArray empty;
+	view->SetSelections(empty);
 }
 
 void EntityTab::SearchForward()
