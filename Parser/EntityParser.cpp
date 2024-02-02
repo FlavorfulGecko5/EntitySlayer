@@ -535,7 +535,10 @@ void EntityParser::logAllocatorInfo(bool includeBlockList, bool logToLogger, boo
 
 std::runtime_error EntityParser::Error(std::string msg)
 {
-	return std::runtime_error("Entities parsing failed (line " + std::to_string(currentLine) + "): " + msg);
+	const char *min = textView.data();
+	for (char* inc = ch; inc >= min; inc--)
+		if (*inc == '\n') errorLine++;
+	return std::runtime_error("Entities parsing failed (line " + std::to_string(errorLine) + "): " + msg);
 }
 
 
@@ -545,7 +548,7 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, NodeType 
 	// Setup variables
 	text.push_back('\0');
 	textView = std::string_view(text);
-	currentLine = 1;
+	errorLine = 1;
 	ch = text.data();
 	first = ch;
 
@@ -584,7 +587,7 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, NodeType 
 			freeNode(tempRoot->children[i]);
 		childAlloc.freeBlock(tempRoot->children, tempRoot->childCount);
 
-		results.errorLineNum = currentLine;
+		results.errorLineNum = errorLine;
 		results.errorMessage = err.what();
 		results.success = false;
 	}
@@ -874,9 +877,7 @@ void EntityParser::Tokenize()
 		case '\r':
 		if(*++ch != '\n')
 			throw Error("Expected line feed after carriage return");
-		case '\n':
-		currentLine++;
-		case ' ': case '\t':
+		case '\n': case ' ': case '\t':
 		ch++;
 		goto LABEL_TOKENIZE_START;
 
@@ -906,19 +907,39 @@ void EntityParser::Tokenize()
 
 		case '/':
 		first = ch;
-		if(*++ch != '/')
-			throw Error("Comments require two consecutive forward slashes.");
-		LABEL_COMMENT_START:
-		switch (*++ch)
-		{
-			case '\n': case '\r': case '\0':
-			lastTokenType = TokenType::COMMENT;
-			lastUniqueToken = std::string_view(first, (size_t)(ch - first));
-			return;
+		if (*++ch == '/') {
+			LABEL_COMMENT_START:
+			switch (*++ch)
+			{
+				case '\n': case '\r': case '\0':
+				lastTokenType = TokenType::COMMENT;
+				lastUniqueToken = std::string_view(first, (size_t)(ch - first));
+				return;
 
-			default:
-			goto LABEL_COMMENT_START;
+				default:
+				goto LABEL_COMMENT_START;
+			}
 		}
+		else if (*ch == '*') { // Don't increment here
+			LABEL_COMMENT_MULTILINE_START:
+			switch (*++ch) 
+			{
+				case '\0':
+				throw Error("No end to multiline comment");
+
+				case '*':
+				if (*(ch + 1) != '/')
+					goto LABEL_COMMENT_MULTILINE_START;
+				ch += 2;
+				lastTokenType = TokenType::COMMENT;
+				lastUniqueToken = std::string_view(first, (size_t)(ch - first));
+				return;
+
+				default:
+				goto LABEL_COMMENT_MULTILINE_START;
+			}
+		}
+		else throw Error("Invalid Comment Syntax");
 
 		case '"':
 		first = ch;

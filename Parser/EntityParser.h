@@ -112,12 +112,11 @@ class EntityParser : public wxDataViewModel {
 	* Their values should be reset or cleared at the start/end of each parse
 	*/
 	private:
-	// NEW PARSE VARIABLES
 	char* ch = nullptr;    // Ptr to next char to be parsed
 	char* first = nullptr; // Ptr to current identifier/value token
 
 	std::string_view textView;					// View of the text we're currently parsing
-	size_t currentLine = 1;
+	size_t errorLine = 1;
 					
 	TokenType lastTokenType = TokenType::END;
 	std::string_view lastUniqueToken;			// Stores most recent identifier or value token
