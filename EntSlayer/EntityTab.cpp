@@ -88,7 +88,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 			keyMenu = new FilterCtrl(this, topWindow, "Text Key", true);
 
 			caseSensCheck = new wxCheckBox(topWindow, wxID_ANY, "Case Sensitive");
-			caseSensCheck->SetValue(true);
+			caseSensCheck->SetValue(false);
 			caseSensCheck->Bind(wxEVT_CHECKBOX, &EntityTab::onFilterCaseCheck, this);
 
 			wxButton* delKeysBtn = new wxButton(topWindow, wxID_ANY, "Delete Unchecked Text Keys");

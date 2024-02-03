@@ -204,8 +204,9 @@ class EntNode
 	* SEARCH FUNCTIONS
 	*/
 
-	bool searchText(const std::string& key, const bool caseSensitive)
+	bool searchText(const std::string& key, const bool caseSensitive, const bool exactLength)
 	{
+		if(exactLength && key.length() != nameLength + valLength) return false;
 		if (caseSensitive)
 		{
 			std::string_view s(textPtr, nameLength + valLength);
@@ -249,7 +250,7 @@ class EntNode
 	* - recursively check all nodes listed after the starting node
 	*	- parents in parent chain do not need their values checked
 	*/
-	EntNode* searchDownwards(const std::string& key, const bool caseSensitive, const EntNode* startAfter=nullptr)
+	EntNode* searchDownwards(const std::string& key, const bool caseSensitive, const bool exactLength, const EntNode* startAfter=nullptr)
 	{
 		int startIndex = 0;
 		if(startAfter != nullptr) // Ensures all children in the starting node are checked
@@ -258,7 +259,7 @@ class EntNode
 
 		for (int i = startIndex; i < childCount; i++)
 		{
-			EntNode* result = children[i]->searchDownwardsLocal(key, caseSensitive);
+			EntNode* result = children[i]->searchDownwardsLocal(key, caseSensitive, exactLength);
 			if(result != SEARCH_404) return result;
 		}
 
@@ -266,15 +267,15 @@ class EntNode
 			return parent->searchDownwards(key, caseSensitive, this);
 
 		// Wrap around by performing local search on root
-		return searchDownwardsLocal(key, caseSensitive);
+		return searchDownwardsLocal(key, caseSensitive, exactLength);
 	}
 
-	EntNode* searchDownwardsLocal(const std::string& key, const bool caseSensitive)
+	EntNode* searchDownwardsLocal(const std::string& key, const bool caseSensitive, const bool exactLength)
 	{
-		if(searchText(key, caseSensitive)) return this;
+		if(searchText(key, caseSensitive, exactLength)) return this;
 		for (int i = 0; i < childCount; i++)
 		{
-			EntNode* result = children[i]->searchDownwardsLocal(key, caseSensitive);
+			EntNode* result = children[i]->searchDownwardsLocal(key, caseSensitive, exactLength);
 			if(result != SEARCH_404) return result;
 		}
 		return SEARCH_404;
@@ -292,11 +293,11 @@ class EntNode
 	* the node directly above this one.
 	* 
 	*/
-	EntNode* searchUpwards(const std::string &key, const bool caseSensitive)
+	EntNode* searchUpwards(const std::string &key, const bool caseSensitive, const bool exactLength)
 	{
 		// Wrap around by performing local search on root
 		if(parent == nullptr)
-			return searchUpwardsLocal(key, caseSensitive);
+			return searchUpwardsLocal(key, caseSensitive, exactLength);
 
 		// Check the parent's child nodes placed above this one
 		int startIndex = parent->childCount - 1;
@@ -305,22 +306,22 @@ class EntNode
 
 		for (int i = startIndex; i > -1; i--)
 		{
-			EntNode* result = parent->children[i]->searchUpwardsLocal(key, caseSensitive);
+			EntNode* result = parent->children[i]->searchUpwardsLocal(key, caseSensitive, exactLength);
 			if(result != SEARCH_404) return result;
 		}
 
-		if(parent->searchText(key, caseSensitive)) return parent; 
-		return parent->searchUpwards(key, caseSensitive);
+		if(parent->searchText(key, caseSensitive, exactLength)) return parent;
+		return parent->searchUpwards(key, caseSensitive, exactLength);
 	}
 
-	EntNode* searchUpwardsLocal(const std::string& key, const bool caseSensitive)
+	EntNode* searchUpwardsLocal(const std::string& key, const bool caseSensitive, const bool exactLength)
 	{
 		for(int i = childCount - 1; i > -1; i--)
 		{
-			EntNode* result = children[i]->searchUpwardsLocal(key, caseSensitive);
+			EntNode* result = children[i]->searchUpwardsLocal(key, caseSensitive, exactLength);
 			if(result != SEARCH_404) return result;
 		} // Search children in reverse order, then the node's own text
-		if(searchText(key, caseSensitive)) return this;
+		if(searchText(key, caseSensitive, exactLength)) return this;
 		return SEARCH_404;
 	}
 

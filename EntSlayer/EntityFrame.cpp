@@ -526,7 +526,7 @@ void EntityFrame::onPrintActiveEncounters(wxCommandEvent& event)
 	size_t index = encounterString.find(';');
 	if (index == std::string::npos) { // Only one encounter, find it immediately
 		wxLogMessage("Found one active encounter, searching for it now...");
-		activeTab->Parser->FilteredSearch("entityDef" + encounterString, false, true);
+		activeTab->Parser->FilteredSearch("entityDef" + encounterString, false, true, true);
 		return;
 	}
 
@@ -550,7 +550,7 @@ void EntityFrame::onPrintActiveEncounters(wxCommandEvent& event)
 void EntityFrame::onActiveEncounterMenu(wxCommandEvent& event)
 {
 	wxLogMessage("Searching this tab for encounter...");
-	activeTab->Parser->FilteredSearch("entityDef" + activeEncounters[event.GetId()], false, true);
+	activeTab->Parser->FilteredSearch("entityDef" + activeEncounters[event.GetId()], false, true, true);
 }
 
 void EntityFrame::onGetSpawnPosition(wxCommandEvent &event) 

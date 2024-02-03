@@ -183,7 +183,7 @@ void SearchBar::initiateSearch(bool backwards)
 	const std::string key(input->GetValue());
 	
 	if(!key.empty())
-		owner->Parser->FilteredSearch(key, backwards, caseSensitiveCheck->IsChecked());
+		owner->Parser->FilteredSearch(key, backwards, caseSensitiveCheck->IsChecked(), false);
 }
 
 void SearchBar::onButtonNext(wxCommandEvent& event)

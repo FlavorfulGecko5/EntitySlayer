@@ -1047,7 +1047,7 @@ void EntityParser::Tokenize()
 	}
 };
 
-void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool caseSensitive) 
+void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool caseSensitive, bool exactLength) 
 {
 	EntNode* startAfter = (EntNode*)view->GetCurrentItem().GetID();
 	if(startAfter == nullptr)
@@ -1062,8 +1062,8 @@ void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool c
 		* amount of nodes are filtered out on large files, search can take significant time to complete
 		*/
 		if (backwards)
-			result = startAfter->searchUpwards(key, caseSensitive);
-		else result = startAfter->searchDownwards(key, caseSensitive, nullptr);
+			result = startAfter->searchUpwards(key, caseSensitive, exactLength);
+		else result = startAfter->searchDownwards(key, caseSensitive, exactLength, nullptr);
 
 		if (result == EntNode::SEARCH_404 || result == firstResult) {
 			EntityLogger::log("Could not find key");
@@ -1289,7 +1289,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 					
 			bool containsText = false;
 			for (const std::string& key : textFilters)
-				if (childBuffer[i]->searchDownwardsLocal(key, caseSensitiveText) != EntNode::SEARCH_404)
+				if (childBuffer[i]->searchDownwardsLocal(key, caseSensitiveText, false) != EntNode::SEARCH_404)
 				{
 					containsText = true;
 					break;

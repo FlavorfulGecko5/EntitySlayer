@@ -272,7 +272,7 @@ class EntityParser : public wxDataViewModel {
 	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu,
 		bool filterSpawnPosition, Sphere spawnSphere, wxCheckListBox* textMenu, bool caseSensitiveText);
 
-	void FilteredSearch(const std::string& key, bool backwards, bool caseSensitive);
+	void FilteredSearch(const std::string& key, bool backwards, bool caseSensitive, bool exactLength);
 
 	/*
 	* wxDataViewModel Functions
