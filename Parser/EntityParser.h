@@ -205,12 +205,13 @@ class EntityParser : public wxDataViewModel {
 	/*
 	* RECURSIVE PARSING FUNCTIONS
 	*/
-	void initiateParse(std::string& text, EntNode* tempRoot, NodeType parentType,
+	void initiateParse(std::string& text, EntNode* tempRoot, EntNode* parent,
 		ParseResult& results);
 	void parseContentsFile(EntNode* node);
 	void parseContentsEntity(EntNode* node);
 	void parseContentsLayer(EntNode* node);
 	void parseContentsDefinition(EntNode* node);
+	void parseContentsPermissive(EntNode* node);
 
 	/*
 	* ALLOCATION / DEALLOCATION FUNCTIONS

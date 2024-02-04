@@ -106,7 +106,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 
 	// We must ensure the parse is successful before modifying the existing tree
 	EntNode tempRoot(NodeType::ROOT);
-	initiateParse(text, &tempRoot, parent->TYPE, outcome);
+	initiateParse(text, &tempRoot, parent, outcome);
 	if(!outcome.success) return outcome;
 
 	wxDataViewItemArray removedNodes;
@@ -244,7 +244,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	{
 		for (wxDataViewItem& n : addedNodes)
 			fixListNumberings((EntNode*)n.GetID(), true, false);
-		if(parent != &root && parent->TYPE != NodeType::OBJECT_SIMPLE_LAYER) // Are these safeguards necessary? Are more needed?
+		if(parent != &root) // Don't waste time reordering the root children, there shouldn't be a list there
 			fixListNumberings(parent, false, true);
 	}
 	return outcome;
@@ -540,7 +540,7 @@ std::runtime_error EntityParser::Error(std::string msg)
 }
 
 
-void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, NodeType parentType,
+void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, EntNode* parent,
 	ParseResult& results)
 {
 	// Setup variables
@@ -552,18 +552,16 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, NodeType 
 
 	try 
 	{
-		switch (parentType)
+		switch (parent->TYPE)
 		{
 			case NodeType::ROOT:
 			parseContentsFile(tempRoot);
 			break;
 
-			case NodeType::OBJECT_SIMPLE_ENTITY:
-			parseContentsEntity(tempRoot);
-			break;
-
-			case NodeType::OBJECT_SIMPLE_LAYER:
-			parseContentsLayer(tempRoot);
+			case NodeType::OBJECT_SIMPLE:
+			if (parent->parent == &root)
+				parseContentsEntity(tempRoot);
+			else parseContentsLayer(tempRoot);
 			break;
 
 			case NodeType::OBJECT_ENTITYDEF: case NodeType::OBJECT_COMMON:
@@ -637,7 +635,7 @@ void EntityParser::parseContentsFile(EntNode* node) {
 		break;
 
 		case TokenType::BRACEOPEN:
-		n = setNodeObj(NodeType::OBJECT_SIMPLE_ENTITY);
+		n = setNodeObj(NodeType::OBJECT_SIMPLE);
 		tempChildren.push_back(n);
 		parseContentsEntity(n);
 		assertLastType(TokenType::BRACECLOSE);
@@ -685,7 +683,7 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 		break;
 
 		case TokenType::BRACEOPEN:
-		n = setNodeObj(NodeType::OBJECT_SIMPLE_LAYER);
+		n = setNodeObj(NodeType::OBJECT_SIMPLE);
 		tempChildren.push_back(n);
 		parseContentsLayer(n);
 		assertLastType(TokenType::BRACECLOSE);

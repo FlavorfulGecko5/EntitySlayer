@@ -3,14 +3,13 @@
 enum class NodeType : unsigned char {
 	UNDESIGNATED,
 	COMMENT,
-	VALUE_LAYER,
-	VALUE_FILE,
-	VALUE_DARKMETAL, // Specifically for pvp_darkmetal "mapSkipsCompile" property - nothing like it in any other file
-	VALUE_COMMON,
-	OBJECT_COMMON,
-	OBJECT_SIMPLE_ENTITY, // Need two simple obj enums for
-	OBJECT_SIMPLE_LAYER,  // parse and replace algorithm
-	OBJECT_ENTITYDEF,
+	VALUE_LAYER,      // [Name]
+	VALUE_FILE,       // [Name] [Value]
+	VALUE_DARKMETAL,  // [Name] = [Value] Specifically for pvp_darkmetal.entities
+	VALUE_COMMON,     // [Name] = [Value];
+	OBJECT_COMMON,    // [Name] = { }
+	OBJECT_SIMPLE,    // [Name] { }
+	OBJECT_ENTITYDEF, // [Name] [Value] { }
 	ROOT
 };
 
@@ -360,8 +359,7 @@ class EntNode
 			buffer.append(" = {\n");
 			break;
 
-			case NodeType::OBJECT_SIMPLE_ENTITY:
-			case NodeType::OBJECT_SIMPLE_LAYER:
+			case NodeType::OBJECT_SIMPLE:
 			buffer.append(" {\n");
 			break;
 
