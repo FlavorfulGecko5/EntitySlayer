@@ -69,6 +69,10 @@ class BlockAllocator
 		used = 0;
 	}
 
+	/* 
+	 Reserves a block of memory for a specified number elements. 
+	 This will return nullptr if the desired capacity is 0  
+	*/
 	T* reserveBlock(size_t capacity)
 	{
 		if(capacity == 0)
@@ -115,6 +119,9 @@ class BlockAllocator
 		return block;
 	}
 
+	/*
+	 Marks a block of allocated memory as freed and able to be reallocated
+	*/
 	void freeBlock(T* addr, size_t amount)
 	{
 		if(amount == 0) return;

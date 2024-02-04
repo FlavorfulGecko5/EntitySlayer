@@ -168,17 +168,6 @@ class EntNode
 	}
 
 	/*
-	* MUTATORS
-	*/
-
-	void populateParentRefs(EntNode* p)
-	{
-		parent = p;
-		for(int i = 0; i < childCount; i++)
-			children[i]->populateParentRefs(this);
-	}
-
-	/*
 	* DEBUGGING FUNCTIONS
 	*/
 

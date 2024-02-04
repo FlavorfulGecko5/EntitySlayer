@@ -212,7 +212,6 @@ class EntityParser : public wxDataViewModel {
 	void parseContentsLayer(EntNode* node);
 	void parseContentsDefinition(EntNode* node);
 
-
 	/*
 	* ALLOCATION / DEALLOCATION FUNCTIONS
 	*/
@@ -234,6 +233,13 @@ class EntityParser : public wxDataViewModel {
 	* Appears to save anywhere between 100-200 MS wall clock time on ~1.2 million line file
 	*/
 	inline bool isLetter();
+
+	/*
+	* Used when tokenizing
+	* Is also faster than standard library isdigit(char) function
+	* On ~1.2 million line file saves anywhere from 2-4 MS in release builds
+	*/
+	inline bool isNum();
 
 	/*
 	* Throws an error if the last-parsed token is not of the required type

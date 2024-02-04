@@ -59,7 +59,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	if (path == "")
 		Parser = new EntityParser();
 	else
-		Parser = new EntityParser(std::string(path));
+		Parser = new EntityParser(std::string(path), true);
 	compressOnSave = Parser->wasFileCompressed();
 	root = Parser->getRoot();
 
@@ -482,7 +482,7 @@ bool EntityTab::dataviewMouseAction(wxDataViewItem item)
 */
 void EntityTab::onNodeSelection(wxDataViewEvent& event)
 {
-	wxLogMessage("Selection change event fired");
+	//wxLogMessage("Selection change event fired");
 	dataviewMouseAction(event.GetItem());
 }
 
@@ -498,7 +498,7 @@ void EntityTab::onViewRightMouseDown(wxMouseEvent& event)
 */
 void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 {
-	wxLogMessage("Context Menu event fired");
+	//wxLogMessage("Context Menu event fired");
 	wxDataViewItem item(event.GetItem());
 	if (!view->IsSelected(item)) {
 		view->UnselectAll();
@@ -532,7 +532,7 @@ void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 
 void EntityTab::onNodeContextAccelerator(wxCommandEvent& event)
 {
-	wxLogMessage("Dataview accelerator action");
+	//wxLogMessage("Dataview accelerator action");
 	if (!dataviewMouseAction(view->GetCurrentItem())) {
 		wxMessageBox("Couldn't perform this action due to a parse error (fix it) or a commit (try again).",
 			"Hotkey Action Cancelled", wxICON_WARNING | wxOK);

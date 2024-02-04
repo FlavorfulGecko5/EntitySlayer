@@ -16,7 +16,6 @@ EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
 
 	parseContentsFile(&root);
 	assertLastType(TokenType::END);
-	root.populateParentRefs(nullptr);
 	tempChildren.shrink_to_fit();
 }
 
@@ -94,7 +93,6 @@ EntityParser::EntityParser(const std::string& filepath, const bool debug_logPars
 	}
 	parseContentsFile(&root); // During construction we allow exceptions to propagate and the parser to be destroyed
 	assertLastType(TokenType::END);
-	root.populateParentRefs(nullptr);
 	tempChildren.shrink_to_fit();
 	if (fileWasCompressed)
 		delete[] decompressedText;
@@ -135,7 +133,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	for (int i = 0; i < tempRoot.childCount; i++)
 	{
 		EntNode* n = tempRoot.children[i];
-		n->populateParentRefs(parent);
+		n->parent = parent;
 		addedNodes.Add(wxDataViewItem(n));
 	}
 	
@@ -617,8 +615,10 @@ void EntityParser::parseContentsFile(EntNode* node) {
 			rootchild_buffer = new EntNode*[rootchild_capacity];
 			root.children = rootchild_buffer;
 			
+			EntNode* rootAddr = &root;
 			for (int i = 0, max = root.childCount; i < max; i++) {
 				rootchild_buffer[i] = tempChildren[i];
+				rootchild_buffer[i]->parent = rootAddr;
 				rootchild_filter[i] = true;
 			}
 				
@@ -803,11 +803,12 @@ EntNode* EntityParser::setNodeValue(const NodeType p_type)
 {
 	size_t length = activeID.length() + lastUniqueToken.length();
 	char* buffer = textAlloc.reserveBlock(length);
-	size_t i = 0;
+	char* inc = buffer;
+
 	for (char c : activeID)
-		buffer[i++] = c;
+		*inc++ = c;
 	for (char c : lastUniqueToken)
-		buffer[i++] = c;
+		*inc++ = c;
 
 	EntNode* n = nodeAlloc.reserveBlock(1);
 	n->TYPE = p_type;
@@ -836,17 +837,27 @@ void EntityParser::setNodeChildren(EntNode* parent, const size_t startIndex)
 	size_t s = tempChildren.size();
 	size_t childCount = s - startIndex;
 	parent->childCount = (int)childCount;
-	if (childCount == 0)
-		return;
 	parent->children = childAlloc.reserveBlock(childCount);
-	for (size_t i = startIndex, j = 0; i < s; i++)
-		parent->children[j++] = tempChildren[i];
+
+	// Fill child buffer, assign parent values to children
+	EntNode **childrenPtr = parent->children, 
+			**max = childrenPtr + childCount,
+			**tempPtr = tempChildren.data() + startIndex;
+	while (childrenPtr < max) { 
+		(*tempPtr)->parent = parent;
+		*childrenPtr++ = *tempPtr++;
+	}
 	tempChildren.resize(startIndex);
 }
 
 bool EntityParser::isLetter()
 {
 	return ((unsigned int)(*ch | 32) - 97) < 26U;
+}
+
+bool EntityParser::isNum()
+{
+	return ((unsigned)*ch - '0') < 10u;
 }
 
 void EntityParser::assertLastType(TokenType requiredType)
@@ -1036,7 +1047,7 @@ void EntityParser::Tokenize()
 				break;
 
 				default:
-				if (isLetter() || isdigit(*ch) || *ch == '_')
+				if (isLetter() || isNum() || *ch == '_')
 					goto LABEL_ID_START;
 				break;
 			}
