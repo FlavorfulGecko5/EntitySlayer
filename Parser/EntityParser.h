@@ -1,3 +1,16 @@
+/*
+* This class is the centerpiece of EntitySlayer's backend
+* 
+* It is a very large class, where each function and member serves
+* 1 of 3 distinct purposes:
+* 
+* 1. Parser - Constructs and maintains a tree of EntNodes from raw text read from files
+* 2. Commander - Validates and performs modifications to the node tree,
+*	logging the history of these edits to support undo/redo operations
+* 3. Model - Communicates with the wxWidgets frontend to determine how the node
+*    tree is presented to the user, using wxDataViewModel overrides and a filter system
+*/
+
 #include <string_view>
 #include <vector>
 #include <set>
@@ -20,26 +33,48 @@ struct ParseResult {
 };
 
 class EntityParser : public wxDataViewModel {
+
+	public:
+	~EntityParser()
+	{
+		delete[] rootchild_buffer;
+		delete[] rootchild_filter;
+	}
+
+	/*
+	* =====================
+	* NODE TREE DATA STORAGE
+	* =====================
+	*/
 	private:
-	enum class CommandType : unsigned char
-	{
-		UNDECLARED,
-		EDIT_TREE, // Call to EditTree function
-		EDIT_TEXT,
-		EDIT_POSITION
-	};
+	bool fileWasCompressed;
+	EntNode root;
+	BlockAllocator<char> textAlloc;      // Allocator for node name/value buffers
+	BlockAllocator<EntNode> nodeAlloc;   // Allocator for the nodes
+	BlockAllocator<EntNode*> childAlloc; // Allocator for node child buffers
 
-	struct ParseCommand 
-	{
-		std::string text = "";       // .entities text we must parse for this command
-		int parentID = 0;            // Positional id of the parent node
-		int insertionIndex = 0;      // Number of nodes this command target
-		int removalCount = 0;
-		bool lastInGroup = false;
-		CommandType type = CommandType::UNDECLARED;
-	};
+	// Root node's child count is orders of magnitude larger than any other object node
+	// Repeated single-entity additions will create extremely large free blocks that cannot
+	// come close to being filled faster than they're created. Hence, it's smarter to dedicate
+	// a separate buffer, which we expand when necessary, to root children
+	EntNode** rootchild_buffer = nullptr;
+	int rootchild_capacity = 0;
 
-	enum class TokenType : unsigned char 
+	/* Accessors */
+	public:
+	EntNode* getRoot();
+	bool wasFileCompressed();
+
+	/* For Debugging */
+	void logAllocatorInfo(bool includeBlockList, bool logToLogger, bool logToFile, const std::string filepath = "");
+
+	/*
+	* ==================
+	* PURPOSE #1: PARSING
+	* ==================
+	*/
+	private:
+	enum class TokenType : unsigned char
 	{
 		END = 0x00,
 		BRACEOPEN = 0x01,
@@ -54,26 +89,217 @@ class EntityParser : public wxDataViewModel {
 		VALUE_KEYWORD = 0xF3
 	};
 
-	static const std::string FILTER_NOLAYERS;
+	/*
+	* Variables used during a parse.
+	* Their values should be reset or cleared at the start/end of each parse
+	*/
+	private:
+	std::string_view textView;					// View of the text we're currently parsing
+	char* ch = nullptr;                         // Ptr to next char to be parsed
+	char* first = nullptr;                      // Ptr to start of current identifier/value token
+	TokenType lastTokenType = TokenType::END;   // Type of the last-parsed token
+	std::string_view lastUniqueToken;			// Stores most recent identifier or value token
+	std::string_view activeID;					// Second-most-recent token (typically an identifier)
+	size_t errorLine = 1;                       // If a grammar error is detected, this is the line it was found on
+
+	// Every node generated during the current parse (except the root node)
+	// is inside here, or childed to a node inside here, until the moment it's
+	// made a child of the root node. Hence, when cancelling a parse due to an exception:
+	// 1. Free all nodes stored here then clear the vector
+	// 2. Free the root node's children and childArray
+	std::vector<EntNode*> tempChildren;
+
+
+	public:
+	/* Constructs an EntityParser with minimal data */
+	EntityParser();
 
 	/*
-	* Fields for longterm storage
-	* of the parsed data
+	* Constructs an EntityParser containing fully parsed data from the given file
+	* @param filepath .entites file to parse
+	* @param debug_logParseTime If true, outputs execution time data
+	* @throw runtime_error thrown when the file cannot be parsed
 	*/
-	public:
-	wxDataViewCtrl* view = nullptr; // Must set this after construction
-	private:
-	bool fileWasCompressed;
-	EntNode root;
-	BlockAllocator<char> textAlloc; // Allocator for node name/value buffers
-	BlockAllocator<EntNode> nodeAlloc; // Allocator for the nodes
-	BlockAllocator<EntNode*> childAlloc; // Allocator for node child buffers
+	EntityParser(const std::string& filepath, const bool debug_logParseTime = false);
 
-	// Root node's child count is orders of magnitude larger than any other object node
-	// Repeated single-entity additions will create extremely large free blocks that cannot
-	// come close to being filled faster than they're created. Hence, it's smarter to dedicate
-	// a separate buffer, which we expand when necessary, to root children
-	//
+	private:
+	/*
+	* Creates an exception for a supplied parsing error
+	* The returned exception should be thrown immediately
+	*/
+	std::runtime_error Error(std::string msg);
+
+	/*
+	* RECURSIVE PARSING FUNCTIONS
+	*/
+
+	// TODO: Get rid of intiateParse somehow - it's sloppy (or not - we may need it when we have multiple parsing modes)
+	// Consider renaming these other functions?
+	void initiateParse(std::string& text, EntNode* tempRoot, EntNode* parent,
+		ParseResult& results);
+	void parseContentsFile(EntNode* node);
+	void parseContentsEntity(EntNode* node);
+	void parseContentsLayer(EntNode* node);
+	void parseContentsDefinition(EntNode* node);
+	void parseContentsPermissive(EntNode* node);
+
+	/*
+	* ALLOCATION / DEALLOCATION FUNCTIONS
+	*/
+	// TODO: Rename these set functions so they're not confusing
+	void freeNode(EntNode* node);
+	inline EntNode* setNodeObj(const NodeType p_type);
+	inline EntNode* setNodeValue(const NodeType p_type);
+	inline EntNode* setNodeNameOnly(const NodeType p_type);
+	void setNodeChildren(EntNode* parent, const size_t startIndex);
+
+
+	/*
+	* TOKENIZATION FUNCTIONS
+	*/
+
+	/* Used when tokenizing. Faster than standard library isalpha(char) function */
+	inline bool isLetter();
+
+	/* Used when tokenizing. Marginally faster than STL isdigit(char) function */
+	inline bool isNum();
+
+	/* Throws an error if the last - parsed token is not of the required type */
+	inline void assertLastType(TokenType requiredType);
+
+	/*
+	 Parses raw text for the next token
+	 Throws an error if the token is not of the required type
+	*/
+	inline void assertIgnore(TokenType requiredType);
+
+	/*
+	 Parses raw text for the next token
+	 If it's an identifier, distinguish whether it's a true ID or special keyword value
+	*/
+	inline void TokenizeAdjustValue();
+
+	/* Parses raw text for the next token, writes results to instance variables */
+	void Tokenize(); 
+
+
+	/*
+	* ===================
+	* PURPOSE #2: COMMANDING
+	* ===================
+	*/
+	private:
+	enum class CommandType : unsigned char
+	{
+		UNDECLARED,
+		EDIT_TREE,
+		EDIT_TEXT,
+		EDIT_POSITION
+	};
+
+	struct ParseCommand
+	{
+		std::string text = "";                      // Text we must parse for this command
+		int parentID = 0;                           // Positional id of the parent node
+		int insertionIndex = 0;                     // Purpose varies depending on command type
+		int removalCount = 0;                       // Purpose varies depending on command type
+		bool lastInGroup = false;                   // If true, this is the last command of this group command
+		CommandType type = CommandType::UNDECLARED; // Determines what operation we perform
+	};
+
+	/*
+	* Variables for tracking command history
+	* 
+	* The Command Pattern is implemented privately, to support undo/redo on groups of editing operations
+	* 
+	* Publicly, users call a handful of functions to edit the node tree, without needing to construct command objects
+	* These actions should be automatically converted into the appropriate undo/redo action by the called function
+	*/
+	private:
+	std::vector<ParseCommand> history;      // Command history, serves as the undo/redo stack
+	const size_t MAX_COMMAND_MEMORY = 100;  // Maximum number of command groups that will be stored in the history before old ones are deleted
+	int commandCount = 0;                   // Current number of command groups being stored in the undo/redo stack                   
+	int redoIndex = 0;                      // Current position on the undo/redo stack.
+	std::vector<ParseCommand> reverseGroup; // Reverse of the current command group incase we must cancel
+
+	/*
+	* Functions related to the command history
+	*/
+
+	private:
+	/* Executes the given command object */
+	void ExecuteCommand(ParseCommand& cmd);
+
+	public:
+	/* Pushes the current command group into the history and starts a new command group */
+	void PushGroupCommand();
+
+	/* Undoes the results of the current command group, resetting it without placing it into the history */
+	void CancelGroupCommand();
+
+	/* Clears the command history */
+	void ClearHistory();
+
+	bool Undo();
+	bool Redo();
+
+	/*
+	* Tree Editing Operations
+	*/
+	private:
+	
+	/*
+	* Edits a node's text without validating the contents
+	* Should be called only by undo/redo and other scenarios where we know the new text is valid
+	* @param text Text replacing the node's original text
+	* @param node Node whose text we're editing
+	* @param nameLength Length of the node's new name string
+	* @param highlight If true, the GUI will highlight the edited node
+	*/
+	void EditText(const std::string& text, EntNode* node, int nameLength, bool highlight);
+
+	public:
+	/*
+	* Parses a given string of text and replaces a pre-existing block of EntNodes
+	* belonging to the same parent.
+	* @param text Text to parse
+	* @param parent Node whose children we're editing
+	* @param insertionIndex Index to insert new nodes at
+	* @param removeCount Number of nodes to delete, starting at insertionIndex
+	* @param renumberLists If true, perform automatic list renumbering
+	* @param highlightNew If true, the GUI will highlight newly created nodes
+	*/
+	ParseResult EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew);
+
+	/*
+	* Moves a node's child to a different index. The other children are shifted up/down to fill the original slot
+	* @param parent The node whose child we're moving
+	* @param childIndex Index of the child we're moving
+	* @param insertionIndex Index the child is being moved too
+	* @param highlight If true, the GUI will highlight the moved node
+	*/
+	void EditPosition(EntNode* parent, int childIndex, int insertionIndex, bool highlight); // TODO: ADD LIST RENUMBERING PARAM
+
+	/*
+	* Perform automatic idList renumbering on a node's children
+	* @param parent Node whose children operating on
+	* @param recursive If true, performs this operation on all of this node's descendants
+	* @param highlight If true, the GUI will highlight modified nodes
+	*/
+	void fixListNumberings(EntNode* parent, bool recursive, bool highlight);
+
+	//void EditName(std::string text, EntNode* node);
+	//void EditValue(std::string text, EntNode* node);
+
+	/*
+	* ===================
+	* PURPOSE #3: MODELING
+	* ===================
+	*/
+
+	private:
+	static const std::string FILTER_NOLAYERS;
+
 	// To represent filtering we have a buffer of booleans, the same length as the root child buffer
 	// If a node passes all the filters, it's boolean value is true. If a node is filtered out, it's value is false
 	// We refactored the filter system to this, replacing it's integration into the wxDataViewModel's GetChildren function
@@ -87,183 +313,10 @@ class EntityParser : public wxDataViewModel {
 	// Using this new system we have full control over when we notify the control of changes - allowing us to cancel alerts
 	// for filtered-out nodes. With debug errors gone, we also no longer need to clear the parser's undo/redo history
 	// whenever we change filters
-	EntNode** rootchild_buffer = nullptr;
 	bool* rootchild_filter = nullptr; // Should be same size as child buffer. true = include, false = exclude
-	int rootchild_capacity = 0;
-
-	/* Variables for tracking command history */
-	const size_t MAX_COMMAND_MEMORY = 100;
-	int commandCount = 0;
-	int redoIndex = 0;
-	std::vector<ParseCommand> reverseGroup; // Reverse of the current group command incase we must cancel
-	std::vector<ParseCommand> history;
-
-	/* Functions related to command history */
-	public:
-	void PushGroupCommand();
-	void CancelGroupCommand();
-	void ClearHistory();
-	void ExecuteCommand(ParseCommand& cmd);
-	bool Undo();
-	bool Redo();
-
-	/*
-	* Variables used during a parse.
-	* Their values should be reset or cleared at the start/end of each parse
-	*/
-	private:
-	char* ch = nullptr;    // Ptr to next char to be parsed
-	char* first = nullptr; // Ptr to current identifier/value token
-
-	std::string_view textView;					// View of the text we're currently parsing
-	size_t errorLine = 1;
-					
-	TokenType lastTokenType = TokenType::END;
-	std::string_view lastUniqueToken;			// Stores most recent identifier or value token
-	std::string_view activeID;					// Second-most-recent token (typically an identifier)
-
-	// Every node generated during the current parse (except the root node)
-	// is inside here, or childed to a node inside here, until the moment it's
-	// made a child of the root node. Hence, when cancelling a parse due to an exception:
-	// 1. Free all nodes stored here then clear the vector
-	// 2. Free the root node's children and childArray
-	std::vector<EntNode*> tempChildren;
 
 	public:
-
-	~EntityParser()
-	{
-		delete[] rootchild_buffer;
-		delete[] rootchild_filter;
-	}
-
-	/*
-	* Constructs an EntityParser with minimal data
-	*/
-	EntityParser();
-
-	/*
-	* Constructs an EntityParser containing fully parsed data from the given file
-	* @param filepath .entites file to parse
-	* @param debug_logParseTime If true, outputs execution time data
-	* @throw runtime_error thrown when the file cannot be parsed
-	*/
-	EntityParser(const std::string& filepath, const bool debug_logParseTime = false);
-
-	/*
-	* Parses a given string of text and replaces a pre-existing block of EntNodes
-	* belonging to the same parent.
-	* @param text Text to parse
-	* @param parent Node whose children we're editing
-	* @param insertionIndex Index to insert new nodes at
-	* @param removeCount Number of nodes to delete, starting at insertionIndex
-	* @param renumberLists If true, perform automatic list renumbering
-	* @param highlightNew If true, highlight newly created nodes
-	*/
-	ParseResult EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew);
-
-
-	/* Should be called only by undo/redo and other scenarios where the command is safe */
-	void EditText(const std::string& text, EntNode* node, int nameLength, bool highlight);
-
-	void EditPosition(EntNode* parent, int childIndex, int insertionIndex, bool highlight);
-
-
-	void EditName(std::string text, EntNode* node);
-
-
-	void EditValue(std::string text, EntNode* node);
-
-
-	/* Move this outside of this class */
-	void fixListNumberings(EntNode* parent, bool recursive, bool highlight);
-
-
-	/*
-	* ACCESSOR METHODS
-	*/
-
-	EntNode* getRoot();
-	
-
-	bool wasFileCompressed();
-	
-
-	/*
-	* DEBUGGING METHODS
-	*/
-	void logAllocatorInfo(bool includeBlockList, bool logToLogger, bool logToFile, const std::string filepath = "");
-
-
-	private:
-	/*
-	* Creates an exception for a supplied parsing error
-	* The returned exception should be thrown immediately
-	*/
-	std::runtime_error Error(std::string msg);
-
-	/*
-	* RECURSIVE PARSING FUNCTIONS
-	*/
-	void initiateParse(std::string& text, EntNode* tempRoot, EntNode* parent,
-		ParseResult& results);
-	void parseContentsFile(EntNode* node);
-	void parseContentsEntity(EntNode* node);
-	void parseContentsLayer(EntNode* node);
-	void parseContentsDefinition(EntNode* node);
-	void parseContentsPermissive(EntNode* node);
-
-	/*
-	* ALLOCATION / DEALLOCATION FUNCTIONS
-	*/
-
-	void freeNode(EntNode* node);
-	inline EntNode* setNodeObj(const NodeType p_type);
-	inline EntNode* setNodeValue(const NodeType p_type);
-	inline EntNode* setNodeNameOnly(const NodeType p_type);
-	void setNodeChildren(EntNode* parent, const size_t startIndex);
-
-
-	/*
-	* TOKENIZATION FUNCTIONS
-	*/
-
-	/*
-	* Used when tokenizing
-	* Faster than standard library isalpha(char) function
-	* Appears to save anywhere between 100-200 MS wall clock time on ~1.2 million line file
-	*/
-	inline bool isLetter();
-
-	/*
-	* Used when tokenizing
-	* Is also faster than standard library isdigit(char) function
-	* On ~1.2 million line file saves anywhere from 2-4 MS in release builds
-	*/
-	inline bool isNum();
-
-	/*
-	* Throws an error if the last-parsed token is not of the required type
-	*/
-	inline void assertLastType(TokenType requiredType);
-
-
-	/*
-	* Parses raw text for the next token
-	* Throws an error if the token is not of the required type
-	*/
-	inline void assertIgnore(TokenType requiredType);
-
-	/*
-	* Parses raw text for the next token
-	* If it's an identifier, distinguish whether it's a true ID or special keyword value
-	*/
-	inline void TokenizeAdjustValue();
-
-	/*
-	* Parses raw text for the next token
-	*/
-	void Tokenize();
+	wxDataViewCtrl* view = nullptr; // Must set this immediately after construction
 
 	/*
 	* FILTER FUNCTIONS
@@ -271,8 +324,8 @@ class EntityParser : public wxDataViewModel {
 	public:
 
 	/* 
-	* Checks for newly created layers/classes/inherits and adds them to their respective filter checklists
-	* Previously identified values are NOT removed from the checklists
+	  Checks for newly created layers/classes/inherits and adds them to their respective filter checklists
+	  Previously identified values are NOT removed from the checklists
 	*/
 	void refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu);
 
@@ -284,6 +337,7 @@ class EntityParser : public wxDataViewModel {
 	/*
 	* wxDataViewModel Functions
 	*/
+	public:
 
 	// wxWidgets calls this function very frequently, on every visible node, if you so much as breathe on the dataview
 	void GetValue(wxVariant& variant, const wxDataViewItem& item, unsigned int col) const override

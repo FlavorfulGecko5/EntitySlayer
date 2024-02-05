@@ -353,15 +353,6 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 	}
 }
 
-void EntityParser::EditName(std::string text, EntNode* node)
-{
-}
-
-void EntityParser::EditValue(std::string text, EntNode* node)
-{
-
-}
-
 void EntityParser::fixListNumberings(EntNode* parent, bool recursive, bool highlight)
 {
 	int listItems = 0;
