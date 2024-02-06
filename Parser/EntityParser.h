@@ -32,6 +32,11 @@ struct ParseResult {
 	std::string errorMessage;
 };
 
+enum class ParsingMode {
+	ENTITIES,
+	PERMISSIVE
+};
+
 class EntityParser : public wxDataViewModel {
 
 	public:
@@ -47,6 +52,7 @@ class EntityParser : public wxDataViewModel {
 	* =====================
 	*/
 	private:
+	const ParsingMode PARSEMODE;
 	bool fileWasCompressed;
 	EntNode root;
 	BlockAllocator<char> textAlloc;      // Allocator for node name/value buffers
@@ -77,12 +83,13 @@ class EntityParser : public wxDataViewModel {
 	enum class TokenType : unsigned char
 	{
 		END = 0x00,
-		BRACEOPEN = 0x01,
-		BRACECLOSE = 0x02,
-		ASSIGNMENT = 0x03,
-		TERMINAL = 0x04,
-		COMMENT = 0x05,
-		IDENTIFIER = 0x06,
+		NEWLINE = 0x01, // Permissive parsing mode only
+		BRACEOPEN = 0x02,
+		BRACECLOSE = 0x03,
+		EQUALSIGN = 0x04,
+		SEMICOLON = 0x05,
+		COMMENT = 0x06,
+		IDENTIFIER = 0x07,
 		VALUE_ANY = 0xF0,
 		VALUE_NUMBER = 0xF1,
 		VALUE_STRING = 0xF2,
@@ -117,10 +124,11 @@ class EntityParser : public wxDataViewModel {
 	/*
 	* Constructs an EntityParser containing fully parsed data from the given file
 	* @param filepath .entites file to parse
+	* @param mode Parsing mode that will be followed
 	* @param debug_logParseTime If true, outputs execution time data
 	* @throw runtime_error thrown when the file cannot be parsed
 	*/
-	EntityParser(const std::string& filepath, const bool debug_logParseTime = false);
+	EntityParser(const std::string& filepath, const ParsingMode mode, const bool debug_logParseTime = false);
 
 	private:
 	/*
@@ -146,11 +154,11 @@ class EntityParser : public wxDataViewModel {
 	/*
 	* ALLOCATION / DEALLOCATION FUNCTIONS
 	*/
-	// TODO: Rename these set functions so they're not confusing
 	void freeNode(EntNode* node);
-	inline EntNode* setNodeObj(const NodeType p_type);
-	inline EntNode* setNodeValue(const NodeType p_type);
-	inline EntNode* setNodeNameOnly(const NodeType p_type);
+
+	template <bool useID, bool useLast>
+	EntNode* pushNode(const NodeType p_type);
+	 
 	void setNodeChildren(EntNode* parent, const size_t startIndex);
 
 

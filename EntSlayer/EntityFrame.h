@@ -10,7 +10,7 @@ class EntityFrame : public wxFrame
 {
 	private:
 	wxMenu* fileMenu = new wxMenu;
-	wxMenu* editMenu = new wxMenu;
+	wxMenu* tabMenu = new wxMenu;
 	wxAuiNotebook* book;
 	EntityTab* activeTab = nullptr;
 	wxTextCtrl* log = nullptr;

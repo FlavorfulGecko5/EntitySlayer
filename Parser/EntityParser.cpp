@@ -7,7 +7,8 @@
 const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
 
 EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
-	textAlloc(1000000), nodeAlloc(1000), childAlloc(30000)
+	textAlloc(1000000), nodeAlloc(1000), childAlloc(30000), 
+	PARSEMODE(ParsingMode::ENTITIES)
 {
 	// Cannot append a null character to a string? Hence const char* instead
 	const char* rawText = "Version 7\nHierarchyVersion 1\0";
@@ -19,8 +20,8 @@ EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
 	tempChildren.shrink_to_fit();
 }
 
-EntityParser::EntityParser(const std::string& filepath, const bool debug_logParseTime)
-	: root(NodeType::ROOT), textAlloc(1000000), nodeAlloc(1000), childAlloc(30000)
+EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, const bool debug_logParseTime)
+	: root(NodeType::ROOT), PARSEMODE(mode), textAlloc(1000000), nodeAlloc(1000), childAlloc(30000)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
 	std::ifstream file(filepath, std::ios_base::binary); // Binary mode 50% faster than 'in' mode, keeps CR chars
@@ -91,8 +92,13 @@ EntityParser::EntityParser(const std::string& filepath, const bool debug_logPars
 		EntityLogger::logTimeStamps("Node Buffer Init Duration: ", timeStart);
 		timeStart = std::chrono::high_resolution_clock::now();
 	}
-	parseContentsFile(&root); // During construction we allow exceptions to propagate and the parser to be destroyed
+
+	if(mode == ParsingMode::ENTITIES)
+		parseContentsFile(&root); // During construction we allow exceptions to propagate and the parser to be destroyed
+	else if(mode == ParsingMode::PERMISSIVE)
+		parseContentsPermissive(&root);
 	assertLastType(TokenType::END);
+
 	tempChildren.shrink_to_fit();
 	if (fileWasCompressed)
 		delete[] decompressedText;
@@ -543,7 +549,9 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, EntNode* 
 
 	try 
 	{
-		switch (parent->TYPE)
+		if(PARSEMODE == ParsingMode::PERMISSIVE)
+			parseContentsPermissive(tempRoot);
+		else switch (parent->TYPE)
 		{
 			case NodeType::ROOT:
 			parseContentsFile(tempRoot);
@@ -581,6 +589,126 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, EntNode* 
 	tempChildren.shrink_to_fit();
 }
 
+/* 
+Permissive parse function with significantly less error checking for proper token types and arrangements.
+It is intended to be as generous as possible, allowing grammars that wouldn't normally work with id's Parsers
+to be given a free pass if they're not completely wrong.
+
+This will eventually be used to parse the append menu file, and may see further use if/when EntitySlayer's is
+expanded to work with .decl files
+*/
+void EntityParser::parseContentsPermissive(EntNode* node)
+{
+	EntNode* n = nullptr;
+	size_t childrenStart = tempChildren.size();
+	
+	LABEL_LOOP:
+	Tokenize();
+
+	LABEL_LOOP_SKIP_TOKENIZE:
+	switch (lastTokenType)
+	{
+		default: // End, BraceClose, Assignment, Value_Number
+		if(node != &root)
+			setNodeChildren(node, childrenStart);
+		else {
+			// At this point, only the root children should
+			// be in the temporary vector
+			root.childCount = (int)tempChildren.size();
+			rootchild_capacity = root.childCount + 1000;
+			rootchild_filter = new bool[rootchild_capacity];
+			rootchild_buffer = new EntNode*[rootchild_capacity];
+			root.children = rootchild_buffer;
+			
+			EntNode* rootAddr = &root;
+			for (int i = 0, max = root.childCount; i < max; i++) {
+				rootchild_buffer[i] = tempChildren[i];
+				rootchild_buffer[i]->parent = rootAddr;
+				rootchild_filter[i] = true;
+			}
+				
+			tempChildren.clear();
+		}
+		return;
+
+		case TokenType::COMMENT:
+		pushNode<false, true>(NodeType::COMMENT);
+		goto LABEL_LOOP;
+
+		case TokenType::NEWLINE:
+		case TokenType::SEMICOLON: // Stray semicolons are valid entities/decl syntax
+		goto LABEL_LOOP;
+
+		case TokenType::BRACEOPEN: // Most decl files begin with a nameless brace pair
+		activeID = std::string_view("");
+		n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
+		parseContentsPermissive(n);
+		assertLastType(TokenType::BRACECLOSE);
+		goto LABEL_LOOP;
+
+		/*
+		* Many Possibilities:
+		* 1. [Identifier/String] [newline | Closing Brace | EOF | Comment] <--- Will need to augment tokenization function to treat newlines as a token
+		* [DONE] 2. [Identifier/String] { }    
+		* [DONE] 3. [Identifier/String] = { }
+		* [DONE] 4. [Identifier/String] = [Identifier/Value]
+		* [DONE] 5. [Identifier/String] = [Idenitifer/Value];
+		* [DONE] 6. [Identifier/String] [Identifier/Value]
+		* [DONE] 7. [Identifier/String] [Identifier/Value] { }
+		*/
+		case TokenType::IDENTIFIER: case TokenType::VALUE_STRING:
+		activeID = lastUniqueToken;
+		Tokenize();
+
+		if (lastTokenType == TokenType::BRACEOPEN) {  // Simple objects
+			n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
+			parseContentsPermissive(n);
+			assertLastType(TokenType::BRACECLOSE);
+			goto LABEL_LOOP;
+		}
+
+		else if (lastTokenType == TokenType::EQUALSIGN) {
+			Tokenize();
+
+			if (lastTokenType == TokenType::BRACEOPEN) { // Common Objects
+				n = pushNode<true, false>(NodeType::OBJECT_COMMON);
+				parseContentsPermissive(n);
+				assertLastType(TokenType::BRACECLOSE);
+				goto LABEL_LOOP;
+			}
+
+			else if (lastTokenType >= TokenType::IDENTIFIER) { // Value assignments
+				n = pushNode<true, true>(NodeType::VALUE_DARKMETAL);
+				Tokenize();
+				if (lastTokenType == TokenType::SEMICOLON) {
+					n->TYPE = NodeType::VALUE_COMMON;
+					goto LABEL_LOOP;
+				}
+				else goto LABEL_LOOP_SKIP_TOKENIZE;
+			}
+
+			else throw Error("Unexpected token after = sign");
+		}
+
+		else if (lastTokenType >= TokenType::IDENTIFIER) { // Consecutive Identifiers or higher
+			n = pushNode<true, true>(NodeType::VALUE_FILE);
+			Tokenize();
+			if (lastTokenType == TokenType::BRACEOPEN) {
+				n->TYPE = NodeType::OBJECT_ENTITYDEF;
+				parseContentsPermissive(n);
+				assertLastType(TokenType::BRACECLOSE);
+				goto LABEL_LOOP;
+			}
+			else goto LABEL_LOOP_SKIP_TOKENIZE;
+		}
+		else if (lastTokenType != TokenType::SEMICOLON) { // EOF, Braceclose, newline, comment
+			pushNode<true, false>(NodeType::VALUE_LAYER);
+			goto LABEL_LOOP_SKIP_TOKENIZE;
+		}
+		else throw Error("Unexpected token after identifier or string literal");
+	}
+}
+
 void EntityParser::parseContentsFile(EntNode* node) {
 	EntNode* n = nullptr;
 	size_t childrenStart = tempChildren.size();
@@ -588,7 +716,7 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		tempChildren.push_back(setNodeNameOnly(NodeType::COMMENT));
+		pushNode<false, true>(NodeType::COMMENT);
 		goto LABEL_LOOP;
 	}
 	if (lastTokenType != TokenType::IDENTIFIER)
@@ -622,12 +750,11 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	{
 		case TokenType::VALUE_NUMBER:
 		case TokenType::VALUE_STRING: case TokenType::VALUE_KEYWORD:
-		tempChildren.push_back(setNodeValue(NodeType::VALUE_FILE));
+		pushNode<true, true>(NodeType::VALUE_FILE);
 		break;
 
 		case TokenType::BRACEOPEN:
-		n = setNodeObj(NodeType::OBJECT_SIMPLE);
-		tempChildren.push_back(n);
+		n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
 		parseContentsEntity(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
@@ -645,15 +772,15 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		tempChildren.push_back(setNodeNameOnly(NodeType::COMMENT));
+		pushNode<false, true>(NodeType::COMMENT);
 		goto LABEL_LOOP;
 	}
 	if (lastTokenType == TokenType::VALUE_STRING) // Need this specifically for pvp_darkmetal
 	{
 		activeID = lastUniqueToken;
-		assertIgnore(TokenType::ASSIGNMENT);
+		assertIgnore(TokenType::EQUALSIGN);
 		assertIgnore(TokenType::VALUE_STRING);
-		tempChildren.push_back(setNodeValue(NodeType::VALUE_DARKMETAL));
+		pushNode<true, true>(NodeType::VALUE_DARKMETAL);
 		goto LABEL_LOOP;
 	}
 	if(lastTokenType != TokenType::IDENTIFIER)
@@ -667,25 +794,23 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	{
 		case TokenType::IDENTIFIER:
 		assertIgnore(TokenType::BRACEOPEN);
-		n = setNodeValue(NodeType::OBJECT_ENTITYDEF);
-		tempChildren.push_back(n);
+		n = pushNode<true, true>(NodeType::OBJECT_ENTITYDEF);
 		parseContentsDefinition(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
 
 		case TokenType::BRACEOPEN:
-		n = setNodeObj(NodeType::OBJECT_SIMPLE);
-		tempChildren.push_back(n);
+		n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
 		parseContentsLayer(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
 
-		case TokenType::ASSIGNMENT:
+		case TokenType::EQUALSIGN:
 		TokenizeAdjustValue();
 		if (lastTokenType < TokenType::VALUE_ANY)
 			throw Error("Value expected (entity function)");
-		tempChildren.push_back(setNodeValue(NodeType::VALUE_COMMON));
-		assertIgnore(TokenType::TERMINAL);
+		pushNode<true, true>(NodeType::VALUE_COMMON);
+		assertIgnore(TokenType::SEMICOLON);
 		break;
 
 		default:
@@ -700,7 +825,7 @@ void EntityParser::parseContentsLayer(EntNode* node) {
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		tempChildren.push_back(setNodeNameOnly(NodeType::COMMENT));
+		pushNode<false, true>(NodeType::COMMENT);
 		goto LABEL_LOOP;
 	}
 	if (lastTokenType != TokenType::VALUE_STRING)
@@ -708,7 +833,7 @@ void EntityParser::parseContentsLayer(EntNode* node) {
 		setNodeChildren(node, childrenStart);
 		return;
 	}
-	tempChildren.push_back(setNodeNameOnly(NodeType::VALUE_LAYER));
+	pushNode<false, true>(NodeType::VALUE_LAYER);
 	goto LABEL_LOOP;
 }
 
@@ -720,7 +845,7 @@ void EntityParser::parseContentsDefinition(EntNode* node)
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		tempChildren.push_back(setNodeNameOnly(NodeType::COMMENT));
+		pushNode<false, true>(NodeType::COMMENT);
 		goto LABEL_LOOP;
 	}
 	if(lastTokenType != TokenType::IDENTIFIER)
@@ -728,22 +853,21 @@ void EntityParser::parseContentsDefinition(EntNode* node)
 		setNodeChildren(node, childrenStart);
 		return;
 	}
-	assertIgnore(TokenType::ASSIGNMENT);
+	assertIgnore(TokenType::EQUALSIGN);
 	activeID = lastUniqueToken;
 	TokenizeAdjustValue();
 	switch (lastTokenType)
 	{
 		case TokenType::BRACEOPEN:
-		n = setNodeObj(NodeType::OBJECT_COMMON);
-		tempChildren.push_back(n);
+		n = pushNode<true, false>(NodeType::OBJECT_COMMON);
 		parseContentsDefinition(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
 
 		case TokenType::VALUE_NUMBER:
 		case TokenType::VALUE_STRING: case TokenType::VALUE_KEYWORD:
-		tempChildren.push_back(setNodeValue(NodeType::VALUE_COMMON));
-		assertIgnore(TokenType::TERMINAL);
+		pushNode<true, true>(NodeType::VALUE_COMMON);
+		assertIgnore(TokenType::SEMICOLON);
 		break;
 
 		default:
@@ -774,50 +898,30 @@ void EntityParser::freeNode(EntNode* node)
 	nodeAlloc.freeBlock(node, 1);
 }
 
-EntNode* EntityParser::setNodeObj(const NodeType p_type)
+template <bool useID, bool useLast>
+EntNode* EntityParser::pushNode(const NodeType p_type)
 {
-	char* buffer = textAlloc.reserveBlock(activeID.length());
-	size_t i = 0;
-	for (char c : activeID)
-		buffer[i++] = c;
-
 	EntNode* n = nodeAlloc.reserveBlock(1);
 	n->TYPE = p_type;
-	n->textPtr = buffer;
-	n->nameLength = (int)activeID.length();
-	return n;
-}
+	n->textPtr = textAlloc.reserveBlock(
+		(useID ? activeID.length() : 0)
+		+ (useLast ? lastUniqueToken.length() : 0)
+	);
+	char* inc = n->textPtr;
 
-EntNode* EntityParser::setNodeValue(const NodeType p_type)
-{
-	size_t length = activeID.length() + lastUniqueToken.length();
-	char* buffer = textAlloc.reserveBlock(length);
-	char* inc = buffer;
+	if (useID) {
+		for (char c : activeID)
+			*inc++ = c;
+		n->nameLength = (int)activeID.length();
+	}
+	if (useLast) {
+		for(char c : lastUniqueToken)
+			*inc++ = c;
+		if(useID) n->valLength = (int)lastUniqueToken.length();
+		else n->nameLength = (int)lastUniqueToken.length();
+	}
 
-	for (char c : activeID)
-		*inc++ = c;
-	for (char c : lastUniqueToken)
-		*inc++ = c;
-
-	EntNode* n = nodeAlloc.reserveBlock(1);
-	n->TYPE = p_type;
-	n->textPtr = buffer;
-	n->nameLength = (int)activeID.length();
-	n->valLength = (int)lastUniqueToken.length();
-	return n;
-}
-
-EntNode* EntityParser::setNodeNameOnly(const NodeType p_type)
-{
-	char* buffer = textAlloc.reserveBlock(lastUniqueToken.length());
-	size_t i = 0;
-	for (char c : lastUniqueToken)
-		buffer[i++] = c;
-
-	EntNode* n = nodeAlloc.reserveBlock(1);
-	n->TYPE = p_type;
-	n->textPtr = buffer;
-	n->nameLength = (int)lastUniqueToken.length();
+	tempChildren.push_back(n);
 	return n;
 }
 
@@ -877,7 +981,13 @@ void EntityParser::Tokenize()
 		case '\r':
 		if(*++ch != '\n')
 			throw Error("Expected line feed after carriage return");
-		case '\n': case ' ': case '\t':
+		case '\n':
+		if (PARSEMODE == ParsingMode::PERMISSIVE) {
+			ch++;
+			lastTokenType = TokenType::NEWLINE;
+			return;
+		}
+		case ' ': case '\t':
 		ch++;
 		goto LABEL_TOKENIZE_START;
 
@@ -886,7 +996,7 @@ void EntityParser::Tokenize()
 		return;
 
 		case ';':
-		lastTokenType = TokenType::TERMINAL;
+		lastTokenType = TokenType::SEMICOLON;
 		ch++;
 		return;
 
@@ -901,7 +1011,7 @@ void EntityParser::Tokenize()
 		return;
 
 		case '=':
-		lastTokenType = TokenType::ASSIGNMENT;
+		lastTokenType = TokenType::EQUALSIGN;
 		ch++;
 		return;
 

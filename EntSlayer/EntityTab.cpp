@@ -58,8 +58,21 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	/* Initialize parser */
 	if (path == "")
 		Parser = new EntityParser();
-	else
-		Parser = new EntityParser(std::string(path), true);
+	else  { // Todo: Hide filters if permissive mode is enabled?
+		ParsingMode mode = ParsingMode::PERMISSIVE;
+		wxString lowercase = filePath.Lower();
+
+		if(lowercase.EndsWith(".entities"))
+			mode = ParsingMode::ENTITIES;
+
+		if (mode == ParsingMode::PERMISSIVE) {
+			wxLogMessage("WARNING: Permissive parsing mode enabled for this file. Automatic list renumbering has been disabled (re-enable it in the 'Tab' menu)");
+			autoNumberLists = false;
+		}
+
+		Parser = new EntityParser(std::string(path), mode, true);
+	}
+		
 	compressOnSave = Parser->wasFileCompressed();
 	root = Parser->getRoot();
 

@@ -13,11 +13,11 @@ enum FrameID
 	FILE_OPEN,
 	FILE_SAVE,
 	FILE_SAVEAS,
-	FILE_COMPRESS,
-
-	EDIT_NUMBERLISTS,
-	EDIT_SEARCHFORWARD,
-	EDIT_SEARCHBACKWARD,
+	
+	TAB_SEARCHFORWARD,
+	TAB_SEARCHBACKWARD,
+	TAB_COMPRESS,
+	TAB_NUMBERLISTS,
 
 	HELP_ABOUT,
 
@@ -46,10 +46,10 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_OPEN, EntityFrame::onFileOpen)
 	EVT_MENU(FILE_SAVE, EntityFrame::onFileSave)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
-	EVT_MENU(FILE_COMPRESS, EntityFrame::onCompressCheck)
-	EVT_MENU(EDIT_NUMBERLISTS, EntityFrame::onNumberListCheck)
-	EVT_MENU(EDIT_SEARCHFORWARD, EntityFrame::onSearchForward)
-	EVT_MENU(EDIT_SEARCHBACKWARD, EntityFrame::onSearchBackward)
+	EVT_MENU(TAB_SEARCHFORWARD, EntityFrame::onSearchForward)
+	EVT_MENU(TAB_SEARCHBACKWARD, EntityFrame::onSearchBackward)
+	EVT_MENU(TAB_COMPRESS, EntityFrame::onCompressCheck)
+	EVT_MENU(TAB_NUMBERLISTS, EntityFrame::onNumberListCheck)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
 
 	EVT_TIMER(MEATHOOK_CHECKSTATUS, EntityFrame::onMHStatusCheck)
@@ -80,13 +80,12 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->Append(FILE_OPEN, "&Open\tCtrl+O");
 		fileMenu->Append(FILE_SAVE, "&Save\tCtrl+S");
 		fileMenu->Append(FILE_SAVEAS, "Save As\tCtrl+Shift+S");
-		fileMenu->AppendSeparator();
-		fileMenu->AppendCheckItem(FILE_COMPRESS, "Compress on Save\tF1");
-
-		editMenu->Append(EDIT_SEARCHFORWARD, "Search Forward\tCtrl+F");
-		editMenu->Append(EDIT_SEARCHBACKWARD, "Search Backward\tCtrl+Space");
-		editMenu->AppendSeparator();
-		editMenu->AppendCheckItem(EDIT_NUMBERLISTS, "Auto-Renumber idLists");
+		
+		tabMenu->Append(TAB_SEARCHFORWARD, "Search Forward\tCtrl+F");
+		tabMenu->Append(TAB_SEARCHBACKWARD, "Search Backward\tCtrl+Space");
+		tabMenu->AppendSeparator();
+		tabMenu->AppendCheckItem(TAB_COMPRESS, "Compress on Save\tF1");
+		tabMenu->AppendCheckItem(TAB_NUMBERLISTS, "Auto-Renumber idLists");
 
 		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Use as Reload Tab\tF4",
 			"Enables level reloads using this tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT!");
@@ -118,7 +117,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 
 		wxMenuBar* bar = new wxMenuBar;
 		bar->Append(fileMenu, "File");
-		bar->Append(editMenu, "Tab");
+		bar->Append(tabMenu, "Tab");
 		bar->Append(mhMenu, "Meathook");
 		bar->Append(specialMenu, "Advanced");
 		bar->Append(helpMenu, "Help");
@@ -276,8 +275,8 @@ void EntityFrame::onTabChanged(wxAuiNotebookEvent& event)
 		SetTitle(activeTab->filePath + " - EntitySlayer");
 		fileMenu->Enable(FILE_SAVE, true);
 	}
-	fileMenu->Check(FILE_COMPRESS, activeTab->compressOnSave);
-	editMenu->Check(EDIT_NUMBERLISTS, activeTab->autoNumberLists);
+	tabMenu->Check(TAB_COMPRESS, activeTab->compressOnSave);
+	tabMenu->Check(TAB_NUMBERLISTS, activeTab->autoNumberLists);
 	RefreshMHMenu();
 }
 
@@ -393,7 +392,7 @@ void EntityFrame::onCompressCheck(wxCommandEvent& event)
 	{
 		wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
 			"Oodle Compression", wxICON_WARNING | wxOK);
-		fileMenu->Check(FILE_COMPRESS, false);
+		tabMenu->Check(TAB_COMPRESS, false);
 	}
 
 	else {
@@ -469,7 +468,7 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 		if (activeTab->compressOnSave) {
 			wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
 				"Oodle Compression", wxICON_WARNING | wxOK);
-			fileMenu->Check(FILE_COMPRESS, false);
+			tabMenu->Check(TAB_COMPRESS, false);
 			activeTab->compressOnSave = false;
 			activeTab->fileUpToDate = false;
 		}
