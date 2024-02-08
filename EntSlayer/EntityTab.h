@@ -25,6 +25,7 @@ class EntityTab : public wxPanel
 	SearchBar* searchBar;
 
 	wxMenu viewMenu;
+	wxMenu* appendMenu = nullptr;
 
 	EntNode* root;
 	wxObjectDataPtr<EntityParser> Parser; // Need this or model leaks when tab destroyed
@@ -34,6 +35,7 @@ class EntityTab : public wxPanel
 	EntityTab(wxWindow* parent, const wxString name, const wxString& path = "");
 	bool IsNewAndUntouched();
 	bool UnsavedChanges();
+	void setAppendMenu();
 	void refreshFilters();
 	void onFilterCaseCheck(wxCommandEvent& event);
 	void onFilterDelKeys(wxCommandEvent& event);

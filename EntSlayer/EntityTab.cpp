@@ -2,6 +2,7 @@
 #include "EntityTab.h"
 #include "EntityEditor.h"
 #include "FilterMenus.h"
+#include "AppendMenu.h"
 #include "Meathook.h"
 
 enum TabID 
@@ -24,7 +25,11 @@ enum TabID
 	NODEVIEW_SETORIENTATION,
 	NODEVIEW_SETORIENTATION_ACCEL,
 	NODEVIEW_TELEPORTPOSITION,
-	NODEVIEW_TELEPORTPOSITION_ACCEL
+	NODEVIEW_TELEPORTPOSITION_ACCEL,
+
+	NODEVIEW_APPENDMENU_ID, // AppendMenu needs a unique ID to be found by the Remove function
+
+	TABID_MAXIMUM
 };
 
 wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
@@ -50,6 +55,14 @@ wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
 	EVT_MENU(NODEVIEW_SETPOSITION_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_SETORIENTATION_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_TELEPORTPOSITION_ACCEL, onNodeContextAccelerator)
+
+	// This technically causes a double-commit test if append is executed via the menus
+	// and not through a shortcut. However, this shouldn't have unwanted side effects since
+	// the second check won't find anything to commit. And if the first check finds errors or commits, the
+	// menu won't show up the first place. So overall, it's just some very minor double-execution of code,
+	// though would still be nice to rectify this somehow
+	// Todo: Investigate cleanliness of executing all right click menu actions through nodeContextAccelerator
+	EVT_MENU_RANGE(TABID_MAXIMUM, MAXSHORT, onNodeContextAccelerator)
 wxEND_EVENT_TABLE()
 
 EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path)
@@ -169,22 +182,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		viewMenu.Append(NODEVIEW_SETPOSITION, "Copy and Set spawnPosition\tCtrl+E");
 		viewMenu.Append(NODEVIEW_SETORIENTATION, "Copy and Set spawnOrientation\tCtrl+R");
 		viewMenu.Append(NODEVIEW_TELEPORTPOSITION, "Teleport to spawnPosition\tCtrl+W");
-
-		const size_t BINDCOUNT = 10;
-		wxAcceleratorEntry entries[BINDCOUNT] {
-			wxAcceleratorEntry(wxACCEL_CTRL, 'Z', NODEVIEW_UNDO),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'Y', NODEVIEW_REDO),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPYSELECTED_ACCEL),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'V', NODEVIEW_PASTE_ACCEL),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'A', NODEVIEW_SELECTALLENTS_ACCEL),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'D', NODEVIEW_DELETESELECTED_ACCEL),
-			wxAcceleratorEntry(wxACCEL_NORMAL, WXK_DELETE, NODEVIEW_DELETESELECTED_ACCEL),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'E', NODEVIEW_SETPOSITION_ACCEL),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'R', NODEVIEW_SETORIENTATION_ACCEL),
-			wxAcceleratorEntry(wxACCEL_CTRL, 'W', NODEVIEW_TELEPORTPOSITION_ACCEL)
-		};
-		wxAcceleratorTable accel(BINDCOUNT, entries);
-		view->SetAcceleratorTable(accel);
+		setAppendMenu();
 	}
 	/* Initialize View */
 	{
@@ -226,6 +224,38 @@ bool EntityTab::IsNewAndUntouched()
 bool EntityTab::UnsavedChanges()
 {
 	return !fileUpToDate || editor->Modified();
+}
+
+void EntityTab::setAppendMenu()
+{
+	const size_t index = 8;
+	if (appendMenu != nullptr) // Destroy deletes the wxMenuItem *and* any attached submenu, preventing memory leaks
+		viewMenu.Destroy(NODEVIEW_APPENDMENU_ID); 
+
+	appendMenu = AppendMenuInterface::getMenu();
+	viewMenu.Insert(index, NODEVIEW_APPENDMENU_ID, "Append", appendMenu);
+
+	size_t bindCount = appendMenu->GetAccelCount() + 10;
+	wxAcceleratorEntry* entries = new wxAcceleratorEntry[bindCount];
+	wxAcceleratorEntry* inc = entries;
+
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'Z', NODEVIEW_UNDO);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'Y', NODEVIEW_REDO);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPYSELECTED_ACCEL);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'V', NODEVIEW_PASTE_ACCEL);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'A', NODEVIEW_SELECTALLENTS_ACCEL);
+	new (inc++)	wxAcceleratorEntry(wxACCEL_CTRL, 'D', NODEVIEW_DELETESELECTED_ACCEL);
+	new (inc++) wxAcceleratorEntry(wxACCEL_NORMAL, WXK_DELETE, NODEVIEW_DELETESELECTED_ACCEL);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'E', NODEVIEW_SETPOSITION_ACCEL);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'R', NODEVIEW_SETORIENTATION_ACCEL);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'W', NODEVIEW_TELEPORTPOSITION_ACCEL);
+	appendMenu->CopyAccels(inc);
+
+	wxAcceleratorTable accel(bindCount, entries);
+	view->SetAcceleratorTable(accel);
+
+	// Must delete entries after, accelerator table seems to copy array instead of taking ownership
+	delete[] entries; 
 }
 
 void EntityTab::onFilterRefresh(wxCommandEvent& event)
@@ -532,6 +562,7 @@ void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 		viewMenu.Enable(NODEVIEW_PASTE, node != nullptr && node != root);
 		viewMenu.Enable(NODEVIEW_SELECTALLENTS, true);
 		viewMenu.Enable(NODEVIEW_DELETESELECTED, view->HasSelection());
+		viewMenu.Enable(NODEVIEW_APPENDMENU_ID, node != nullptr && node != root);
 
 		// Todo: Verify edit node exists
 		viewMenu.Enable(NODEVIEW_SETPOSITION, online && node != nullptr && node != root);
@@ -582,8 +613,30 @@ void EntityTab::onNodeContextAccelerator(wxCommandEvent& event)
 		onTeleportToEntity(event);
 		break;
 
-		default:
-		wxLogMessage("Unknown Dataview Accelerator Command");
+		default: 
+		{ // Assume all other values are an append menu action
+			std::string text;
+			EntNode* node = (EntNode*)view->GetCurrentItem().GetID();
+			if (node == nullptr || node == root) {
+				wxLogMessage("Cannot attempt an Append at this location");
+				return;
+			}
+			EntNode* parent = node->getParent();
+
+			if (AppendMenuInterface::getText(event.GetId(), text)) 
+			{
+				ParseResult outcome = Parser->EditTree(text, parent, parent->getChildIndex(node) + 1, 0, autoNumberLists, true);
+				if(!outcome.success)
+					wxMessageBox(outcome.errorMessage, "Append Failed", wxICON_ERROR | wxOK);
+				else {
+					Parser->PushGroupCommand();
+					editor->SetActiveNode(nullptr); // Todo: Adjust this? (Also perhaps merge this and paste function? This basically copies from it's logic)
+					fileUpToDate = false;
+					wxLogMessage("Append Successful");
+				}
+			}
+			else wxLogMessage("Append canceled or could not find text for option");
+		}
 		break;
 	}
 }
@@ -649,7 +702,7 @@ void EntityTab::onPaste(wxCommandEvent& event)
 				wxMessageBox(outcome.errorMessage, "Paste Failed ", wxICON_ERROR | wxOK);
 			else {
 				Parser->PushGroupCommand();
-				editor->SetActiveNode(nullptr); // Adjust this?
+				editor->SetActiveNode(nullptr); // Todo: Adjust this?
 				fileUpToDate = false;
 			}
 		}

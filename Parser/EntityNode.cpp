@@ -14,6 +14,18 @@ wxString EntNode::getNameWX() { return wxString(textPtr, nameLength); }
 
 wxString EntNode::getValueWX() { return wxString(textPtr + nameLength, valLength); }
 
+wxString EntNode::getNameWXUQ() {
+	if(nameLength < 2 || *textPtr != '"')
+		return wxString(textPtr, nameLength);
+	return wxString(textPtr + 1, nameLength - 2);
+}
+
+wxString EntNode::getValueWXUQ() {
+	if(valLength < 2 || textPtr[nameLength] != '"')
+		return wxString(textPtr + nameLength, valLength);
+	return wxString(textPtr + nameLength + 1, valLength - 2);
+}
+
 void EntNode::writeToFile(const std::string filepath, const bool oodleCompress, const bool debug_logTime)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();

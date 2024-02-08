@@ -45,21 +45,24 @@ class EntNode
 
 	std::string_view getValue() {return std::string_view(textPtr + nameLength, valLength); }
 
-	wxString getNameWX();
-	wxString getValueWX();
-
+	// If the name is a string literal, return it unquoted. Otherwise return the name as normal
 	std::string_view getNameUQ() {
-		if (nameLength < 2)
+		if (nameLength < 2 || *textPtr != '"')
 			return std::string_view(textPtr, nameLength);
 		return std::string_view(textPtr + 1, nameLength - 2);
 	}
 
-	// If the value is a string literal, get it with the quotes removed
+	// If the value is a string literal, get it with the quotes removed. Else return the value as normal
 	std::string_view getValueUQ() {
-		if (valLength < 2)
+		if (valLength < 2 || textPtr[nameLength] != '"')
 			return std::string_view(textPtr + nameLength, valLength);
 		return std::string_view(textPtr + nameLength + 1, valLength - 2);
 	}
+
+	wxString getNameWX();
+	wxString getValueWX();
+	wxString getNameWXUQ();
+	wxString getValueWXUQ();
 
 	int NameLength() { return nameLength; }
 

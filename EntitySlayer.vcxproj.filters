@@ -57,6 +57,9 @@
     <ClCompile Include="EntSlayer\Meathook.cpp">
       <Filter>Source Files\EntSlayer</Filter>
     </ClCompile>
+    <ClCompile Include="EntSlayer\AppendMenu.cpp">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser\EntityLogger.h">
@@ -96,6 +99,9 @@
       <Filter>Source Files\EntHero\Meathook</Filter>
     </ClInclude>
     <ClInclude Include="EntSlayer\Meathook.h">
+      <Filter>Source Files\EntSlayer</Filter>
+    </ClInclude>
+    <ClInclude Include="EntSlayer\AppendMenu.h">
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
   </ItemGroup>

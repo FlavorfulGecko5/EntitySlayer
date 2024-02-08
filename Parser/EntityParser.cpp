@@ -251,7 +251,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 		for (wxDataViewItem& n : addedNodes)
 			fixListNumberings((EntNode*)n.GetID(), true, false);
 		if(parent != &root) // Don't waste time reordering the root children, there shouldn't be a list there
-			fixListNumberings(parent, false, true);
+			fixListNumberings(parent, false, false);
 	}
 	return outcome;
 }
@@ -1121,8 +1121,11 @@ void EntityParser::Tokenize()
 
 		default:
 		{
-			if (!isLetter() && *ch != '_')
-				throw Error("Unrecognized character");
+			if (!isLetter() && *ch != '_') {
+				if(*ch != '%' || PARSEMODE != ParsingMode::PERMISSIVE)
+					throw Error("Unrecognized character");
+			}
+				
 			first = ch;
 
 			LABEL_ID_START:
@@ -1147,6 +1150,8 @@ void EntityParser::Tokenize()
 
 				default:
 				if (isLetter() || isNum() || *ch == '_')
+					goto LABEL_ID_START;
+				if(*ch == '%' && PARSEMODE == ParsingMode::PERMISSIVE)
 					goto LABEL_ID_START;
 				break;
 			}
