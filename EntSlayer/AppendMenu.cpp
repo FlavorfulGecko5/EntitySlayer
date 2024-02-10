@@ -154,24 +154,29 @@ class ParameterDialog : public wxDialog {
 			if(child->getType() == NodeType::COMMENT)
 				continue;
 
-			wxStaticText* text = new wxStaticText(this, wxID_ANY, child->getNameWXUQ(),
-				wxDefaultPosition, wxSize(150, 23), wxST_ELLIPSIZE_END);
+			// Goal: Maximum window width should be 1000
+			wxString name = child->getNameWXUQ();
+			int textWidth = wxWindow::GetTextExtent(name).x;
+			if(textWidth > 750) textWidth = 750;
+
+			wxStaticText* text = new wxStaticText(this, wxID_ANY, name,
+				wxDefaultPosition, wxSize(textWidth, 23), wxST_ELLIPSIZE_END);
 			wxTextCtrl* input = new wxTextCtrl(this, wxID_ANY, child->getValueWX(),
-				wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER); // Otherwise Enter will trigger the last-highlighted button
+				wxDefaultPosition, wxSize(150, -1), wxTE_PROCESS_ENTER); // Otherwise Enter will trigger the last-highlighted button
 
 			col0->Add(text);
 			col1->Add(input, 1, wxEXPAND);
 			boxes.push_back(input);
 		}
 
-		parmSizer->Add(col0, 0, wxRIGHT, 3);
+		parmSizer->Add(col0, 0, wxRIGHT, 10);
 		parmSizer->Add(col1, 1);
 		mainSizer->Add(parmSizer, 0, wxEXPAND | wxALL, 7);
 		mainSizer->Add(btnSizer, 0, wxCENTER | wxALL, 5);
 		SetSizerAndFit(mainSizer);
 
 		int y = GetBestSize().y;
-		SetSize(wxSize(400, y > 600 ? 600 : y));
+		SetSize(wxSize(-1, y > 600 ? 600 : y));
 		CenterOnScreen();
 		ShowModal();
 
