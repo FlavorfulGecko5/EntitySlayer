@@ -140,6 +140,8 @@ class ParameterDialog : public wxDialog {
 		wxDefaultPosition, wxDefaultSize) 
 	{		
 		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+		wxScrolledWindow* parmWindow = new wxScrolledWindow(this, wxID_ANY,
+			wxDefaultPosition, wxDefaultSize, wxVSCROLL); // This style doesn't actually work?
 		wxBoxSizer* parmSizer = new wxBoxSizer(wxHORIZONTAL);
 		wxBoxSizer* col0 = new wxBoxSizer(wxVERTICAL);
 		wxBoxSizer* col1 = new wxBoxSizer(wxVERTICAL);
@@ -159,24 +161,25 @@ class ParameterDialog : public wxDialog {
 			int textWidth = wxWindow::GetTextExtent(name).x;
 			if(textWidth > 750) textWidth = 750;
 
-			wxStaticText* text = new wxStaticText(this, wxID_ANY, name,
+			wxStaticText* text = new wxStaticText(parmWindow, wxID_ANY, name,
 				wxDefaultPosition, wxSize(textWidth, 23), wxST_ELLIPSIZE_END);
-			wxTextCtrl* input = new wxTextCtrl(this, wxID_ANY, child->getValueWX(),
+			wxTextCtrl* input = new wxTextCtrl(parmWindow, wxID_ANY, child->getValueWX(),
 				wxDefaultPosition, wxSize(150, -1), wxTE_PROCESS_ENTER); // Otherwise Enter will trigger the last-highlighted button
 
 			col0->Add(text);
 			col1->Add(input, 1, wxEXPAND);
 			boxes.push_back(input);
 		}
-
+		
 		parmSizer->Add(col0, 0, wxRIGHT, 10);
 		parmSizer->Add(col1, 1);
-		mainSizer->Add(parmSizer, 0, wxEXPAND | wxALL, 7);
+		parmWindow->SetScrollRate(0, 10);        // Scrollbars won't render without this, 0 to turn off horizontal scrollbar
+		parmWindow->SetMaxSize(wxSize(-1, 500)); // If max size exceeded, scrolling will be activated
+		parmWindow->SetSizerAndFit(parmSizer);   // Todo: Scrollbar will overlap with textboxes - doesn't seem like an easy way to fix it, but shouldn't be a big deal
+		
+		mainSizer->Add(parmWindow, 0, wxEXPAND | wxALL, 7);
 		mainSizer->Add(btnSizer, 0, wxCENTER | wxALL, 5);
 		SetSizerAndFit(mainSizer);
-
-		int y = GetBestSize().y;
-		SetSize(wxSize(-1, y > 600 ? 600 : y));
 		CenterOnScreen();
 		ShowModal();
 
