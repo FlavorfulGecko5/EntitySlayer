@@ -136,7 +136,7 @@
     <ClCompile Include="EntHero\prefs.cpp" />
     <ClCompile Include="EntHero\RPCInterface\meathook_interface_c.c" />
     <ClCompile Include="EntHero\RPCInterface\mhclient.cpp" />
-    <ClCompile Include="EntSlayer\AppendMenu.cpp" />
+    <ClCompile Include="EntSlayer\Config.cpp" />
     <ClCompile Include="EntSlayer\Application.cpp" />
     <ClCompile Include="EntSlayer\EntityEditor.cpp" />
     <ClCompile Include="EntSlayer\EntityFrame.cpp" />
@@ -152,7 +152,7 @@
     <ClInclude Include="EntHero\prefs.h" />
     <ClInclude Include="EntHero\RPCInterface\meathook_interface.h" />
     <ClInclude Include="EntHero\RPCInterface\mhclient.h" />
-    <ClInclude Include="EntSlayer\AppendMenu.h" />
+    <ClInclude Include="EntSlayer\Config.h" />
     <ClInclude Include="EntSlayer\EntityTab.h" />
     <ClInclude Include="EntSlayer\EntityEditor.h" />
     <ClInclude Include="EntSlayer\EntityFrame.h" />

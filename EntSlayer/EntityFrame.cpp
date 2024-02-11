@@ -3,7 +3,7 @@
 #include "wx/clipbrd.h"
 #include "Meathook.h"
 #include "Oodle.h"
-#include "AppendMenu.h"
+#include "Config.h"
 #include "EntityFrame.h"
 #include "EntityTab.h"
 
@@ -48,7 +48,7 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_OPEN, EntityFrame::onFileOpen)
 	EVT_MENU(FILE_SAVE, EntityFrame::onFileSave)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
-	EVT_MENU(FILE_RELOAD_APPENDMENU, EntityFrame::onReloadAppendFile)
+	EVT_MENU(FILE_RELOAD_APPENDMENU, EntityFrame::onReloadConfigFile)
 	EVT_MENU(TAB_SEARCHFORWARD, EntityFrame::onSearchForward)
 	EVT_MENU(TAB_SEARCHBACKWARD, EntityFrame::onSearchBackward)
 	EVT_MENU(TAB_COMPRESS, EntityFrame::onCompressCheck)
@@ -76,7 +76,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 			"Warning: oo2core_8_win64.dll is missing or corrupted.",
 			wxICON_WARNING | wxOK);
 
-	AppendMenuInterface::loadData();
+	ConfigInterface::loadData();
 
 	/* Build Menu Bar */
 	{
@@ -86,7 +86,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->Append(FILE_SAVE, "&Save\tCtrl+S");
 		fileMenu->Append(FILE_SAVEAS, "Save As\tCtrl+Shift+S");
 		fileMenu->AppendSeparator();
-		fileMenu->Append(FILE_RELOAD_APPENDMENU, "Reload AppendMenu File");
+		fileMenu->Append(FILE_RELOAD_APPENDMENU, "Reload Config File");
 		
 		tabMenu->Append(TAB_SEARCHFORWARD, "Search Forward\tCtrl+F");
 		tabMenu->Append(TAB_SEARCHBACKWARD, "Search Backward\tCtrl+Space");
@@ -241,7 +241,7 @@ void EntityFrame::onWindowClose(wxCloseEvent& event)
 		event.Veto();
 		return;
 	}
-	AppendMenuInterface::deleteData(); // Debugger will detect large memory leaks if we don't do this
+	ConfigInterface::deleteData(); // Debugger will detect large memory leaks if we don't do this
 	delete EntNode::SEARCH_404;        // Cause of the 40 byte memory leak that's been present for the longest time. Todo: have it point to a static EntNode var?
 	event.Skip();
 }
@@ -394,9 +394,9 @@ void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 	fileMenu->Enable(FILE_SAVE, true);
 }
 
-void EntityFrame::onReloadAppendFile(wxCommandEvent& event)
+void EntityFrame::onReloadConfigFile(wxCommandEvent& event)
 {
-	if(AppendMenuInterface::loadData()) {
+	if(ConfigInterface::loadData()) {
 		for (size_t i = 0, max = book->GetPageCount(); i < max; i++) {
 			EntityTab* t = (EntityTab*)book->GetPage(i);
 			t->setAppendMenu();
@@ -440,7 +440,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 2 [Search Fixes, eventDef visualization, Find Active Encounter]");
+	info.SetVersion("Beta 3 Closed Pre-Release [Customizable Append Menu]");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

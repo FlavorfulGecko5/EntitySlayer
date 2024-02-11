@@ -2,7 +2,7 @@
 
 class wxWindow;
 class wxMenu;
-namespace AppendMenuInterface 
+namespace ConfigInterface 
 {
 	bool loadData();
 	void deleteData();

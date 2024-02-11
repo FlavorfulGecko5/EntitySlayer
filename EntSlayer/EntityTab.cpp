@@ -2,7 +2,7 @@
 #include "EntityTab.h"
 #include "EntityEditor.h"
 #include "FilterMenus.h"
-#include "AppendMenu.h"
+#include "Config.h"
 #include "Meathook.h"
 
 enum TabID 
@@ -232,7 +232,7 @@ void EntityTab::setAppendMenu()
 	if (appendMenu != nullptr) // Destroy deletes the wxMenuItem *and* any attached submenu, preventing memory leaks
 		viewMenu.Destroy(NODEVIEW_APPENDMENU_ID); 
 
-	appendMenu = AppendMenuInterface::getMenu();
+	appendMenu = ConfigInterface::getMenu();
 	viewMenu.Insert(index, NODEVIEW_APPENDMENU_ID, "Append", appendMenu);
 
 	size_t bindCount = appendMenu->GetAccelCount() + 10;
@@ -623,7 +623,7 @@ void EntityTab::onNodeContextAccelerator(wxCommandEvent& event)
 			}
 			EntNode* parent = node->getParent();
 
-			if (AppendMenuInterface::getText(event.GetId(), text)) 
+			if (ConfigInterface::getText(event.GetId(), text)) 
 			{
 				ParseResult outcome = Parser->EditTree(text, parent, parent->getChildIndex(node) + 1, 0, autoNumberLists, true);
 				if(!outcome.success)

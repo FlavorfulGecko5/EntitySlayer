@@ -38,7 +38,7 @@ class EntityFrame : public wxFrame
 	void onMeathookOpen(wxCommandEvent& event);
 	void onFileSave(wxCommandEvent& event);
 	void onFileSaveAs(wxCommandEvent& event);
-	void onReloadAppendFile(wxCommandEvent &event);
+	void onReloadConfigFile(wxCommandEvent &event);
 	void onCompressCheck(wxCommandEvent& event);
 	void onNumberListCheck(wxCommandEvent& event);
 	void onSearchForward(wxCommandEvent &event);

@@ -1,7 +1,7 @@
 #pragma warning(disable : 4996) // Deprecation errors
 #include <vector>
 #include "EntityParser.h"
-#include "AppendMenu.h"
+#include "Config.h"
 
 /*
  Parsed AppendMenu file data
@@ -57,9 +57,9 @@ void recursiveBuildMenu(wxMenu* parentMenu, EntNode* node)
 	}
 }
 
-bool AppendMenuInterface::loadData()
+bool ConfigInterface::loadData()
 {
-	const std::string filepath = "EntitySlayer_AppendMenu.txt";
+	const std::string filepath = "EntitySlayer_Config.txt";
 
 	try {
 		EntityParser* newParser = new EntityParser(filepath, ParsingMode::PERMISSIVE, false);
@@ -77,8 +77,9 @@ bool AppendMenuInterface::loadData()
 	templateMenu = new wxMenu;
 
 	EntNode* root = data->getRoot();
-	for(int i = 0, max = root->getChildCount(); i < max; i++)
-		recursiveBuildMenu(templateMenu, root->ChildAt(i));
+	EntNode& append = (*root)["append"];
+	for(int i = 0, max = append.getChildCount(); i < max; i++)
+		recursiveBuildMenu(templateMenu, append.ChildAt(i));
 
 	return true;
 }
@@ -100,14 +101,14 @@ void recursiveCloneMenu(wxMenu* copyFrom, wxMenu* copyTo)
 	}
 }
 
-wxMenu* AppendMenuInterface::getMenu()
+wxMenu* ConfigInterface::getMenu()
 {
 	wxMenu* appendMenu = new wxMenu;
 	recursiveCloneMenu(templateMenu, appendMenu);
 	return appendMenu;
 }
 
-void AppendMenuInterface::deleteData()
+void ConfigInterface::deleteData()
 {
 	delete data;
 	delete templateMenu;
@@ -125,8 +126,6 @@ void AppendMenuInterface::deleteData()
 * > To prevent outrageously large parameter names from running the textboxes off the page, we must do two things:
 *	- Set the width of the statictexts to a set value - combined with the dialog size, use this to control the width proportion of the two columns
 *   - Give the statictexts an ellipse style i.e. wxST_ELLIPSIZE_END
-* > Currenty unaccounted for: how will scrolling work if there are a lot of parameters? - No sane template will need to be able to scroll, but should still handle it
-* > Additionally: Investigate possibility of dynamically setting width of dialog based on largest text length (or capping it if it's too long)
 */
 
 class ParameterDialog : public wxDialog {
@@ -192,7 +191,7 @@ class ParameterDialog : public wxDialog {
 	}
 };
 
-bool AppendMenuInterface::getText(const int menuID, std::string& buffer)
+bool ConfigInterface::getText(const int menuID, std::string& buffer)
 {
 	int index = menuID - MENU_ID_OFFSET;
 	if(index < 0 || index >= idMap.size())
