@@ -1,5 +1,5 @@
 # EntitySlayer
-EntitySlayer is a WIP editor for DOOM Eternal's .entities files.  
+EntitySlayer is an editor for DOOM Eternal's .entities files.  
 
 Beginning originally as a bug fix and QoL update for [EntityHero](https://github.com/nopjne/EntityHero/tree/master), it quickly became a separate application containing only a few core components of the original codebase. It aims to overhaul the editing experience provided by EntityHero while maintaining a familiar interface for frequent users of this tool.
 
@@ -37,6 +37,18 @@ For these features, use input strings like `globalAIsettings"default"` instead o
 > Meathook is reloading the map, but none of the changes I made to the entities file are appearing?
 
 The `Use as Reload Tab` option **must be set AFTER loading into the level you want to edit.**
+
+> Selecting an option from the append menu is slow! Is there a way to speed things up?
+
+Edit `EntitySlayer_Config.txt` - you can set a custom hotkey for every item in the append menu!
+
+> Can `EntitySlayer_Config.txt` be edited in EntitySlayer?
+
+Yes!
+
+> Navigating the Append Parameter menu with a mouse is slow! How can I do it more efficiently?
+
+Use `Tab` to quickly navigate between the different textboxes, checkboxes and buttons! Use `Spacebar` to check/uncheck a checkbox or activate a button!
 
 ### Contributing
 EntitySlayer is written in C++17 using [wxWidgets](https://www.wxwidgets.org/) 3.1.4 as it's GUI library. You will need [Microsoft's Visual Studio](https://visualstudio.microsoft.com/) to work with the project files.

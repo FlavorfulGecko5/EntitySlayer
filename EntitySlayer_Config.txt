@@ -1,0 +1,1065 @@
+/* READ ME!
+
+This file is for customizing EntitySlayer's append menu - letting you craft your own set of insertion macros to suit your needs.
+
+I recommend keeping Automatic idList Renumbering turned off for this file. Enabling it may cause unwanted edits to templates.
+
+Once satisfied with your edits, use the option in the File Menu to reload and rebuild the append menu. Remember to save your changes before doing this!
+
+Each menu entry may have the following fields - all are optional
+1. hotkey - Sets the keyboard shortcut for this item.
+   > Virtually any hotkey is acceptable: "1", "Ctrl+5", "Shift+T", "Ctrl+Shift+F", "Alt+K" etc.
+   > If hotkeys conflict, unintended functions may execute. Please double check that your desired hotkey for a template isn't already in use by another template or feature of EntitySlayer!
+
+2. args - Can specify a list of parameters and their default values.
+   > When appending an item with args defined, you will be prompted to enter them.
+   > To insert the parameters into your text, use %[index]% (i.e. int = %0%)
+   > Two parameter types available: "bool" (creates a checkbox), and unspecified (creates a textbox)
+   > Be Efficient - use Tab to quickly navigate between the different boxes and buttons! Use spacebar to check/uncheck a textbox and activate a button!
+   
+3. text - The contents of this object is what gets inserted into the node tree when you execute Append. 
+   > If this node is missing from an object, it is assumed that you want to construct a submenu.
+
+This file comes pre-supplied with many helpful templates, including ones for eventCalls used by idEncounterManagers. I recommend studying the contents of this file for help creating your own templates.
+*/
+append {
+	eventCalls {
+		activateTarget {
+			hotkey ""
+			args {
+				"Target"
+				"Design Comment"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "activateTarget";
+						args = {
+							num = 2;
+							item[0] = {
+								entity = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+						}
+					}
+				}
+			}
+		}
+		clearCombatRoles {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Group Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "clearCombatRoles";
+						args = {
+							num = 2;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+						}
+					}
+				}
+			}
+		}
+		clearFactionOverrides {
+			hotkey ""
+			args {
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "clearFactionOverrides";
+						args = {
+							num = 0;
+						}
+					}
+				}
+			}
+		}
+		damageAI {
+			hotkey ""
+			args {
+				"Damage Type"
+				"AI Type"
+				"Group Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "damageAI";
+						args = {
+							num = 3;
+							item[0] = {
+								decl = {
+									damage = "%0%";
+								}
+							}
+							item[1] = {
+								eEncounterSpawnType_t = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+						}
+					}
+				}
+			}
+		}
+		designerComment {
+			hotkey ""
+			args {
+				"Comment"
+				"Print To Console" {
+					type = "bool"
+					default = true
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "designerComment";
+						args = {
+							num = 2;
+							item[0] = {
+								string = "%0%";
+							}
+							item[1] = {
+								bool = %1%;
+							}
+						}
+					}
+				}
+			}
+		}
+		forceAIToFlee {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Group Label"
+				"Radius"
+				"Immediately Despawn" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "forceAIToFlee";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+							item[2] = {
+								float = %2%;
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		forceChargeOnAllAI {
+			hotkey ""
+			args {
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "forceChargeOnAllAI";
+						args = {
+							num = 0;
+						}
+					}
+				}
+			}
+		}
+		maintainAICount {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Desired Count"
+				"Maximum Spawn Count" = -1
+				"Minimum Spawn Delay"
+				"Minimum AI for Respawn"
+				"Spawn Group"
+				"Group Label"
+				"Maximum Spawn Delay"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "maintainAICount";
+						args = {
+							num = 8;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								int = %2%;
+							}
+							item[3] = {
+								float = %3%;
+							}
+							item[4] = {
+								int = %4%;
+							}
+							item[5] = {
+								entity = "%5%";
+							}
+							item[6] = {
+								string = "%6%";
+							}
+							item[7] = {
+								float = %7%;
+							}
+						}
+					}
+				}
+			}
+		}
+		makeAIAwareOfPlayer {
+			hotkey ""
+			args {
+				"All Active" {
+					type = "bool"
+				}
+				"On Spawn" {
+					type = "bool"
+				}
+				"Group Label"
+				"Restore Perception" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "makeAIAwareOfPlayer";
+						args = {
+							num = 4;
+							item[0] = {
+								bool = %0%;
+							}
+							item[1] = {
+								bool = %1%;
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		migrateAIFromExternalScript {
+			hotkey ""
+			args {
+				"Encounter Script"
+				"AI Type"
+				"Group Label"
+				"Shared Between Scripts" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "migrateAIFromExternalScript";
+						args = {
+							num = 4;
+							item[0] = {
+								entity = "%0%";
+							}
+							item[1] = {
+								eEncounterSpawnType_t = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		proceedToNextScript {
+			hotkey ""
+			args {
+				"Bypass Next Wait For Commit" {
+					type = "bool"
+				}
+				"Carry Over Existing User Flags" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "proceedToNextScript";
+						args = {
+							num = 2;
+							item[0] = {
+								bool = %0%;
+							}
+							item[1] = {
+								bool = %1%;
+							}
+						}
+					}
+				}
+			}
+		}
+		raiseEventFlagOnExternalScript {
+			hotkey ""
+			args {
+				"Encounter Script"
+				"Event Flag"
+				"User Flag"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "raiseEventFlagOnExternalScript";
+						args = {
+							num = 3;
+							item[0] = {
+								entity = "%0%";
+							}
+							item[1] = {
+								eEncounterEventFlags_t = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+						}
+					}
+				}
+			}
+		}
+		removeAI {
+			hotkey ""
+			args {
+				"AI Type"
+				"Group Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "removeAI";
+						args = {
+							num = 2;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+						}
+					}
+				}
+			}
+		}
+		setCombatRoles {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Group Label"
+				"Group Role"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "setCombatRoles";
+						args = {
+							num = 3;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+							item[2] = {
+								encounterGroupRole_t = "%2%";
+							}
+						}
+					}
+				}
+			}
+		}
+		setFactionRelation {
+			hotkey ""
+			args {
+				"Instigator Spawn Type"
+				"Group Label"
+				"Target Spawn Type"
+				"Relation"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "setFactionRelation";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+							item[2] = {
+								eEncounterSpawnType_t = "%2%";
+							}
+							item[3] = {
+								socialEmotion_t = "%3%";
+							}
+						}
+					}
+				}
+			}
+		}
+		setMusicState {
+			hotkey ""
+			args {
+				"Target"
+				"State Decl"
+				"Design Comment"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "setMusicState";
+						args = {
+							num = 3;
+							item[0] = {
+								entity = "%0%";
+							}
+							item[1] = {
+								decl = {
+									soundstate = "%1%";
+								}
+							}
+							item[2] = {
+								string = "%2%";
+							}
+						}
+					}
+				}
+			}
+		}
+		setNextScriptIndex {
+			hotkey ""
+			args {
+				"Next Script Index"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "setNextScriptIndex";
+						args = {
+							num = 1;
+							item[0] = {
+								int = %0%;
+							}
+						}
+					}
+				}
+			}
+		}
+		setNextScriptIndexRandom {
+			hotkey ""
+			args {
+				"Minimum Script Index"
+				"Maximum Script Index"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "setNextScriptIndexRandom";
+						args = {
+							num = 2;
+							item[0] = {
+								int = %0%;
+							}
+							item[1] = {
+								int = %1%;
+							}
+						}
+					}
+				}
+			}
+		}
+		spawnAI {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Spawn Count"
+				"Spawn Group"
+				"Group Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "spawnAI";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								entity = "%2%";
+							}
+							item[3] = {
+								string = "%3%";
+							}
+						}
+					}
+				}
+			}
+		}
+		spawnArchvile {
+			hotkey ""
+			args {
+				"Spawn Target"
+				"Archvile Template"
+				"Archvile Label"
+				"Group Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "spawnArchvile";
+						args = {
+							num = 4;
+							item[0] = {
+								entity = "%0%";
+							}
+							item[1] = {
+								entity = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								string = "%3%";
+							}
+						}
+					}
+				}
+			}
+		}
+		spawnBuffPod {
+			hotkey ""
+			args {
+				"Spawn Target"
+				"Buffpod Label"
+				"Buffed AI Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "spawnBuffPod";
+						args = {
+							num = 3;
+							item[0] = {
+								entity = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+						}
+					}
+				}
+			}
+		}
+		spawnPossessedAI {
+			hotkey ""
+			args {
+				"AI Spawn Type"
+				"AI Spawn Target"
+				"AI Group Label"
+				"Spirit Spawn Target"
+				"Spirit Allowed AI Types"
+				"Spirit Allowed Group Label"
+				"AI Type Explicit Filtering" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "spawnPossessedAI";
+						args = {
+							num = 7;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								entity = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								entity = "%3%";
+							}
+							item[4] = {
+								eEncounterSpawnType_t = "%4%";
+							}
+							item[5] = {
+								string = "%5%";
+							}
+							item[6] = {
+								bool = %6%;
+							}
+						}
+					}
+				}
+			}
+		}
+		spawnSingleAI {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Spawn Target"
+				"Group Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "spawnSingleAI";
+						args = {
+							num = 3;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								entity = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+						}
+					}
+				}
+			}
+		}
+		spawnSpirit {
+			hotkey ""
+			args {
+				"Spawn Target"
+				"Allowed AI Types"
+				"Allowed Group Label"
+				"AI Type Explicit Filtering" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "spawnSpirit";
+						args = {
+							num = 4;
+							item[0] = {
+								entity = "%0%";
+							}
+							item[1] = {
+								eEncounterSpawnType_t = "%1%";
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		staggeredAISpawn {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Spawn Count"
+				"Spawn Group"
+				"Group Label"
+				"Minimum Spawn Stagger"
+				"Maximum Spawn Stagger"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "staggeredAISpawn";
+						args = {
+							num = 6;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								entity = "%2%";
+							}
+							item[3] = {
+								string = "%3%";
+							}
+							item[4] = {
+								float = %4%;
+							}
+							item[5] = {
+								float = %5%;
+							}
+						}
+					}
+				}
+			}
+		}
+		stopMaintainingAICount {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Group Label"
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "stopMaintainingAICount";
+						args = {
+							num = 2;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+						}
+					}
+				}
+			}
+		}
+		wait {
+			hotkey ""
+			args {
+				"Seconds"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "wait";
+						args = {
+							num = 2;
+							item[0] = {
+								float = %0%;
+							}
+							item[1] = {
+								bool = %1%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitAIHealthLevel {
+			hotkey ""
+			args {
+				"Spawn Type"
+				"Target Group Health"
+				"Group Label"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitAIHealthLevel";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								float = %1%;
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitAIRemaining {
+			hotkey ""
+			args {
+				"AI Type"
+				"Desired Remaining AI Count"
+				"Group Label"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitAIRemaining";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitForEventFlag {
+			hotkey ""
+			args {
+				"Event Flag" = ENCOUNTER_EVENT_FLAG_USER_EVENT
+				"User Flag"
+				"Test If Already Raised" {
+					type = "bool"
+				}
+				"Disable AI Highlight" {
+					type = "bool"
+					default = false
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitForEventFlag";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterEventFlags_t = "%0%";
+							}
+							item[1] = {
+								string = "%1%";
+							}
+							item[2] = {
+								bool = %2%;
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitKillCount {
+			hotkey ""
+			args {
+				"AI Type"
+				"Desired Kill Count"
+				"Group Label"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitKillCount";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterEventFlags_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitMaintainComplete {
+			hotkey ""
+			args {
+				"AI Type"
+				"Remaining Spawn Count"
+				"Group Label"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitMaintainComplete";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitMultipleConditions {
+			// Note: The typo in the eventDef string is intentional
+			// This spelling mistake is present in the game
+			hotkey ""
+			args {
+				"Condition Count"
+				"Logic Operator"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitMulitpleConditions";
+						args = {
+							num = 3;
+							item[0] = {
+								int = %0%;
+							}
+							item[1] = {
+								encounterLogicOperator_t = "%1%";
+							}
+							item[2] = {
+								bool = %2%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitRandomKillCount {
+			hotkey ""
+			args {
+				"AI Type"
+				"Minimum Kill Count"
+				"Maximum Kill Count"
+				"Group Label"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitRandomKillCount";
+						args = {
+							num = 5;
+							item[0] = {
+								eEncounterEventFlags_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								int = %2%;
+							}
+							item[3] = {
+								string = "%3%";
+							}
+							item[4] = {
+								bool = %4%;
+							}
+						}
+					}
+				}
+			}
+		}
+		waitStaggeredSpawnComplete {
+			hotkey ""
+			args {
+				"AI Type"
+				"Remaining Spawn Count"
+				"Group Label"
+				"Disable AI Highlight" {
+					type = "bool"
+				}
+			}
+			text {
+				item[0] = {
+					eventCall = {
+						eventDef = "waitStaggeredSpawnComplete";
+						args = {
+							num = 4;
+							item[0] = {
+								eEncounterSpawnType_t = "%0%";
+							}
+							item[1] = {
+								int = %1%;
+							}
+							item[2] = {
+								string = "%2%";
+							}
+							item[3] = {
+								bool = %3%;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

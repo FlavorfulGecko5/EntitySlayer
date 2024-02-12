@@ -1,5 +1,6 @@
 #pragma warning(disable : 4996) // Deprecation errors
 #include <vector>
+#include <chrono>
 #include "EntityParser.h"
 #include "Config.h"
 
@@ -115,6 +116,39 @@ void ConfigInterface::deleteData()
 	idMap.clear();
 }
 
+enum class ParameterType {
+	DEFAULT,
+	BOOL
+};
+
+class ParameterInput {
+	private:
+	const ParameterType type;
+	void* gui;
+
+	public:
+	ParameterInput(ParameterType p_type, void* p_gui) : type(p_type), gui(p_gui) {}
+
+	std::string getValue() 
+	{
+		switch (type)
+		{
+			case ParameterType::DEFAULT:
+			{
+				wxTextCtrl* textbox = (wxTextCtrl*)gui;
+				return std::string(textbox->GetValue());
+			}
+
+			case ParameterType::BOOL:
+			{
+				wxCheckBox* checkbox = (wxCheckBox*)gui;
+				return checkbox->IsChecked() ? "true" : "false";
+			}
+		}
+		return "!!!Bad Type?";
+	}
+};
+
 /*
 * PARAMETER BRAINSTORMING:
 * - Inherit from wxDialog
@@ -130,7 +164,7 @@ void ConfigInterface::deleteData()
 
 class ParameterDialog : public wxDialog {
 	private:
-	std::vector<wxTextCtrl*> boxes;
+	std::vector<ParameterInput> inputs;
 
 	public:
 	std::vector<std::string> values;
@@ -138,6 +172,7 @@ class ParameterDialog : public wxDialog {
 	ParameterDialog(const wxString& name, EntNode& args) : wxDialog(nullptr, wxID_ANY, "Append: " + name, 
 		wxDefaultPosition, wxDefaultSize) 
 	{		
+		//auto startTime = std::chrono::high_resolution_clock::now();
 		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 		wxScrolledWindow* parmWindow = new wxScrolledWindow(this, wxID_ANY,
 			wxDefaultPosition, wxDefaultSize, wxVSCROLL); // This style doesn't actually work?
@@ -148,26 +183,41 @@ class ParameterDialog : public wxDialog {
 		btnSizer->Add(new wxButton(this, wxID_OK, "Append"));
 		btnSizer->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxLEFT, 5);
 
-		boxes.reserve(args.getChildCount());
+		inputs.reserve(args.getChildCount());
 		for (int i = 0, max = args.getChildCount(); i < max; i++) 
 		{
-			EntNode* child = args.ChildAt(i);
-			if(child->getType() == NodeType::COMMENT)
+			EntNode& argNode = *args.ChildAt(i);
+			if(argNode.getType() == NodeType::COMMENT)
 				continue;
 
-			// Goal: Maximum window width should be 1000
-			wxString name = child->getNameWXUQ();
+			// Create Label Text
+			wxString name(argNode.getNameWXUQ());
 			int textWidth = wxWindow::GetTextExtent(name).x;
 			if(textWidth > 750) textWidth = 750;
-
 			wxStaticText* text = new wxStaticText(parmWindow, wxID_ANY, name,
 				wxDefaultPosition, wxSize(textWidth, 23), wxST_ELLIPSIZE_END);
-			wxTextCtrl* input = new wxTextCtrl(parmWindow, wxID_ANY, child->getValueWX(),
-				wxDefaultPosition, wxSize(150, -1), wxTE_PROCESS_ENTER); // Otherwise Enter will trigger the last-highlighted button
-
 			col0->Add(text);
-			col1->Add(input, 1, wxEXPAND);
-			boxes.push_back(input);
+
+			// Create Input Field
+			std::string_view argType(argNode["type"].getValueUQ());
+			wxString argDefaultValue(argNode.getValueWX());
+			if(argDefaultValue.IsEmpty()) 
+				argDefaultValue.Append(argNode["default"].getValueWX());
+
+			if (argType == "bool") {
+				wxCheckBox* input = new wxCheckBox(parmWindow, wxID_ANY, "True",
+					wxDefaultPosition, wxSize(-1, 23));
+				input->SetValue(argDefaultValue == "true");
+
+				col1->Add(input, 1, wxEXPAND);
+				inputs.emplace_back(ParameterType::BOOL, input);
+			}
+			else {
+				wxTextCtrl* input = new wxTextCtrl(parmWindow, wxID_ANY, argDefaultValue,
+					wxDefaultPosition, wxSize(150, -1), wxTE_PROCESS_ENTER); // Otherwise Enter will trigger the last-highlighted button
+				col1->Add(input, 1, wxEXPAND);
+				inputs.emplace_back(ParameterType::DEFAULT, input);
+			}
 		}
 		
 		parmSizer->Add(col0, 0, wxRIGHT, 10);
@@ -179,15 +229,19 @@ class ParameterDialog : public wxDialog {
 		mainSizer->Add(parmWindow, 0, wxEXPAND | wxALL, 7);
 		mainSizer->Add(btnSizer, 0, wxCENTER | wxALL, 5);
 		SetSizerAndFit(mainSizer);
-		CenterOnScreen();
+		CenterOnScreen(); // Todo: Make this center on EntitySlayer instead of the screen?
+
+		//auto stopTime = std::chrono::high_resolution_clock::now();
+		//auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);
+		//wxLogMessage("Parameter Build Time: %zu", duration.count());
 		ShowModal();
 
 		// Should this even be called when an instance is stack allocated? Todo: Figure this out, consider dynamic allocation for safety?
 		Destroy(); // Queues this window to be destroyed after all events have been handled
 
-		values.reserve(boxes.size());
-		for(wxTextCtrl* t : boxes)
-			values.emplace_back(t->GetValue());
+		values.reserve(inputs.size());
+		for(ParameterInput& p : inputs)
+			values.emplace_back(p.getValue());
 	}
 };
 
