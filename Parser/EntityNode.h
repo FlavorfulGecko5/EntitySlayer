@@ -241,7 +241,7 @@ class EntNode
 	* - recursively check all nodes listed after the starting node
 	*	- parents in parent chain do not need their values checked
 	*/
-	EntNode* searchDownwards(const std::string& key, const bool caseSensitive, const bool exactLength, const EntNode* startAfter=nullptr)
+	EntNode* searchDownwards(const std::string& key, const bool caseSensitive, const bool exactLength, const EntNode* startAfter=nullptr) // Todo: Remove this default parameter
 	{
 		int startIndex = 0;
 		if(startAfter != nullptr) // Ensures all children in the starting node are checked
@@ -255,7 +255,7 @@ class EntNode
 		}
 
 		if(parent != nullptr)
-			return parent->searchDownwards(key, caseSensitive, this);
+			return parent->searchDownwards(key, caseSensitive, exactLength, this);
 
 		// Wrap around by performing local search on root
 		return searchDownwardsLocal(key, caseSensitive, exactLength);
