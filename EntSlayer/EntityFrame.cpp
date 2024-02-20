@@ -242,7 +242,6 @@ void EntityFrame::onWindowClose(wxCloseEvent& event)
 		return;
 	}
 	ConfigInterface::deleteData(); // Debugger will detect large memory leaks if we don't do this
-	delete EntNode::SEARCH_404;        // Cause of the 40 byte memory leak that's been present for the longest time. Todo: have it point to a static EntNode var?
 	event.Skip();
 }
 

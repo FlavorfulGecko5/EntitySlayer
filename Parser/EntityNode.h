@@ -45,6 +45,8 @@ class EntNode
 
 	std::string_view getValue() {return std::string_view(textPtr + nameLength, valLength); }
 
+	bool hasValue() {return valLength > 0;};
+
 	// If the name is a string literal, return it unquoted. Otherwise return the name as normal
 	std::string_view getNameUQ() {
 		if (nameLength < 2 || *textPtr != '"')

@@ -1,5 +1,7 @@
 #pragma warning(disable : 4996) // Deprecation errors
+#include "wx/combo.h"
 #include <vector>
+#include <unordered_map>
 #include <chrono>
 #include "EntityParser.h"
 #include "Config.h"
@@ -29,6 +31,16 @@ const int MENU_ID_OFFSET = wxID_HIGHEST + 2000;
  instead of using a positionalID system
 */
 std::vector<EntNode*> idMap;
+
+//struct enumData { // Brainstorm - will need more complex data structure for aliasing
+//	wxArrayString displayedValues;
+//	EntNode* node;
+//};
+
+/*
+* Stores parsed enum data
+*/
+std::unordered_map<std::string_view, wxArrayString> enumMap;
 
 void recursiveBuildMenu(wxMenu* parentMenu, EntNode* node)
 {
@@ -73,14 +85,41 @@ bool ConfigInterface::loadData()
 		return false;
 	}
 
+	enumMap.clear();
 	idMap.clear();
 	delete templateMenu;
 	templateMenu = new wxMenu;
 
-	EntNode* root = data->getRoot();
-	EntNode& append = (*root)["append"];
+	/* Build append menu */
+	EntNode& root = *data->getRoot();
+	EntNode& append = root["append"];
 	for(int i = 0, max = append.getChildCount(); i < max; i++)
 		recursiveBuildMenu(templateMenu, append.ChildAt(i));
+
+	/* Build enum map */
+	EntNode& enums = root["enums"];
+	enumMap.reserve(enums.getChildCount());
+	for (int i = 0, max = enums.getChildCount(); i < max; i++) {
+		EntNode* enumNode = enums.ChildAt(i);
+		if(enumNode->getType() == NodeType::COMMENT)
+			continue;
+
+		std::string_view name = enumNode->getName();
+		enumMap.emplace(name, wxArrayString());
+		wxArrayString& items = enumMap[name];
+		items.reserve(enumNode->getChildCount());
+
+		for (int j = 0, enumCount = enumNode->getChildCount(); j < enumCount; j++) {
+			EntNode* val = enumNode->ChildAt(j);
+			if(val->getType() == NodeType::COMMENT) // Probably can't ignore comments if we do aliasing
+				continue;
+
+			//if (val->hasValue()) // For aliasing
+			//	items.push_back(val->getValueWX());
+			//else items.push_back(val->getNameWX());
+			items.push_back(val->getNameWX());
+		}
+	}
 
 	return true;
 }
@@ -114,11 +153,88 @@ void ConfigInterface::deleteData()
 	delete data;
 	delete templateMenu;
 	idMap.clear();
+	enumMap.clear();
 }
+
+class EnumChecklist : public wxCheckListBox, public wxComboPopup 
+{
+	public:
+	virtual bool Create(wxWindow* parent) {
+		return wxCheckListBox::Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+			0, NULL, wxLB_HSCROLL | wxLB_NEEDED_SB);
+	}
+
+	virtual wxWindow* GetControl()
+	{
+		return this;
+	}
+
+	virtual wxString GetStringValue() const // Todo: Perhaps just always have the enum name? Or do if 0 values
+	{
+		wxString value;
+		for(int i = 0, max = GetCount(); i < max; i++)
+			if (IsChecked(i))
+			{
+				value.Append(GetString(i));
+				value.Append(' ');
+			}
+		return value;
+	}
+
+	virtual wxSize GetAdjustedSize(int minWidth, int prefHeight, int maxHeight)
+	{
+		/*
+		* Problems:
+		* - prefHeight will always be 400
+		* - GetBestSize() stops increasing the height (instead adding a scrollbar) after 10 items (174)
+		* To keep the GUI looking nice, we need to manually interpolate the height up to prefHeight
+		* 
+		* Todo: horizontal scrollbar consumes vertical space, blocks elements and forces vertical scroll, obstructs one-element dropdown entirely
+		* Consider disabling horizontal scroll entirely, especially if we do aliasing?
+		*/
+		int y = GetCount() * 17.4 + 5; // 174 units fit 10 items, so we use this as a best-matching size
+		if(y == 5) y = 55;			   // Edge case so dropdown with 0 items isn't tiny
+		if(y > prefHeight) y = prefHeight;
+		
+		return wxSize(minWidth, y);
+	}
+};
+
+class EnumCtrl : public wxComboCtrl 
+{
+	public:
+	EnumChecklist* list;
+	std::string_view enumName;
+
+	EnumCtrl(wxWindow* parent, std::string_view p_enumName) : wxComboCtrl(parent, wxID_ANY, "", 
+		wxDefaultPosition, wxSize(-1, 23), wxCB_READONLY), enumName(p_enumName)
+	{
+		list = new EnumChecklist;
+		SetPopupControl(list);
+		list->Bind(wxEVT_LEFT_DOWN, &EnumCtrl::onListLeftDown, this);
+		list->Append(enumMap[enumName]);
+
+		int x = list->GetBestSize().x; // Determined based on text width
+		if(x > 500) x = 500;
+		SetMinSize(wxSize(x, 23));
+	}
+
+	void onListLeftDown(wxMouseEvent& event)
+	{
+		int index = list->HitTest(event.GetPosition());
+		if (index > -1)
+		{
+			list->Check(index, !list->IsChecked(index));
+			SetText(list->GetStringValue());
+		}
+	}
+};
+
 
 enum class ParameterType {
 	DEFAULT,
-	BOOL
+	BOOL,
+	ENUM
 };
 
 class ParameterInput {
@@ -143,6 +259,29 @@ class ParameterInput {
 			{
 				wxCheckBox* checkbox = (wxCheckBox*)gui;
 				return checkbox->IsChecked() ? "true" : "false";
+			}
+
+			case ParameterType::ENUM:
+			{
+				EnumCtrl* checklist = (EnumCtrl*)gui;
+				EnumChecklist* list = checklist->list;
+				wxArrayString& items = enumMap[checklist->enumName];
+				
+				std::string value;
+				value.push_back('"');
+
+				for(int i = 0, max = list->GetCount(); i < max; i++)
+					if (list->IsChecked(i)) {
+						value.append(items[i]);
+						value.push_back(' ');
+					}
+
+				// Remove trailing space
+				if(value[value.length() - 1] == '"' )
+					value.push_back('"');
+				else
+					value[value.length() - 1] = '"';
+				return value;
 			}
 		}
 		return "!!!Bad Type?";
@@ -172,7 +311,7 @@ class ParameterDialog : public wxDialog {
 	ParameterDialog(const wxString& name, EntNode& args) : wxDialog(nullptr, wxID_ANY, "Append: " + name, 
 		wxDefaultPosition, wxDefaultSize) 
 	{		
-		//auto startTime = std::chrono::high_resolution_clock::now();
+		auto startTime = std::chrono::high_resolution_clock::now();
 		wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 		wxScrolledWindow* parmWindow = new wxScrolledWindow(this, wxID_ANY,
 			wxDefaultPosition, wxDefaultSize, wxVSCROLL); // This style doesn't actually work?
@@ -212,9 +351,17 @@ class ParameterDialog : public wxDialog {
 				col1->Add(input, 1, wxEXPAND);
 				inputs.emplace_back(ParameterType::BOOL, input);
 			}
+			else if (enumMap.count(argType) > 0) {
+				EnumCtrl* ctrl = new EnumCtrl(parmWindow, argType);
+
+				// Todo: Default values - will enums even support them?
+
+				col1->Add(ctrl, 1, wxEXPAND);
+				inputs.emplace_back(ParameterType::ENUM, ctrl);
+			}
 			else {
 				wxTextCtrl* input = new wxTextCtrl(parmWindow, wxID_ANY, argDefaultValue,
-					wxDefaultPosition, wxSize(150, -1), wxTE_PROCESS_ENTER); // Otherwise Enter will trigger the last-highlighted button
+					wxDefaultPosition, wxSize(200, -1), wxTE_PROCESS_ENTER); // Otherwise Enter will trigger the last-highlighted button
 				col1->Add(input, 1, wxEXPAND);
 				inputs.emplace_back(ParameterType::DEFAULT, input);
 			}
@@ -231,9 +378,9 @@ class ParameterDialog : public wxDialog {
 		SetSizerAndFit(mainSizer);
 		CenterOnScreen(); // Todo: Make this center on EntitySlayer instead of the screen?
 
-		//auto stopTime = std::chrono::high_resolution_clock::now();
-		//auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);
-		//wxLogMessage("Parameter Build Time: %zu", duration.count());
+		auto stopTime = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stopTime - startTime);
+		wxLogMessage("Parameter Build Time: %zu", duration.count());
 		ShowModal();
 
 		// Should this even be called when an instance is stack allocated? Todo: Figure this out, consider dynamic allocation for safety?

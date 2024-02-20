@@ -8,7 +8,9 @@
 * that can't be defined in the header files
 */
 
-EntNode* EntNode::SEARCH_404 = new EntNode();
+EntNode _404;
+
+EntNode* EntNode::SEARCH_404 = &_404;
 
 wxString EntNode::getNameWX() { return wxString(textPtr, nameLength); }
 
