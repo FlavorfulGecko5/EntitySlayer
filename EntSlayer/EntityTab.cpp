@@ -373,7 +373,7 @@ void EntityTab::saveFile()
 
 	if (fileUpToDate) return; // Need to check this when commitResult <= 0
 
-	root->writeToFile(std::string(filePath), compressOnSave);
+	root->writeToFile(std::string(filePath), compressOnSave && !compressOnSave_ForceDisable);
 
 	if (commitResult < 0)
 		wxMessageBox("File was saved. But you must fix syntax errors before saving contents of text box.",

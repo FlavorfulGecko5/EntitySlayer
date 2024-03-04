@@ -406,17 +406,8 @@ void EntityFrame::onReloadConfigFile(wxCommandEvent& event)
 
 void EntityFrame::onCompressCheck(wxCommandEvent& event)
 {
-	if (activeTab == mhTab)
-	{
-		wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
-			"Oodle Compression", wxICON_WARNING | wxOK);
-		tabMenu->Check(TAB_COMPRESS, false);
-	}
-
-	else {
-		activeTab->compressOnSave = event.IsChecked();
-		activeTab->fileUpToDate = false; // Allows saving unedited file when compression toggled
-	}
+	activeTab->compressOnSave = event.IsChecked();
+	activeTab->fileUpToDate = false; // Allows saving unedited file when compression toggled
 }
 
 void EntityFrame::onNumberListCheck(wxCommandEvent& event)
@@ -467,6 +458,9 @@ bool EntityFrame::ClearMHTab()
 	{
 		size_t index = book->GetPageIndex(mhTab);
 		book->SetPageText(index, mhTab->tabName);
+		mhTab->compressOnSave_ForceDisable = false;
+		if(mhTab->compressOnSave)
+			mhTab->fileUpToDate = false;
 		mhTab = nullptr;
 		return true;
 	}
@@ -483,11 +477,10 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 		book->SetPageText(activeIndex, "[Meathook] " + activeTab->tabName);
 		mhTab = activeTab;
 
+		activeTab->compressOnSave_ForceDisable = true;
 		if (activeTab->compressOnSave) {
 			wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
 				"Oodle Compression", wxICON_WARNING | wxOK);
-			tabMenu->Check(TAB_COMPRESS, false);
-			activeTab->compressOnSave = false;
 			activeTab->fileUpToDate = false;
 		}
 
@@ -599,6 +592,8 @@ void EntityFrame::RefreshMHMenu()
 	if (!online && ClearMHTab())
 		wxMessageBox("Connection lost with Meathook. Your Meathook tab has been automatically disabled", 
 			"Meathook", wxICON_WARNING | wxOK);
+
+	tabMenu->Enable(TAB_COMPRESS, !activeTab->compressOnSave_ForceDisable);
 
 	mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != ""); // Tabs with no file shouldn't be useable with mh
 	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab == mhTab);

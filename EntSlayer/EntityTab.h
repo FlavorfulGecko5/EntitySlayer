@@ -14,6 +14,7 @@ class EntityTab : public wxPanel
 	wxString filePath;
 	bool fileUpToDate = true;
 	bool compressOnSave;
+	bool compressOnSave_ForceDisable = false; // If true, disables compression regardless of setting
 	bool autoNumberLists = true;
 
 	FilterCtrl* layerMenu;

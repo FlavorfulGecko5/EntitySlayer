@@ -32,15 +32,15 @@ const int MENU_ID_OFFSET = wxID_HIGHEST + 2000;
 */
 std::vector<EntNode*> idMap;
 
-//struct enumData { // Brainstorm - will need more complex data structure for aliasing
-//	wxArrayString displayedValues;
-//	EntNode* node;
-//};
+struct enumData {
+	wxArrayString displayedValues;
+	EntNode* node;
+};
 
 /*
 * Stores parsed enum data
 */
-std::unordered_map<std::string_view, wxArrayString> enumMap;
+std::unordered_map<std::string_view, enumData> enumMap;
 
 void recursiveBuildMenu(wxMenu* parentMenu, EntNode* node)
 {
@@ -101,23 +101,27 @@ bool ConfigInterface::loadData()
 	enumMap.reserve(enums.getChildCount());
 	for (int i = 0, max = enums.getChildCount(); i < max; i++) {
 		EntNode* enumNode = enums.ChildAt(i);
-		if(enumNode->getType() == NodeType::COMMENT)
+		std::string_view name = enumNode->getName();
+
+		// Prevent duplicates and empty enums
+		if(enumNode->getChildCount() == 0 || enumMap.count(name) > 0) 
 			continue;
 
-		std::string_view name = enumNode->getName();
-		enumMap.emplace(name, wxArrayString());
-		wxArrayString& items = enumMap[name];
-		items.reserve(enumNode->getChildCount());
+		enumMap.try_emplace(name);
+		enumData& data = enumMap[name];
+		data.node = enumNode;
+		data.displayedValues.reserve(enumNode->getChildCount());
 
 		for (int j = 0, enumCount = enumNode->getChildCount(); j < enumCount; j++) {
 			EntNode* val = enumNode->ChildAt(j);
-			if(val->getType() == NodeType::COMMENT) // Probably can't ignore comments if we do aliasing
-				continue;
 
-			//if (val->hasValue()) // For aliasing
-			//	items.push_back(val->getValueWX());
-			//else items.push_back(val->getNameWX());
-			items.push_back(val->getNameWX());
+			// Due to aliasing, we cannot ignore comments, but this should be acceptable
+			//if(val->getType() == NodeType::COMMENT)
+			//	continue;
+
+			if (val->hasValue())
+				data.displayedValues.push_back(val->getValueWXUQ());
+			else data.displayedValues.push_back(val->getNameWX());
 		}
 	}
 
@@ -212,7 +216,7 @@ class EnumCtrl : public wxComboCtrl
 		list = new EnumChecklist;
 		SetPopupControl(list);
 		list->Bind(wxEVT_LEFT_DOWN, &EnumCtrl::onListLeftDown, this);
-		list->Append(enumMap[enumName]);
+		list->Append(enumMap[enumName].displayedValues);
 
 		int x = list->GetBestSize().x; // Determined based on text width
 		if(x > 500) x = 500;
@@ -265,14 +269,14 @@ class ParameterInput {
 			{
 				EnumCtrl* checklist = (EnumCtrl*)gui;
 				EnumChecklist* list = checklist->list;
-				wxArrayString& items = enumMap[checklist->enumName];
+				EntNode** values = enumMap[checklist->enumName].node->getChildBuffer();
 				
 				std::string value;
 				value.push_back('"');
 
 				for(int i = 0, max = list->GetCount(); i < max; i++)
 					if (list->IsChecked(i)) {
-						value.append(items[i]);
+						value.append(values[i]->getName());
 						value.push_back(' ');
 					}
 
