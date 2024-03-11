@@ -34,7 +34,9 @@ class EntityFrame : public wxFrame
 	void onTabClosing(wxAuiNotebookEvent& event);
 	void onTabChanged(wxAuiNotebookEvent& event);
 	void onFileNew(wxCommandEvent& event);
+	void openFiles(const wxArrayString& filepaths);
 	void onFileOpen(wxCommandEvent& event);
+	void onFileOpenFolder(wxCommandEvent& event);
 	void onMeathookOpen(wxCommandEvent& event);
 	void onFileSave(wxCommandEvent& event);
 	void onFileSaveAs(wxCommandEvent& event);

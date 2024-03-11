@@ -1,6 +1,7 @@
 #pragma warning(disable : 4996) // Deprecation errors
 #include <chrono>
 #include "wx/clipbrd.h"
+#include "wx/dir.h"
 #include "Meathook.h"
 #include "Oodle.h"
 #include "Config.h"
@@ -11,7 +12,8 @@ enum FrameID
 {
 	FRAME_MINIMUM = wxID_HIGHEST + 1,
 	FILE_NEW,
-	FILE_OPEN,
+	FILE_OPEN_FILE,
+	FILE_OPEN_FOLDER,
 	FILE_SAVE,
 	FILE_SAVEAS,
 	FILE_RELOAD_APPENDMENU,
@@ -45,7 +47,8 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_AUINOTEBOOK_PAGE_CLOSE(wxID_ANY, EntityFrame::onTabClosing)
 
 	EVT_MENU(FILE_NEW, EntityFrame::onFileNew)
-	EVT_MENU(FILE_OPEN, EntityFrame::onFileOpen)
+	EVT_MENU(FILE_OPEN_FILE, EntityFrame::onFileOpen)
+	EVT_MENU(FILE_OPEN_FOLDER, EntityFrame::onFileOpenFolder)
 	EVT_MENU(FILE_SAVE, EntityFrame::onFileSave)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
 	EVT_MENU(FILE_RELOAD_APPENDMENU, EntityFrame::onReloadConfigFile)
@@ -81,9 +84,10 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 	/* Build Menu Bar */
 	{
 		// Note: These shortcuts override component-level shortcuts (such as in the editor)
-		fileMenu->Append(FILE_NEW, "&New\tCtrl+N");
-		fileMenu->Append(FILE_OPEN, "&Open\tCtrl+O");
-		fileMenu->Append(FILE_SAVE, "&Save\tCtrl+S");
+		fileMenu->Append(FILE_NEW, "New\tCtrl+N");
+		fileMenu->Append(FILE_OPEN_FILE, "Open Files\tCtrl+O");
+		fileMenu->Append(FILE_OPEN_FOLDER, "Open Folder\tAlt+O");
+		fileMenu->Append(FILE_SAVE, "Save\tCtrl+S");
 		fileMenu->Append(FILE_SAVEAS, "Save As\tCtrl+Shift+S");
 		fileMenu->AppendSeparator();
 		fileMenu->Append(FILE_RELOAD_APPENDMENU, "Reload Config File");
@@ -292,28 +296,17 @@ void EntityFrame::onFileNew(wxCommandEvent& event)
 	AddUntitledTab();
 }
 
-void EntityFrame::onFileOpen(wxCommandEvent& event)
+void EntityFrame::openFiles(const wxArrayString& filepaths)
 {
-	wxFileDialog openFileDialog(this, "Open File", wxEmptyString, wxEmptyString,
-		"All Files (*.entities;*.txt)|*.entities;*.txt|Doom Files (*.entities)|*.entities",
-		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
-	if (openFileDialog.ShowModal() == wxID_CANCEL)
-		return;
-
-	wxArrayString allPaths;
-	wxArrayString allNames;
-	openFileDialog.GetPaths(allPaths);
-	openFileDialog.GetFilenames(allNames);
-	for (size_t i = 0, max = allPaths.size(); i < max; i++)
+	for (const wxString& path : filepaths)
 	{
-		wxString filepath = allPaths[i];
-		wxString name = allNames[i];
+		wxString name = wxFileNameFromPath(path);
 
 		// Don't open the same file twice
 		for (size_t i = 0, max = book->GetPageCount(); i < max; i++)
 		{
 			EntityTab* page = (EntityTab*)book->GetPage(i);
-			if (page->filePath == filepath)
+			if (page->filePath == path)
 			{
 				book->SetSelection(i);
 				goto LABEL_CONTINUE_OUTER;
@@ -321,7 +314,7 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 		}
 
 		try {
-			EntityTab* newTab = new EntityTab(book, name, filepath);
+			EntityTab* newTab = new EntityTab(book, name, path);
 			AddOpenedTab(newTab);
 		}
 		catch (std::runtime_error e) {
@@ -331,6 +324,164 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 
 		LABEL_CONTINUE_OUTER:;
 	}
+}
+
+void EntityFrame::onFileOpen(wxCommandEvent& event)
+{
+	wxFileDialog openFileDialog(this, "Open File", wxEmptyString, wxEmptyString,
+		"All Files (*.entities;*.txt)|*.entities;*.txt|Doom Files (*.entities)|*.entities",
+		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
+	if (openFileDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxArrayString allPaths;
+	openFileDialog.GetPaths(allPaths);
+	wxLogMessage("%zu", allPaths.size());
+	openFiles(allPaths);
+}
+
+void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
+{
+	class SelectionDialog : public wxDialog 
+	{
+		public:
+		wxCheckListBox* checklist = nullptr;
+
+		SelectionDialog(const wxString& directory, const wxArrayString& files) : wxDialog(nullptr, wxID_ANY, directory) 
+		{
+			wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+			wxButton* checkAll = new wxButton(this, wxID_ANY, "Toggle All");
+			checkAll->Bind(wxEVT_BUTTON, &SelectionDialog::onToggleAll, this);
+
+			buttons->Add(new wxButton(this, wxID_OK, "Confirm"));
+			buttons->Add(checkAll, 0, wxLEFT, 5);
+			buttons->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxLEFT, 5);
+
+			checklist = new wxCheckListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+				0, NULL, wxLB_HSCROLL | wxLB_NEEDED_SB);
+			checklist->Append(files);
+			checklist->Bind(wxEVT_LEFT_DOWN, &SelectionDialog::onLeftDown, this);
+
+			wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+			mainSizer->Add(checklist, 0, wxEXPAND);
+			mainSizer->Add(buttons, 0, wxCENTER | wxTOP | wxBOTTOM, 5);
+			SetSizerAndFit(mainSizer);
+			CenterOnScreen();
+
+			ShowModal();
+			Destroy();
+		}
+
+		void onToggleAll(wxCommandEvent& event) {
+			// If no items are checked, check them all
+			// Otherwise, uncheck them all
+
+			bool noneChecked = true;
+			int max = checklist->GetCount();
+			for (int i = 0; i < max; i++)
+				if (checklist->IsChecked(i)) {
+					noneChecked = false;
+					break;
+				}
+
+			for(int i = 0; i < max; i++)
+				checklist->Check(i, noneChecked);
+		}
+
+		void onLeftDown(wxMouseEvent& event) {
+			// Normally, left clicking on the text just highlights it.
+			// For convenience, we want that to check/uncheck the item
+			// Like clicking on the checkbox does
+
+			int index = checklist->HitTest(event.GetPosition());
+			if (index > -1)
+				checklist->Check(index, !checklist->IsChecked(index));
+		}
+	};
+
+	// Safeguards against users opening stupidly large directories
+	class EarlyOutTraverser : public wxDirTraverser
+	{
+		public:
+		// Should be a completely reasonable item limit
+		// For reference, the injectable portion of Kaiser Campaign is ~8700 items
+		const size_t ITEM_LIMIT = 25000;
+
+		// Number of files and folders iterated over
+		size_t itemCount = 0;
+
+		wxArrayString& files;
+
+		EarlyOutTraverser(wxArrayString& p_files) : files(p_files) {}
+
+		wxDirTraverseResult OnFile(const wxString& filename)
+		{
+			if(++itemCount > ITEM_LIMIT)
+				return wxDIR_STOP;
+
+			if(filename.EndsWith(".entities"))
+				files.push_back(filename);
+			return wxDIR_CONTINUE;
+		}
+
+		wxDirTraverseResult OnDir(const wxString& dirname)
+		{
+			if(++itemCount > ITEM_LIMIT)
+				return wxDIR_STOP;
+			return wxDIR_CONTINUE;
+		}
+
+		bool EarliedOut() const
+		{
+			return itemCount > ITEM_LIMIT;
+		}
+	};
+
+	wxDirDialog openDialog(this, "Open Folder", wxEmptyString, wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST); // Todo: Can select multiple
+	if(openDialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString dirString(openDialog.GetPath());
+	size_t dirLength = dirString.length();
+	wxDir dir(dirString);
+	wxArrayString files, displayedFiles;
+	EarlyOutTraverser traverser(files);
+
+	// Cannot use filespec - filtered out files won't get passed to the traverser, meaning they won't get counted
+	// and we can't properly early-out. We must do the extension check manually in the traverser functions
+	// 
+	// This function seems to log errors if reading certain streamed vertexpaint files in a resource archive's maps folder
+	// These errors don't appear to cause crashes/memory leaks - so it should be safe to ignore them
+	dir.Traverse(traverser, wxEmptyString, wxDIR_FILES | wxDIR_DIRS | wxDIR_NO_FOLLOW);
+	wxLogMessage("Navigated through %zu files/folders", traverser.itemCount);
+	if (traverser.EarliedOut()) {
+		wxLogMessage("Selected folder has too many items! To prevent freezing, opening this folder has been cancelled");
+		return;
+	}
+	if (files.IsEmpty()) {
+		wxLogMessage("Found no files to open");
+		return;
+	}
+
+	displayedFiles.reserve(files.size());
+	for (wxString& f : files)
+		displayedFiles.push_back(f.substr(dirLength + 1));
+		
+
+	SelectionDialog selector(dirString, displayedFiles);
+	wxCheckListBox* checklist = selector.checklist;
+	wxArrayInt selections;
+
+	checklist->GetCheckedItems(selections);
+	if(selector.GetReturnCode() == wxID_CANCEL || selections.IsEmpty())
+		return;
+
+	wxArrayString selectedFiles;
+	selectedFiles.reserve(files.size());
+
+	for (int i : selections)
+		selectedFiles.push_back(files[i]);
+	openFiles(selectedFiles);
 }
 
 void EntityFrame::onMeathookOpen(wxCommandEvent& event)
