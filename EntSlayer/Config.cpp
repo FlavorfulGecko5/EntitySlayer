@@ -6,6 +6,11 @@
 #include "EntityParser.h"
 #include "Config.h"
 
+const char* ConfigInterface::ConfigPath()
+{
+	return "EntitySlayer_Config.txt";
+}
+
 /*
  Parsed AppendMenu file data
 */
@@ -72,7 +77,7 @@ void recursiveBuildMenu(wxMenu* parentMenu, EntNode* node)
 
 bool ConfigInterface::loadData()
 {
-	const std::string filepath = "EntitySlayer_Config.txt";
+	const std::string filepath = ConfigPath();
 
 	try {
 		EntityParser* newParser = new EntityParser(filepath, ParsingMode::PERMISSIVE, false);

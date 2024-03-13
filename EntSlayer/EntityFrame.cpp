@@ -2,6 +2,7 @@
 #include <chrono>
 #include "wx/clipbrd.h"
 #include "wx/dir.h"
+#include "wx/filename.h"
 #include "Meathook.h"
 #include "Oodle.h"
 #include "Config.h"
@@ -14,8 +15,11 @@ enum FrameID
 	FILE_NEW,
 	FILE_OPEN_FILE,
 	FILE_OPEN_FOLDER,
+	FILE_OPEN_CONFIG,
 	FILE_SAVE,
 	FILE_SAVEAS,
+	FILE_CLOSE_ALL,
+	FILE_CLOSE_ALL_OTHERS,
 	FILE_RELOAD_APPENDMENU,
 	
 	TAB_SEARCHFORWARD,
@@ -49,8 +53,11 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_NEW, EntityFrame::onFileNew)
 	EVT_MENU(FILE_OPEN_FILE, EntityFrame::onFileOpen)
 	EVT_MENU(FILE_OPEN_FOLDER, EntityFrame::onFileOpenFolder)
+	EVT_MENU(FILE_OPEN_CONFIG, EntityFrame::onOpenConfig)
 	EVT_MENU(FILE_SAVE, EntityFrame::onFileSave)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
+	EVT_MENU(FILE_CLOSE_ALL, EntityFrame::onFileCloseAll)
+	EVT_MENU(FILE_CLOSE_ALL_OTHERS, EntityFrame::onFileCloseAll)
 	EVT_MENU(FILE_RELOAD_APPENDMENU, EntityFrame::onReloadConfigFile)
 	EVT_MENU(TAB_SEARCHFORWARD, EntityFrame::onSearchForward)
 	EVT_MENU(TAB_SEARCHBACKWARD, EntityFrame::onSearchBackward)
@@ -89,7 +96,11 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->Append(FILE_OPEN_FOLDER, "Open Folder\tAlt+O");
 		fileMenu->Append(FILE_SAVE, "Save\tCtrl+S");
 		fileMenu->Append(FILE_SAVEAS, "Save As\tCtrl+Shift+S");
+		fileMenu->Append(FILE_CLOSE_ALL, "Close All Tabs");
+		fileMenu->Append(FILE_CLOSE_ALL_OTHERS, "Close All Other Tabs", 
+			"Close all tabs except the one you're currently viewing");
 		fileMenu->AppendSeparator();
+		fileMenu->Append(FILE_OPEN_CONFIG, "Open Config File");
 		fileMenu->Append(FILE_RELOAD_APPENDMENU, "Reload Config File");
 		
 		tabMenu->Append(TAB_SEARCHFORWARD, "Search Forward\tCtrl+F");
@@ -273,6 +284,33 @@ void EntityFrame::onTabClosing(wxAuiNotebookEvent& event)
 	}
 }
 
+void EntityFrame::onFileCloseAll(wxCommandEvent& event)
+{
+	bool excludeActive = event.GetId() == FILE_CLOSE_ALL_OTHERS;
+	size_t removedPages = 0;
+	for (size_t i = 0, max = book->GetPageCount(); i < max; i++)
+	{
+		size_t index = i - removedPages;
+		EntityTab* page = (EntityTab*)book->GetPage(index);
+		if(excludeActive && page == activeTab)
+			continue;
+
+		if(page->UnsavedChanges() && wxMessageBox("Tab has unsaved changes. Close it anyways?", 
+			page->tabName, wxICON_WARNING | wxYES_NO | wxNO_DEFAULT, this) != wxYES)
+			continue;
+
+		if(page == mhTab)
+			mhTab = nullptr;
+
+		//if(book->GetPageCount() == 1 && !activeTab->IsNewAndUntouched())
+		if(book->GetPageCount() == 1)
+			AddUntitledTab();
+
+		book->DeletePage(index);
+		removedPages++;
+	}
+}
+
 void EntityFrame::onTabChanged(wxAuiNotebookEvent& event)
 {
 	int i = event.GetSelection();
@@ -314,6 +352,14 @@ void EntityFrame::openFiles(const wxArrayString& filepaths)
 		}
 
 		try {
+			// If we want to multithread this function (which we should)
+			// Then we'll need to create the EntityParsers here and pass them
+			// to tabs as a constructor parm - the GUI classes don't appear to be
+			// thread safe (which is pretty stupid), so we have to separate
+			// the tab creation from the parser creation
+			// Questionable whether this would even be worthwhile
+			// Tab creation takes ~150 MS excluding the Parser anyways, meaning
+			// Parser operations only take ~40% of the total tab build time for average entity files
 			EntityTab* newTab = new EntityTab(book, name, path);
 			AddOpenedTab(newTab);
 		}
@@ -326,6 +372,17 @@ void EntityFrame::openFiles(const wxArrayString& filepaths)
 	}
 }
 
+void EntityFrame::onOpenConfig(wxCommandEvent& event)
+{
+	wxFileName path;
+	path.AssignCwd();
+	path.SetFullName(ConfigInterface::ConfigPath());
+
+	wxArrayString container;
+	container.push_back(path.GetFullPath());
+	openFiles(container);
+}
+
 void EntityFrame::onFileOpen(wxCommandEvent& event)
 {
 	wxFileDialog openFileDialog(this, "Open File", wxEmptyString, wxEmptyString,
@@ -336,7 +393,6 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 
 	wxArrayString allPaths;
 	openFileDialog.GetPaths(allPaths);
-	wxLogMessage("%zu", allPaths.size());
 	openFiles(allPaths);
 }
 
@@ -419,7 +475,7 @@ void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
 			if(++itemCount > ITEM_LIMIT)
 				return wxDIR_STOP;
 
-			if(filename.EndsWith(".entities"))
+			if(filename.EndsWith(".entities") || filename.EndsWith(".txt"))
 				files.push_back(filename);
 			return wxDIR_CONTINUE;
 		}
@@ -506,7 +562,11 @@ void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 
 void EntityFrame::onFileSave(wxCommandEvent& event)
 {
-	activeTab->saveFile();
+	// Technically this is error-prone if users deliberately do things wrong
+	// (opening another file of the same name, or setting this as their Meathook tab)
+	// but it should be fine
+	if(activeTab->saveFile() && activeTab->tabName == ConfigInterface::ConfigPath())
+		onReloadConfigFile(event);
 }
 
 void EntityFrame::onFileSaveAs(wxCommandEvent& event)

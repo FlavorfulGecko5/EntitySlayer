@@ -46,7 +46,7 @@ class EntityTab : public wxPanel
 	void applyFilters(bool clearAll);
 	void SearchForward();
 	void SearchBackward();
-	void saveFile();
+	bool saveFile();
 	int CommitEdits();
 	void UndoRedo(bool undo);
 	void onDataviewChar(wxKeyEvent &event);

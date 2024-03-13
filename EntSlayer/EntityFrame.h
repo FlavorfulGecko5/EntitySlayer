@@ -32,9 +32,11 @@ class EntityFrame : public wxFrame
 	void AddOpenedTab(EntityTab* tab);
 	void onWindowClose(wxCloseEvent& event);
 	void onTabClosing(wxAuiNotebookEvent& event);
+	void onFileCloseAll(wxCommandEvent& event);
 	void onTabChanged(wxAuiNotebookEvent& event);
 	void onFileNew(wxCommandEvent& event);
 	void openFiles(const wxArrayString& filepaths);
+	void onOpenConfig(wxCommandEvent& event);
 	void onFileOpen(wxCommandEvent& event);
 	void onFileOpenFolder(wxCommandEvent& event);
 	void onMeathookOpen(wxCommandEvent& event);

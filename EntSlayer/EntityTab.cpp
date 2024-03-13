@@ -363,15 +363,18 @@ void EntityTab::SearchBackward()
 	searchBar->initiateSearch(true);
 }
 
-void EntityTab::saveFile()
+/*
+* Returns true if the file was saved, otherwise false
+*/
+bool EntityTab::saveFile()
 {
-	if (filePath == "") return;
+	if (filePath == "") return false;
 
 	int commitResult = CommitEdits();
 	if (commitResult > 0)
 		editor->SetActiveNode(nullptr);
 
-	if (fileUpToDate) return; // Need to check this when commitResult <= 0
+	if (fileUpToDate) return false; // Need to check this when commitResult <= 0
 
 	root->writeToFile(std::string(filePath), compressOnSave && !compressOnSave_ForceDisable);
 
@@ -380,6 +383,7 @@ void EntityTab::saveFile()
 			"File Saved", wxICON_WARNING | wxOK);
 	fileUpToDate = true;
 	wxLogMessage("Saving Finished");
+	return true;
 }
 
 /*

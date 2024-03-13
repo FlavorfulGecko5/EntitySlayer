@@ -4,6 +4,8 @@ class wxWindow;
 class wxMenu;
 namespace ConfigInterface 
 {
+	const char* ConfigPath();
+
 	bool loadData();
 	void deleteData();
 
