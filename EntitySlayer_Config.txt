@@ -1,27 +1,190 @@
 /* READ ME!
 
-This file is for customizing EntitySlayer's append menu - letting you craft your own set of insertion macros to suit your needs.
+This is EntitySlayer's config file. Use EntitySlayer to open and edit this file!
+
+Right now, it's sole purpose is customizing the append menu - letting you craft and organize your own templates to suit your needs.
 
 I recommend keeping Automatic idList Renumbering turned off for this file. Enabling it may cause unwanted edits to templates.
 
-Once satisfied with your edits, use the option in the File Menu to reload and rebuild the append menu. Remember to save your changes before doing this!
+Once satisfied, save your changes and the append menu will automatically refresh.
 
-Each menu entry may have the following fields - all are optional
-1. hotkey - Sets the keyboard shortcut for this item.
-   > Virtually any hotkey is acceptable: "1", "Ctrl+5", "Shift+T", "Ctrl+Shift+F", "Alt+K" etc.
-   > If hotkeys conflict, unintended functions may execute. Please double check that your desired hotkey for a template isn't already in use by another template or feature of EntitySlayer!
+=======
+Enums
 
-2. args - Can specify a list of parameters and their default values.
+Use the enums object to define custom argument types for the append menu.
+
+Each value may have an alias, which is displayed to the user instead of the literal value. Both the value and alias may be quoted.
+
+=======
+Append
+
+Use the append object to build a custom append menu.
+
+Each menu entry may have the following fields:
+
+1. text - This object's contents are inserted into the node tree when you execute Append. If this node is missing, a submenu is constructed instead of a menu button.
+
+2. hotkey - Sets the keyboard shortcut for this item. If hotkeys conflict, unintended functions may execute.
+   > Examples: "1" , "Ctrl+5" , "Shift+T" , "Ctrl+Shift+F", "Alt+K", etc.
+   > If hotkeys conflict, unintended functions may execute. Please ensure your template hotkeys don't conflict with each other, or with other features of EntitySlayer!
+
+3. args - Specifies a list of parameters and their default values. 
    > When appending an item with args defined, you will be prompted to enter them.
-   > To insert the parameters into your text, use %[index]% (i.e. int = %0%)
-   > Two parameter types available: "bool" (creates a checkbox), and unspecified (creates a textbox)
-   > Be Efficient - use Tab to quickly navigate between the different boxes and buttons! Use spacebar to check/uncheck a textbox and activate a button!
-   
-3. text - The contents of this object is what gets inserted into the node tree when you execute Append. 
-   > If this node is missing from an object, it is assumed that you want to construct a submenu.
+   > To insert parameters into your text, use %[index]% (i.e. int = %0%)
+   > Be efficient - use Tab to quickly navigate between different fields, and spacebar to select them!
 
-This file comes pre-supplied with many helpful templates, including ones for eventCalls used by idEncounterManagers. I recommend studying the contents of this file for help creating your own templates.
+This file comes pre-supplied with many helpful templates. Studying this file's contents will teach you how to create your own templates. See the next section for more information on append arguments.
+
+=====
+Arguments In-Depth
+
+There are several types of arguments. This section shows examples for defining all of them:
+
+---
+1. Textboxes
+
+The default argument type. You may give a default value for this argument type
+
+args {
+   Name = "Default Value"
+   "Second"
+   "Third" = 5
+}
+
+---
+2. Checkboxes
+
+To use these, you must specify that the argument is of type "bool". Default values are true/false.
+
+args {
+   Boolean {
+      type = "bool"
+      default = true
+   }
+   "Another Boolean" {
+      type = bool
+      default = false
+   }
+}
+
+---
+3. Checklists
+
+Used by Enum types to display a list of values, of which any number may be selected. Default values are not currently supported.
+
+args {
+   "Spawn These Monsters" {
+      type = "spawntype"
+   }
+}
 */
+enums {
+	/* Omitted SpawnTypes:
+	ENCOUNTER_SPAWN_INVALID
+	ENCOUNTER_DO_NOT_USE_MAX_COMMON
+	ENCOUNTER_DO_NOT_USE_MAX_HEAVY
+	ENCOUNTER_DO_NOT_USE_MAX_SUPER
+	ENCOUNTER_DO_NOT_USE_AMBIENT
+	ENCOUNTER_SPAWN_GENERIC
+	ENCOUNTER_SPAWN_UNUSED
+	*/
+	spawntype {
+		ENCOUNTER_SPAWN_ANY = "Any"
+		// === FODDER ===
+		ENCOUNTER_SPAWN_ZOMBIE_TIER_1 = "Zombie"
+		ENCOUNTER_SPAWN_ZOMBIE_T1_SCREECHER = "Screecher"
+		ENCOUNTER_SPAWN_ZOMBIE_TIER_3 = "Mech. Zombie"
+		ENCOUNTER_SPAWN_IMP = "Imp"
+		ENCOUNTER_SPAWN_STONE_IMP = "Stone Imp"
+		ENCOUNTER_SPAWN_GARGOYLE = "Gargoyle"
+		ENCOUNTER_SPAWN_HELL_SOLDIER = "Blaster Soldier"
+		ENCOUNTER_SPAWN_SHOTGUN_SOLDIER = "Shotgun Soldier"
+		ENCOUNTER_SPAWN_CHAINGUN_SOLDIER = "Chaingun Soldier"
+		ENCOUNTER_SPAWN_ZOMBIE_MAYKR = "Maykr Drone"
+		ENCOUNTER_SPAWN_LOST_SOUL = "Lost Soul"
+		// === HEAVIES ===
+		ENCOUNTER_SPAWN_ARACHNOTRON = "Arachnotron"
+		ENCOUNTER_SPAWN_BLOOD_ANGEL = "Blood Maykr"
+		ENCOUNTER_SPAWN_CARCASS = "Carcass"
+		ENCOUNTER_SPAWN_HELL_KNIGHT = "Hell Knight"
+		ENCOUNTER_SPAWN_DREAD_KNIGHT = "Dread Knight"
+		ENCOUNTER_SPAWN_PINKY = "Pinky"
+		ENCOUNTER_SPAWN_SPECTRE = "Spectre"
+		ENCOUNTER_SPAWN_CACODEMON = "Cacodemon"
+		ENCOUNTER_SPAWN_PAIN_ELEMENTAL = "Pain Elemental"
+		ENCOUNTER_SPAWN_MANCUBUS = "Mancubus"
+		ENCOUNTER_SPAWN_CYBER_MANCUBUS = "Cyber Mancubus"
+		ENCOUNTER_SPAWN_PROWLER = "Prowler"
+		ENCOUNTER_SPAWN_CURSED_PROWLER = "Cursed Prowler"
+		ENCOUNTER_SPAWN_REVENANT = "Revenant"
+		ENCOUNTER_SPAWN_WHIPLASH = "Whiplash"
+		// === SUPER HEAVIES ===
+		ENCOUNTER_SPAWN_ARCHVILE = "Archvile"
+		ENCOUNTER_SPAWN_DOOM_HUNTER = "Doom Hunter"
+		ENCOUNTER_SPAWN_BARON = "Baron"
+		ENCOUNTER_SPAWN_ARMORED_BARON = "Armored Baron"
+		ENCOUNTER_SPAWN_MARAUDER = "Marauder"
+		ENCOUNTER_SPAWN_TYRANT = "Tyrant"
+		// === AMBIENT ===
+		ENCOUNTER_SPAWN_CUEBALL = "Explosive Zombie"
+		ENCOUNTER_SPAWN_BUFF_POD = "Buff Totem"
+		ENCOUNTER_SPAWN_SUPER_TENTACLE = "Giant Tentacle"
+		ENCOUNTER_SPAWN_TENTACLE = "Tentacle"
+		ENCOUNTER_SPAWN_SPIRIT = "Spirit"
+		ENCOUNTER_SPAWN_TURRET = "Turret"
+		ENCOUNTER_SPAWN_DEMONIC_TROOPER = "Immoran Soldier"
+		// === BOSSES ===
+		ENCOUNTER_SPAWN_GLADIATOR = "Gladiator"
+		ENCOUNTER_SPAWN_ICON_OF_SIN = "Icon of Sin"
+		ENCOUNTER_SPAWN_MAYKR_ANGEL = "Khan Maykr"
+		ENCOUNTER_SPAWN_SAMUEL_BOSS = "Samuel Maykr"
+	}
+	eventflag {
+		ENCOUNTER_EVENT_FLAG_PRE_COMBAT
+		ENCOUNTER_EVENT_FLAG_COMMIT
+		ENCOUNTER_EVENT_FLAG_EXIT
+		ENCOUNTER_EVENT_FLAG_AI_AWARE_OF_PLAYER
+		ENCOUNTER_EVENT_FLAG_USER_EVENT
+		ENCOUNTER_EVENT_FLAG_COUNT
+	}
+	grouprole {
+		ROLE_NONE
+		ROLE_DEFEND
+		ROLE_ASSAULT
+		ROLE_FLANK
+		ROLE_FLANK_CHARGE
+		ROLE_FORMATION
+		ROLE_THROW
+		ROLE_CHARGE
+		ROLE_TURRET
+		ROLE_DEFEND_ZONE
+		ROLE_UNAVAILABLE
+		ROLE_MAX
+	}
+	socialemotion {
+		EMOTION_MIN
+		EMOTION_TERRIFIED
+		EMOTION_FEAR
+		EMOTION_WARY
+		EMOTION_DESTROY_AT_ALL_COSTS
+		EMOTION_DESTROY_PRIORITY
+		EMOTION_DESTROY
+		EMOTION_HATE
+		EMOTION_ANGER
+		EMOTION_DISLIKE
+		EMOTION_ANNOYED
+		EMOTION_NEUTRAL
+		EMOTION_FRIENDLY
+		EMOTION_SQUADMATE
+		EMOTION_PARTNER
+		EMOTION_MAX
+	}
+	logicoperator {
+		ENCOUNTER_LOGICAL_OP_AND
+		ENCOUNTER_LOGICAL_OP_OR
+		ENCOUNTER_LOGICAL_OP_MAX
+	}
+}
 append {
 	eventCalls {
 		activateTarget {
@@ -50,7 +213,9 @@ append {
 		clearCombatRoles {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype"
+				}
 				"Group Label"
 			}
 			text {
@@ -60,7 +225,7 @@ append {
 						args = {
 							num = 2;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								string = "%1%";
@@ -88,8 +253,10 @@ append {
 		damageAI {
 			hotkey ""
 			args {
-				"Damage Type"
-				"AI Type"
+				"Damage Decl"
+				"AI Type" {
+					type = "spawntype";
+				}
 				"Group Label"
 			}
 			text {
@@ -104,7 +271,7 @@ append {
 								}
 							}
 							item[1] = {
-								eEncounterSpawnType_t = "%1%";
+								eEncounterSpawnType_t = %1%;
 							}
 							item[2] = {
 								string = "%2%";
@@ -143,7 +310,9 @@ append {
 		forceAIToFlee {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Group Label"
 				"Radius"
 				"Immediately Despawn" {
@@ -157,7 +326,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								string = "%1%";
@@ -191,7 +360,9 @@ append {
 		maintainAICount {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Desired Count"
 				"Maximum Spawn Count" = -1
 				"Minimum Spawn Delay"
@@ -207,7 +378,7 @@ append {
 						args = {
 							num = 8;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;
@@ -276,7 +447,9 @@ append {
 			hotkey ""
 			args {
 				"Encounter Script"
-				"AI Type"
+				"AI Type" {
+					type = "spawntype";
+				}
 				"Group Label"
 				"Shared Between Scripts" {
 					type = "bool"
@@ -292,7 +465,7 @@ append {
 								entity = "%0%";
 							}
 							item[1] = {
-								eEncounterSpawnType_t = "%1%";
+								eEncounterSpawnType_t = %1%;
 							}
 							item[2] = {
 								string = "%2%";
@@ -336,7 +509,9 @@ append {
 			hotkey ""
 			args {
 				"Encounter Script"
-				"Event Flag"
+				"Event Flag" {
+					type = "eventflag"
+				}
 				"User Flag"
 			}
 			text {
@@ -349,7 +524,7 @@ append {
 								entity = "%0%";
 							}
 							item[1] = {
-								eEncounterEventFlags_t = "%1%";
+								eEncounterEventFlags_t = %1%;
 							}
 							item[2] = {
 								string = "%2%";
@@ -362,7 +537,9 @@ append {
 		removeAI {
 			hotkey ""
 			args {
-				"AI Type"
+				"AI Type" {
+					type = "spawntype";
+				}
 				"Group Label"
 			}
 			text {
@@ -372,7 +549,7 @@ append {
 						args = {
 							num = 2;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								string = "%1%";
@@ -385,9 +562,13 @@ append {
 		setCombatRoles {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Group Label"
-				"Group Role"
+				"Group Role" {
+					type = "grouprole"
+				}
 			}
 			text {
 				item[0] = {
@@ -396,13 +577,13 @@ append {
 						args = {
 							num = 3;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								string = "%1%";
 							}
 							item[2] = {
-								encounterGroupRole_t = "%2%";
+								encounterGroupRole_t = %2%;
 							}
 						}
 					}
@@ -412,10 +593,16 @@ append {
 		setFactionRelation {
 			hotkey ""
 			args {
-				"Instigator Spawn Type"
+				"Instigator Spawn Type" {
+					type = "spawntype";
+				}
 				"Group Label"
-				"Target Spawn Type"
-				"Relation"
+				"Target Spawn Type" {
+					type = "spawntype";
+				}
+				"Relation" {
+					type = "socialemotion"
+				}
 			}
 			text {
 				item[0] = {
@@ -424,16 +611,16 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								string = "%1%";
 							}
 							item[2] = {
-								eEncounterSpawnType_t = "%2%";
+								eEncounterSpawnType_t = %2%;
 							}
 							item[3] = {
-								socialEmotion_t = "%3%";
+								socialEmotion_t = %3%;
 							}
 						}
 					}
@@ -514,7 +701,9 @@ append {
 		spawnAI {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Spawn Count"
 				"Spawn Group"
 				"Group Label"
@@ -526,7 +715,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;
@@ -603,11 +792,15 @@ append {
 		spawnPossessedAI {
 			hotkey ""
 			args {
-				"AI Spawn Type"
+				"AI Spawn Type" {
+					type = "spawntype";
+				}
 				"AI Spawn Target"
 				"AI Group Label"
 				"Spirit Spawn Target"
-				"Spirit Allowed AI Types"
+				"Spirit Allowed AI Types" {
+					type = "spawntype";
+				}
 				"Spirit Allowed Group Label"
 				"AI Type Explicit Filtering" {
 					type = "bool"
@@ -620,7 +813,7 @@ append {
 						args = {
 							num = 7;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								entity = "%1%";
@@ -632,7 +825,7 @@ append {
 								entity = "%3%";
 							}
 							item[4] = {
-								eEncounterSpawnType_t = "%4%";
+								eEncounterSpawnType_t = %4%;
 							}
 							item[5] = {
 								string = "%5%";
@@ -648,7 +841,9 @@ append {
 		spawnSingleAI {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Spawn Target"
 				"Group Label"
 			}
@@ -659,7 +854,7 @@ append {
 						args = {
 							num = 3;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								entity = "%1%";
@@ -676,7 +871,9 @@ append {
 			hotkey ""
 			args {
 				"Spawn Target"
-				"Allowed AI Types"
+				"Allowed AI Types" {
+					type = "spawntype";
+				}
 				"Allowed Group Label"
 				"AI Type Explicit Filtering" {
 					type = "bool"
@@ -692,7 +889,7 @@ append {
 								entity = "%0%";
 							}
 							item[1] = {
-								eEncounterSpawnType_t = "%1%";
+								eEncounterSpawnType_t = %1%;
 							}
 							item[2] = {
 								string = "%2%";
@@ -708,7 +905,9 @@ append {
 		staggeredAISpawn {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Spawn Count"
 				"Spawn Group"
 				"Group Label"
@@ -722,7 +921,7 @@ append {
 						args = {
 							num = 6;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;
@@ -747,7 +946,9 @@ append {
 		stopMaintainingAICount {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Group Label"
 			}
 			text {
@@ -757,7 +958,7 @@ append {
 						args = {
 							num = 2;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								string = "%1%";
@@ -795,7 +996,9 @@ append {
 		waitAIHealthLevel {
 			hotkey ""
 			args {
-				"Spawn Type"
+				"Spawn Type" {
+					type = "spawntype";
+				}
 				"Target Group Health"
 				"Group Label"
 				"Disable AI Highlight" {
@@ -809,7 +1012,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								float = %1%;
@@ -828,7 +1031,9 @@ append {
 		waitAIRemaining {
 			hotkey ""
 			args {
-				"AI Type"
+				"AI Type" {
+					type = "spawntype";
+				}
 				"Desired Remaining AI Count"
 				"Group Label"
 				"Disable AI Highlight" {
@@ -842,7 +1047,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;
@@ -861,14 +1066,15 @@ append {
 		waitForEventFlag {
 			hotkey ""
 			args {
-				"Event Flag" = ENCOUNTER_EVENT_FLAG_USER_EVENT
+				"Event Flag" {
+					type = "eventflag"
+				}
 				"User Flag"
 				"Test If Already Raised" {
 					type = "bool"
 				}
 				"Disable AI Highlight" {
 					type = "bool"
-					default = false
 				}
 			}
 			text {
@@ -878,7 +1084,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterEventFlags_t = "%0%";
+								eEncounterEventFlags_t = %0%;
 							}
 							item[1] = {
 								string = "%1%";
@@ -897,7 +1103,9 @@ append {
 		waitKillCount {
 			hotkey ""
 			args {
-				"AI Type"
+				"AI Type" {
+					type = "spawntype"
+				}
 				"Desired Kill Count"
 				"Group Label"
 				"Disable AI Highlight" {
@@ -911,7 +1119,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterEventFlags_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;
@@ -930,7 +1138,9 @@ append {
 		waitMaintainComplete {
 			hotkey ""
 			args {
-				"AI Type"
+				"AI Type" {
+					type = "spawntype";
+				}
 				"Remaining Spawn Count"
 				"Group Label"
 				"Disable AI Highlight" {
@@ -944,7 +1154,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;
@@ -966,7 +1176,9 @@ append {
 			hotkey ""
 			args {
 				"Condition Count"
-				"Logic Operator"
+				"Logic Operator" {
+					type = "logicoperator"
+				}
 				"Disable AI Highlight" {
 					type = "bool"
 				}
@@ -981,7 +1193,7 @@ append {
 								int = %0%;
 							}
 							item[1] = {
-								encounterLogicOperator_t = "%1%";
+								encounterLogicOperator_t = %1%;
 							}
 							item[2] = {
 								bool = %2%;
@@ -994,7 +1206,9 @@ append {
 		waitRandomKillCount {
 			hotkey ""
 			args {
-				"AI Type"
+				"AI Type" {
+					type = "spawntype"
+				}
 				"Minimum Kill Count"
 				"Maximum Kill Count"
 				"Group Label"
@@ -1009,7 +1223,7 @@ append {
 						args = {
 							num = 5;
 							item[0] = {
-								eEncounterEventFlags_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;
@@ -1031,7 +1245,9 @@ append {
 		waitStaggeredSpawnComplete {
 			hotkey ""
 			args {
-				"AI Type"
+				"AI Type" {
+					type = "spawntype";
+				}
 				"Remaining Spawn Count"
 				"Group Label"
 				"Disable AI Highlight" {
@@ -1045,7 +1261,7 @@ append {
 						args = {
 							num = 4;
 							item[0] = {
-								eEncounterSpawnType_t = "%0%";
+								eEncounterSpawnType_t = %0%;
 							}
 							item[1] = {
 								int = %1%;

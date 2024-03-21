@@ -531,7 +531,7 @@ void EntityParser::logAllocatorInfo(bool includeBlockList, bool logToLogger, boo
 std::runtime_error EntityParser::Error(std::string msg)
 {
 	const char *min = textView.data();
-	for (char* inc = ch; inc >= min; inc--)
+	for (char* inc = ch - 1; inc >= min; inc--) //ch will equal next char to be parsed - if == \n an extra newline would be added
 		if (*inc == '\n') errorLine++;
 	return std::runtime_error("Entities parsing failed (line " + std::to_string(errorLine) + "): " + msg);
 }
@@ -648,7 +648,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 
 		/*
 		* Many Possibilities:
-		* 1. [Identifier/String] [newline | Closing Brace | EOF | Comment] <--- Will need to augment tokenization function to treat newlines as a token
+		* 1. [Identifier/String] [newline | Closing Brace | EOF | Comment]
 		* [DONE] 2. [Identifier/String] { }    
 		* [DONE] 3. [Identifier/String] = { }
 		* [DONE] 4. [Identifier/String] = [Identifier/Value]
@@ -807,7 +807,7 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 
 		case TokenType::EQUALSIGN:
 		TokenizeAdjustValue();
-		if (lastTokenType < TokenType::VALUE_ANY)
+		if (lastTokenType <= TokenType::IDENTIFIER)
 			throw Error("Value expected (entity function)");
 		pushNode<true, true>(NodeType::VALUE_COMMON);
 		assertIgnore(TokenType::SEMICOLON);

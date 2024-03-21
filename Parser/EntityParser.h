@@ -89,8 +89,7 @@ class EntityParser : public wxDataViewModel {
 		EQUALSIGN = 0x04,
 		SEMICOLON = 0x05,
 		COMMENT = 0x06,
-		IDENTIFIER = 0x07,
-		VALUE_ANY = 0xF0,
+		IDENTIFIER = 0x07, // Anything greater is assumed to be a value TokenType
 		VALUE_NUMBER = 0xF1,
 		VALUE_STRING = 0xF2,
 		VALUE_KEYWORD = 0xF3

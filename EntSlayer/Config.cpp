@@ -126,7 +126,7 @@ bool ConfigInterface::loadData()
 
 			if (val->hasValue())
 				data.displayedValues.push_back(val->getValueWXUQ());
-			else data.displayedValues.push_back(val->getNameWX());
+			else data.displayedValues.push_back(val->getNameWXUQ());
 		}
 	}
 
@@ -281,7 +281,7 @@ class ParameterInput {
 
 				for(int i = 0, max = list->GetCount(); i < max; i++)
 					if (list->IsChecked(i)) {
-						value.append(values[i]->getName());
+						value.append(values[i]->getNameUQ());
 						value.push_back(' ');
 					}
 
