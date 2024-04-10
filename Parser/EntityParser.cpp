@@ -6,9 +6,7 @@
 
 const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
 
-EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
-	textAlloc(1000000), nodeAlloc(1000), childAlloc(30000), 
-	PARSEMODE(ParsingMode::ENTITIES)
+EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false), PARSEMODE(ParsingMode::ENTITIES)
 {
 	// Cannot append a null character to a string? Hence const char* instead
 	const char* rawText = "Version 7\nHierarchyVersion 1\0";
@@ -21,7 +19,7 @@ EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false),
 }
 
 EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, const bool debug_logParseTime)
-	: root(NodeType::ROOT), PARSEMODE(mode), textAlloc(1000000), nodeAlloc(1000), childAlloc(30000)
+	: root(NodeType::ROOT), PARSEMODE(mode)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
 	std::ifstream file(filepath, std::ios_base::binary); // Binary mode 50% faster than 'in' mode, keeps CR chars
@@ -1050,6 +1048,27 @@ void EntityParser::Tokenize()
 			}
 		}
 		else throw Error("Invalid Comment Syntax");
+
+		// Todo
+		//case '(':
+		//{
+		//	char* openPtr = ch++;
+		//	
+		//	LABEL_TUPLE_START:
+		//	Tokenize();
+		//	switch (lastTokenType)
+		//	{
+		//		case TokenType::VALUE_NUMBER:
+		//		goto LABEL_TUPLE_START;
+
+		//		// case close parentheses token
+		//		// case comma token
+
+		//		default:
+		//		throw Error("Tuples must contain numbers");
+		//		break;
+		//	}
+		//}
 
 		case '"':
 		first = ch;

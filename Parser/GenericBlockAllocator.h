@@ -7,28 +7,29 @@
 * users to utilize it the correct way to prevent errors:
 * 1. Does not check if the memory you free was actually provided by the allocator
 * 2. Expects users to independently maintain the start and lengths of allocated blocks
+* 
+* Todo: Consider implementing a system that completely discards freeblocks of a small-enough size,
+* to eliminate inefficiency from building up a large number of tiny free blocks?
 */
 template <typename T>
 class BlockAllocator
 {
 	private:
-	std::vector<T*> blockStarts; // Sorted starting addresses of deallocated blocks
-	std::vector<T*> blockEnds;   // Sorted ending addresses of deallocated blocks
+	std::vector<T*> allBuffers;  // Contains every buffer made by this allocator
+	std::vector<T*> blockStarts; // Sorted starting addresses of free blocks
+	std::vector<T*> blockEnds;   // Sorted ending addresses of free blocks (exclusive)
 
-	std::vector<T*> allBuffers; // Contains every buffer made by this allocator
-	const size_t NEW_BUFFER_LENGTH;
-
-	T* buffer; // Active buffer
-	size_t max; // Capacity of the active buffer
-	size_t used = 0; // Number of used elements in the active buffer.
+	T* buffer = nullptr;    // Active buffer
+	size_t max = 0;         // Capacity of the active buffer
+	size_t used = 0;        // Number of used elements in the active buffer.
+	size_t newBufferLength; // Default length of new buffers
 
 	public:
-	BlockAllocator(const size_t newCapacity) : buffer(nullptr), max(0), NEW_BUFFER_LENGTH(newCapacity) {}
+	BlockAllocator() = delete;
+	BlockAllocator(const BlockAllocator<T>& copyFrom) = delete;
+	void operator=(const BlockAllocator<T>& copyFrom) = delete;
 
-	BlockAllocator(const size_t initialCapacity, const size_t newCapacity) : NEW_BUFFER_LENGTH(newCapacity)
-	{
-		setActiveBuffer(initialCapacity);
-	}
+	BlockAllocator(const size_t p_newBufferLength) : newBufferLength(p_newBufferLength) {}
 
 	~BlockAllocator() 
 	{
@@ -41,7 +42,7 @@ class BlockAllocator
 		std::ostringstream buffer;
 		buffer << "Number of Buffers: " << allBuffers.size();
 		buffer << "\nActive Buffer Status: " << used << " / " << max << " (used / max)";
-		buffer << "\nNew Buffer Sizes: " << NEW_BUFFER_LENGTH;
+		buffer << "\nNew Buffer Sizes: " << newBufferLength;
 		buffer << "\nAvailable Free Blocks: " << blockStarts.size();
 
 		if (includeBlockList)
@@ -103,7 +104,7 @@ class BlockAllocator
 
 			// Edge Case: We need a buffer larger than the size
 			// of new buffers. Create a specially-sized buffer for that request
-			if (capacity > NEW_BUFFER_LENGTH)
+			if (capacity > newBufferLength)
 			{
 				block = new T[capacity];
 				allBuffers.push_back(block);
@@ -112,7 +113,7 @@ class BlockAllocator
 				
 			// Else: Make EOB a free block if it isn't completely filled 
 			// Then Create a new buffer and use the first slots of that
-			setActiveBuffer(NEW_BUFFER_LENGTH);
+			setActiveBuffer(newBufferLength);
 		}
 		block = &buffer[used];
 		used += capacity;

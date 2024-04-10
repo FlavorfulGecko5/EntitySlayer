@@ -55,9 +55,9 @@ class EntityParser : public wxDataViewModel {
 	const ParsingMode PARSEMODE;
 	bool fileWasCompressed;
 	EntNode root;
-	BlockAllocator<char> textAlloc;      // Allocator for node name/value buffers
-	BlockAllocator<EntNode> nodeAlloc;   // Allocator for the nodes
-	BlockAllocator<EntNode*> childAlloc; // Allocator for node child buffers
+	BlockAllocator<char> textAlloc = BlockAllocator<char>(1000000);         // Allocator for node name/value buffers
+	BlockAllocator<EntNode> nodeAlloc = BlockAllocator<EntNode>(1000);      // Allocator for the nodes
+	BlockAllocator<EntNode*> childAlloc =  BlockAllocator<EntNode*>(30000); // Allocator for node child buffers
 
 	// Root node's child count is orders of magnitude larger than any other object node
 	// Repeated single-entity additions will create extremely large free blocks that cannot
@@ -82,17 +82,17 @@ class EntityParser : public wxDataViewModel {
 	private:
 	enum class TokenType : unsigned char
 	{
-		END = 0x00,
-		NEWLINE = 0x01, // Permissive parsing mode only
-		BRACEOPEN = 0x02,
-		BRACECLOSE = 0x03,
-		EQUALSIGN = 0x04,
-		SEMICOLON = 0x05,
-		COMMENT = 0x06,
-		IDENTIFIER = 0x07, // Anything greater is assumed to be a value TokenType
-		VALUE_NUMBER = 0xF1,
-		VALUE_STRING = 0xF2,
-		VALUE_KEYWORD = 0xF3
+		END,
+		NEWLINE, // Permissive parsing mode only
+		BRACEOPEN,
+		BRACECLOSE,
+		EQUALSIGN,
+		SEMICOLON,
+		COMMENT,
+		IDENTIFIER, // Anything greater is assumed to be a value TokenType
+		VALUE_NUMBER,
+		VALUE_STRING,
+		VALUE_KEYWORD
 	};
 
 	/*
