@@ -29,6 +29,7 @@ class EntNode
 	int valLength = 0;
 	int childCount = 0;
 	NodeType TYPE = NodeType::UNDESIGNATED;
+	bool hidden = false;
 
 	public:
 	EntNode() {}
@@ -72,6 +73,8 @@ class EntNode
 
 	EntNode* getParent() { return parent; }
 
+	bool HasParent() {return parent == nullptr;}
+
 	EntNode** getChildBuffer() { return children; }
 
 	int getChildCount() {return childCount;}
@@ -93,10 +96,10 @@ class EntNode
 
 	// More generally, get the second ancestor
 	EntNode* getEntity() {
-		if(TYPE == NodeType::ROOT) return nullptr;
+		if(!HasParent()) return nullptr;
 
 		EntNode* entity = this;
-		while (entity->parent->TYPE != NodeType::ROOT) 
+		while(entity->parent->HasParent())
 			entity = entity->parent;
 		return entity;
 	}

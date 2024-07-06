@@ -39,6 +39,9 @@ class EntityFrame : public wxFrame
 	void onOpenConfig(wxCommandEvent& event);
 	void onFileOpen(wxCommandEvent& event);
 	void onFileOpenFolder(wxCommandEvent& event);
+	void detectExternalEdits();
+	void onFileReload(wxCommandEvent& event);
+	void onWindowFocus(wxActivateEvent& event);
 	void onMeathookOpen(wxCommandEvent& event);
 	void onFileSave(wxCommandEvent& event);
 	void onFileSaveAs(wxCommandEvent& event);
@@ -60,7 +63,10 @@ class EntityFrame : public wxFrame
 	void RefreshMHMenu();
 	bool ClearMHTab();
 	void onSpecial_PropMovers(wxCommandEvent &event);
+	void onSpecial_TraversalInherits(wxCommandEvent &event);
 	void onSpecial_DumpAllocatorInfo(wxCommandEvent &event);
+
+	void onDebugMenuOne(wxCommandEvent &event);
 
 	private:
 	wxDECLARE_EVENT_TABLE();

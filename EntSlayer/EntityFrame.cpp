@@ -9,6 +9,12 @@
 #include "EntityFrame.h"
 #include "EntityTab.h"
 
+
+#define TIMESTART auto timeStart = std::chrono::high_resolution_clock::now();
+#define TIMESTOP(msg) auto timeStop = std::chrono::high_resolution_clock::now(); \
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(timeStop - timeStart); \
+	wxLogMessage("%s %zu", msg, duration.count());
+
 enum FrameID
 {
 	FRAME_MINIMUM = wxID_HIGHEST + 1,
@@ -20,7 +26,8 @@ enum FrameID
 	FILE_SAVEAS,
 	FILE_CLOSE_ALL,
 	FILE_CLOSE_ALL_OTHERS,
-	FILE_RELOAD_APPENDMENU,
+	FILE_RELOAD,
+	FILE_RELOAD_CONFIGFILE,
 	
 	TAB_SEARCHFORWARD,
 	TAB_SEARCHBACKWARD,
@@ -42,10 +49,16 @@ enum FrameID
 	
 	SPECIAL_DEBUG_DUMPBUFFERS,
 	SPECIAL_PROPMOVERS,
+	SPECIAL_TRAVERSALINHERIT,
+
+	DEBUG_MENUONE
 };
 
 wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_CLOSE(EntityFrame::onWindowClose)
+
+	// For detecting external changes. Not ready yet
+	//EVT_ACTIVATE(EntityFrame::onWindowFocus)
 
 	EVT_AUINOTEBOOK_PAGE_CHANGED(wxID_ANY, EntityFrame::onTabChanged)
 	EVT_AUINOTEBOOK_PAGE_CLOSE(wxID_ANY, EntityFrame::onTabClosing)
@@ -58,7 +71,8 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(FILE_SAVEAS, EntityFrame::onFileSaveAs)
 	EVT_MENU(FILE_CLOSE_ALL, EntityFrame::onFileCloseAll)
 	EVT_MENU(FILE_CLOSE_ALL_OTHERS, EntityFrame::onFileCloseAll)
-	EVT_MENU(FILE_RELOAD_APPENDMENU, EntityFrame::onReloadConfigFile)
+	EVT_MENU(FILE_RELOAD, EntityFrame::onFileReload)
+	EVT_MENU(FILE_RELOAD_CONFIGFILE, EntityFrame::onReloadConfigFile)
 	EVT_MENU(TAB_SEARCHFORWARD, EntityFrame::onSearchForward)
 	EVT_MENU(TAB_SEARCHBACKWARD, EntityFrame::onSearchBackward)
 	EVT_MENU(TAB_COMPRESS, EntityFrame::onCompressCheck)
@@ -76,7 +90,10 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(MEATHOOK_SPAWNPOS_OFFSET, EntityFrame::onSpawnOffsetCheck)
 
 	EVT_MENU(SPECIAL_DEBUG_DUMPBUFFERS, EntityFrame::onSpecial_DumpAllocatorInfo)
+	EVT_MENU(SPECIAL_TRAVERSALINHERIT, EntityFrame::onSpecial_TraversalInherits)
 	EVT_MENU(SPECIAL_PROPMOVERS, EntityFrame::onSpecial_PropMovers)
+
+	EVT_MENU(DEBUG_MENUONE, EntityFrame::onDebugMenuOne)
 wxEND_EVENT_TABLE()
 
 EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
@@ -99,9 +116,10 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		fileMenu->Append(FILE_CLOSE_ALL, "Close All Tabs");
 		fileMenu->Append(FILE_CLOSE_ALL_OTHERS, "Close All Other Tabs", 
 			"Close all tabs except the one you're currently viewing");
+		fileMenu->Append(FILE_RELOAD, "Reload From Disk");
 		fileMenu->AppendSeparator();
 		fileMenu->Append(FILE_OPEN_CONFIG, "Open Config File");
-		fileMenu->Append(FILE_RELOAD_APPENDMENU, "Reload Config File");
+		fileMenu->Append(FILE_RELOAD_CONFIGFILE, "Reload Config File");
 		
 		tabMenu->Append(TAB_SEARCHFORWARD, "Search Forward\tCtrl+F");
 		tabMenu->Append(TAB_SEARCHBACKWARD, "Search Backward\tCtrl+Space");
@@ -130,6 +148,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		wxMenu* specialMenu = new wxMenu;
 		specialMenu->Append(SPECIAL_PROPMOVERS, "Bind idProp2 Entities to idMovers",
 			"For Modded Multiplayer developers. Use this to fix idProp2 entity offsets");
+		specialMenu->Append(SPECIAL_TRAVERSALINHERIT, "Fix Generated Traversals");
 		specialMenu->AppendSeparator();
 		specialMenu->Append(SPECIAL_DEBUG_DUMPBUFFERS, "Write Allocator Data",
 			"For debugging. Writes parser allocation data for the current tab to a file.");
@@ -137,12 +156,16 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		wxMenu* helpMenu = new wxMenu;
 		helpMenu->Append(HELP_ABOUT, "About");
 
+		wxMenu* debugMenu = new wxMenu;
+		debugMenu->Append(DEBUG_MENUONE, "One");
+
 		wxMenuBar* bar = new wxMenuBar;
 		bar->Append(fileMenu, "File");
 		bar->Append(tabMenu, "Tab");
 		bar->Append(mhMenu, "Meathook");
 		bar->Append(specialMenu, "Advanced");
 		bar->Append(helpMenu, "Help");
+		bar->Append(debugMenu, "Debug");
 		SetMenuBar(bar);
 	}
 
@@ -319,10 +342,12 @@ void EntityFrame::onTabChanged(wxAuiNotebookEvent& event)
 	if (activeTab->filePath == "") {
 		SetTitle("EntitySlayer");
 		fileMenu->Enable(FILE_SAVE, false);
+		fileMenu->Enable(FILE_RELOAD, false);
 	}
 	else {
 		SetTitle(activeTab->filePath + " - EntitySlayer");
 		fileMenu->Enable(FILE_SAVE, true);
+		fileMenu->Enable(FILE_RELOAD, true);
 	}
 	tabMenu->Check(TAB_COMPRESS, activeTab->compressOnSave);
 	tabMenu->Check(TAB_NUMBERLISTS, activeTab->autoNumberLists);
@@ -540,6 +565,38 @@ void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
 	openFiles(selectedFiles);
 }
 
+void EntityFrame::detectExternalEdits()
+{
+	//std::error_code code;
+	//std::filesystem::file_time_type modTime = std::filesystem::last_write_time(std::string(activeTab->filePath), code);
+	//wxLogMessage("%s", code.message());
+	//if(modTime > activeTab->openTime)
+	//	wxLogMessage("External edits detected");
+	//if(modTime == std::filesystem::file_time_type::min())
+	//	wxLogMessage("Minimum");
+	//else
+	//	wxLogMessage("No External Edits detected");
+
+	//if(!code)
+	//	wxLogMessage("No Error");
+}
+
+void EntityFrame::onWindowFocus(wxActivateEvent& event)
+{
+	if(event.GetActive())
+		detectExternalEdits();
+}
+
+void EntityFrame::onFileReload(wxCommandEvent& event)
+{
+	if (activeTab->filePath == "")
+		return;
+	if (wxMessageBox(activeTab->filePath, "Reloading will discard unsaved changes. Proceed?",
+		wxICON_WARNING | wxYES_NO | wxNO_DEFAULT, this) != wxYES)
+		return;
+	activeTab->reloadFile();
+}
+
 void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 {
 	// This will be a newly created temp. file dumped from meathook,
@@ -593,7 +650,7 @@ void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 	// Reconfigure tab
 	activeTab->tabName = saveFileDialog.GetFilename();
 	activeTab->filePath = path;
-	activeTab->fileUpToDate = false;
+	activeTab->Parser->MarkFileOutdated();
 	activeTab->saveFile();
 
 	// Reconfigure Book's perspective of tab
@@ -602,6 +659,7 @@ void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 	else book->SetPageText(tabIndex, activeTab->tabName);
 	SetTitle(activeTab->filePath + " - EntitySlayer");
 	fileMenu->Enable(FILE_SAVE, true);
+	fileMenu->Enable(FILE_RELOAD, true);
 }
 
 void EntityFrame::onReloadConfigFile(wxCommandEvent& event)
@@ -618,7 +676,7 @@ void EntityFrame::onReloadConfigFile(wxCommandEvent& event)
 void EntityFrame::onCompressCheck(wxCommandEvent& event)
 {
 	activeTab->compressOnSave = event.IsChecked();
-	activeTab->fileUpToDate = false; // Allows saving unedited file when compression toggled
+	activeTab->Parser->MarkFileOutdated(); // Allows saving unedited file when compression toggled
 }
 
 void EntityFrame::onNumberListCheck(wxCommandEvent& event)
@@ -641,7 +699,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 4 [Append Menu Enums, File Menu Expansion]");
+	info.SetVersion("BETA 4.X DEBUG BUILD");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -671,7 +729,7 @@ bool EntityFrame::ClearMHTab()
 		book->SetPageText(index, mhTab->tabName);
 		mhTab->compressOnSave_ForceDisable = false;
 		if(mhTab->compressOnSave)
-			mhTab->fileUpToDate = false;
+			mhTab->Parser->MarkFileOutdated();
 		mhTab = nullptr;
 		return true;
 	}
@@ -692,7 +750,7 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 		if (activeTab->compressOnSave) {
 			wxMessageBox("Meathook cannot load compressed files. Compression-on-save has been disabled for this file.",
 				"Oodle Compression", wxICON_WARNING | wxOK);
-			activeTab->fileUpToDate = false;
+			activeTab->Parser->MarkFileOutdated();
 		}
 
 		/*
@@ -823,6 +881,11 @@ void EntityFrame::onSpecial_PropMovers(wxCommandEvent &event)
 	activeTab->action_PropMovers();
 }
 
+void EntityFrame::onSpecial_TraversalInherits(wxCommandEvent& event)
+{
+	activeTab->action_FixTraversals();
+}
+
 void EntityFrame::onSpecial_DumpAllocatorInfo(wxCommandEvent& event)
 {
 	wxFileDialog saveFileDialog(this, "Save File", wxEmptyString, "EntitySlayer_AllocData.txt",
@@ -833,4 +896,14 @@ void EntityFrame::onSpecial_DumpAllocatorInfo(wxCommandEvent& event)
 
 	std::string path(saveFileDialog.GetPath());
 	activeTab->Parser->logAllocatorInfo(true, false, true, path);
+}
+
+void EntityFrame::onDebugMenuOne(wxCommandEvent& event)
+{
+	//TIMESTART
+	//std::string buffer;
+	////buffer.reserve(45000000);
+	//activeTab->root->generateText(buffer);
+	//TIMESTOP("Generation Time: ");
+	wxLogMessage("%zu", sizeof(EntNode));
 }

@@ -6,7 +6,7 @@
 
 const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
 
-EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false), PARSEMODE(ParsingMode::ENTITIES)
+EntityParser::EntityParser() : fileWasCompressed(false), PARSEMODE(ParsingMode::ENTITIES)
 {
 	// Cannot append a null character to a string? Hence const char* instead
 	const char* rawText = "Version 7\nHierarchyVersion 1\0";
@@ -19,7 +19,7 @@ EntityParser::EntityParser() : root(NodeType::ROOT), fileWasCompressed(false), P
 }
 
 EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, const bool debug_logParseTime)
-	: root(NodeType::ROOT), PARSEMODE(mode)
+	: PARSEMODE(mode)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
 	std::ifstream file(filepath, std::ios_base::binary); // Binary mode 50% faster than 'in' mode, keeps CR chars
@@ -251,6 +251,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 		if(parent != &root) // Don't waste time reordering the root children, there shouldn't be a list there
 			fixListNumberings(parent, false, false);
 	}
+	fileUpToDate = false;
 	return outcome;
 }
 
@@ -292,6 +293,8 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 		if (highlight)
 			view->Select(item);
 	}
+
+	fileUpToDate = false;
 }
 
 /* 
@@ -355,6 +358,7 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 		if(highlight)
 			view->Select(childItem);
 	}
+	fileUpToDate = false;
 }
 
 void EntityParser::fixListNumberings(EntNode* parent, bool recursive, bool highlight)
@@ -941,16 +945,6 @@ void EntityParser::setNodeChildren(EntNode* parent, const size_t startIndex)
 	tempChildren.resize(startIndex);
 }
 
-bool EntityParser::isLetter()
-{
-	return ((unsigned int)(*ch | 32) - 97) < 26U;
-}
-
-bool EntityParser::isNum()
-{
-	return ((unsigned)*ch - '0') < 10u;
-}
-
 void EntityParser::assertLastType(TokenType requiredType)
 {
 	if (lastTokenType != requiredType)
@@ -973,6 +967,10 @@ void EntityParser::TokenizeAdjustValue()
 
 void EntityParser::Tokenize() 
 {
+	// Faster than STL isalpha(char) and isdigit(char) functions
+	#define isLetter (((unsigned int)(*ch | 32) - 97) < 26U)
+	#define isNum (((unsigned)*ch - '0') < 10u)
+
 	LABEL_TOKENIZE_START:
 	switch (*ch) // Not auto-incrementing should eliminate unnecessary arithmetic operations
 	{                     // at the cost of needing to manually it++ in additional areas
@@ -1048,6 +1046,7 @@ void EntityParser::Tokenize()
 			}
 		}
 		else throw Error("Invalid Comment Syntax");
+
 
 		// Todo
 		//case '(':
@@ -1140,7 +1139,7 @@ void EntityParser::Tokenize()
 
 		default:
 		{
-			if (!isLetter() && *ch != '_') {
+			if (!isLetter && *ch != '_') {
 				if(*ch != '%' || PARSEMODE != ParsingMode::PERMISSIVE)
 					throw Error("Unrecognized character");
 			}
@@ -1168,7 +1167,7 @@ void EntityParser::Tokenize()
 				break;
 
 				default:
-				if (isLetter() || isNum() || *ch == '_')
+				if (isLetter || isNum || *ch == '_')
 					goto LABEL_ID_START;
 				if(*ch == '%' && PARSEMODE == ParsingMode::PERMISSIVE)
 					goto LABEL_ID_START;

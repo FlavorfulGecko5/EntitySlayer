@@ -2,6 +2,7 @@
 #include "wx/collpane.h"
 #include "wx/splitter.h"
 #include "EntityParser.h"
+//#include <filesystem>
 
 class EntityEditor;
 class FilterCtrl;
@@ -12,7 +13,7 @@ class EntityTab : public wxPanel
 	public:
 	wxString tabName;
 	wxString filePath;
-	bool fileUpToDate = true;
+	//std::filesystem::file_time_type openTime = std::filesystem::file_time_type::min();
 	bool compressOnSave;
 	bool compressOnSave_ForceDisable = false; // If true, disables compression regardless of setting
 	bool autoNumberLists = true;
@@ -46,6 +47,7 @@ class EntityTab : public wxPanel
 	void applyFilters(bool clearAll);
 	void SearchForward();
 	void SearchBackward();
+	void reloadFile();
 	bool saveFile();
 	int CommitEdits();
 	void UndoRedo(bool undo);
@@ -79,6 +81,7 @@ class EntityTab : public wxPanel
 	void onFilterMenuShowHide(wxCollapsiblePaneEvent& event);
 
 	void action_PropMovers();
+	void action_FixTraversals();
 
 	private:
 	wxDECLARE_EVENT_TABLE();

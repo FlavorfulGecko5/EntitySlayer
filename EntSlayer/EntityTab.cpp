@@ -84,6 +84,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		}
 
 		Parser = new EntityParser(std::string(path), mode, true);
+		//openTime = std::filesystem::last_write_time(std::string(path));
 	}
 		
 	compressOnSave = Parser->wasFileCompressed();
@@ -218,12 +219,12 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 
 bool EntityTab::IsNewAndUntouched()
 {
-	return filePath == "" && fileUpToDate && !editor->Modified();
+	return filePath == "" && Parser->FileUpToDate() && !editor->Modified();
 }
 
 bool EntityTab::UnsavedChanges()
 {
-	return !fileUpToDate || editor->Modified();
+	return !Parser->FileUpToDate() || editor->Modified();
 }
 
 void EntityTab::setAppendMenu()
@@ -363,6 +364,25 @@ void EntityTab::SearchBackward()
 	searchBar->initiateSearch(true);
 }
 
+void EntityTab::reloadFile()
+{
+	try {
+		EntityParser* reloaded = new EntityParser(std::string(filePath), Parser->getMode(), true);
+		editor->SetActiveNode(nullptr);
+		Parser = reloaded;
+		root = reloaded->getRoot();
+		//fileUpToDate = true;
+
+		view->AssociateModel(reloaded);
+		view->Expand(wxDataViewItem(root));
+		applyFilters(false);
+	}
+	catch (std::runtime_error e) {
+		wxString msg = wxString::Format("File Reload Cancelled\n\n%s", e.what());
+		wxMessageBox(msg, filePath, wxICON_ERROR | wxOK | wxCENTER, this);
+	}
+}
+
 /*
 * Returns true if the file was saved, otherwise false
 */
@@ -374,14 +394,14 @@ bool EntityTab::saveFile()
 	if (commitResult > 0)
 		editor->SetActiveNode(nullptr);
 
-	if (fileUpToDate) return false; // Need to check this when commitResult <= 0
+	if (Parser->FileUpToDate()) return false; // Need to check this when commitResult <= 0
 
-	root->writeToFile(std::string(filePath), compressOnSave && !compressOnSave_ForceDisable);
+	Parser->WriteToFile(std::string(filePath), compressOnSave && !compressOnSave_ForceDisable);
 
 	if (commitResult < 0)
 		wxMessageBox("File was saved. But you must fix syntax errors before saving contents of text box.",
 			"File Saved", wxICON_WARNING | wxOK);
-	fileUpToDate = true;
+	//fileUpToDate = true;
 	wxLogMessage("Saving Finished");
 	return true;
 }
@@ -421,7 +441,7 @@ int EntityTab::CommitEdits()
 	//	
 	//}
 
-	fileUpToDate = false;
+	//fileUpToDate = false;
 	return 1;
 }
 
@@ -442,21 +462,11 @@ void EntityTab::UndoRedo(bool undo)
 
 	wxLogMessage("Undo/Redo on node tree executed successfully");
 
-	// TODO: Figure out how to re-add auto-selection. For now, set nullptr
-	// as the active node
-	// POSSIBILITY: Setup and allow multi-selection? Select each added/changed node?
+	// Note: Originally, I wanted undo / redo to set the active node to
+	// one that was restored by the undo / redo operation. Not really
+	// possible with group commands at the moment though
 	editor->SetActiveNode(nullptr);
-	fileUpToDate = false;
-
-	//if (addedItems.size() > 0)
-	//{
-	//	view->Select(addedItems[0]);
-	//	editor->SetActiveNode(outcome.addedNodes[0]);
-	//}
-	//else {
-	//	view->Select(parentItem);
-	//	editor->SetActiveNode(outcome.parent);
-	//}
+	//fileUpToDate = false;
 }
 
 void EntityTab::onDataviewChar(wxKeyEvent& event)
@@ -635,7 +645,7 @@ void EntityTab::onNodeContextAccelerator(wxCommandEvent& event)
 				else {
 					Parser->PushGroupCommand();
 					editor->SetActiveNode(nullptr); // Todo: Adjust this? (Also perhaps merge this and paste function? This basically copies from it's logic)
-					fileUpToDate = false;
+					//fileUpToDate = false;
 					wxLogMessage("Append Successful");
 				}
 			}
@@ -707,7 +717,7 @@ void EntityTab::onPaste(wxCommandEvent& event)
 			else {
 				Parser->PushGroupCommand();
 				editor->SetActiveNode(nullptr); // Todo: Adjust this?
-				fileUpToDate = false;
+				//fileUpToDate = false;
 			}
 		}
 		else wxLogMessage("Could not paste non-text content");
@@ -743,7 +753,7 @@ void EntityTab::onDeleteSelectedNodes(wxCommandEvent& event)
 		}
 	}
 	Parser->PushGroupCommand();
-	fileUpToDate = false;
+	//fileUpToDate = false;
 	wxLogMessage("Deleted %i nodes and their children", numDeletions);
 }
 
@@ -776,7 +786,7 @@ void EntityTab::onSetSpawnPosition(wxCommandEvent& event)
 	else Parser->EditTree(text, &edit, edit.getChildIndex(&spawnPosition), 1, false, true);
 
 	Parser->PushGroupCommand();
-	fileUpToDate = false;
+	//fileUpToDate = false;
 }
 
 void EntityTab::onSetSpawnOrientation(wxCommandEvent& event)
@@ -808,7 +818,7 @@ void EntityTab::onSetSpawnOrientation(wxCommandEvent& event)
 	else Parser->EditTree(text, &edit, edit.getChildIndex(&spawnOrientation), 1, false, true);
 
 	Parser->PushGroupCommand();
-	fileUpToDate = false;
+	//fileUpToDate = false;
 }
 
 void EntityTab::onTeleportToEntity(wxCommandEvent& event)
@@ -993,5 +1003,34 @@ void EntityTab::action_PropMovers()
 	wxLogMessage("Finished Binding Props to Movers");
 
 	Parser->PushGroupCommand();
-	fileUpToDate = false;
+	//fileUpToDate = false;
+}
+
+void EntityTab::action_FixTraversals()
+{
+	std::string inheritLine = " inherit = \"info/traversal\"; ";
+
+	if(CommitEdits() < 0)
+		return;
+	editor->SetActiveNode(nullptr);
+
+	int numNodes = 0;
+	for (int i = 0, max = root->getChildCount(); i < max; i++) 
+	{
+		EntNode* entity = root->ChildAt(i);
+		EntNode& defNode = (*entity)["entityDef"];
+
+		// Check if it's a traversal node, and if so, if the inherit line exists
+		if (defNode["class"].getValueUQ() == "idInfoTraversal"
+			&& &defNode["inherit"] == EntNode::SEARCH_404) {
+
+			Parser->EditTree(inheritLine, &defNode, 0, 0, false, false);
+			numNodes++;
+		}
+	}
+
+	wxLogMessage("Inherits added for %i traversal entities", numNodes);
+
+	Parser->PushGroupCommand();
+	//fileUpToDate = false;
 }

@@ -54,7 +54,7 @@ class EntityParser : public wxDataViewModel {
 	private:
 	const ParsingMode PARSEMODE;
 	bool fileWasCompressed;
-	EntNode root;
+	EntNode root = EntNode(NodeType::ROOT);
 	BlockAllocator<char> textAlloc = BlockAllocator<char>(1000000);         // Allocator for node name/value buffers
 	BlockAllocator<EntNode> nodeAlloc = BlockAllocator<EntNode>(1000);      // Allocator for the nodes
 	BlockAllocator<EntNode*> childAlloc =  BlockAllocator<EntNode*>(30000); // Allocator for node child buffers
@@ -66,13 +66,27 @@ class EntityParser : public wxDataViewModel {
 	EntNode** rootchild_buffer = nullptr;
 	int rootchild_capacity = 0;
 
+	// Internally tracks whether edits have been written to a file
+	bool fileUpToDate = true;
+
 	/* Accessors */
 	public:
 	EntNode* getRoot();
 	bool wasFileCompressed();
+	bool FileUpToDate() { return fileUpToDate;}
+	ParsingMode getMode() { return PARSEMODE; };
 
 	/* For Debugging */
 	void logAllocatorInfo(bool includeBlockList, bool logToLogger, bool logToFile, const std::string filepath = "");
+
+	void MarkFileOutdated() {
+		fileUpToDate = false;
+	}
+
+	void WriteToFile(const std::string& filepath, bool compress) {
+		root.writeToFile(filepath, compress);
+		fileUpToDate = true;
+	}
 
 	/*
 	* ==================
@@ -164,12 +178,6 @@ class EntityParser : public wxDataViewModel {
 	/*
 	* TOKENIZATION FUNCTIONS
 	*/
-
-	/* Used when tokenizing. Faster than standard library isalpha(char) function */
-	inline bool isLetter();
-
-	/* Used when tokenizing. Marginally faster than STL isdigit(char) function */
-	inline bool isNum();
 
 	/* Throws an error if the last - parsed token is not of the required type */
 	inline void assertLastType(TokenType requiredType);
