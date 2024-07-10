@@ -29,7 +29,11 @@ class EntNode
 	int valLength = 0;
 	int childCount = 0;
 	NodeType TYPE = NodeType::UNDESIGNATED;
-	bool hidden = false;
+
+	// If false, don't display this or it's children in a dataview tree GUI.
+	// Setting this to true by default means newly added nodes are always displayed
+	// regardless of what filters are being applied (Possible todo: test if they pass filters first?)
+	bool filtered = true; 
 
 	public:
 	EntNode() {}
@@ -73,7 +77,7 @@ class EntNode
 
 	EntNode* getParent() { return parent; }
 
-	bool HasParent() {return parent == nullptr;}
+	bool HasParent() {return parent != nullptr;}
 
 	EntNode** getChildBuffer() { return children; }
 
@@ -92,6 +96,18 @@ class EntNode
 
 	EntNode* ChildAt(int index) {
 		return children[index];
+	}
+
+	// Checks whether node is filtered out, either by itself or one of it's ancestors
+	bool isFiltered() {
+		EntNode* node = this;
+
+		while (node->HasParent()) {
+			if(!node->filtered)
+				return false;
+			node = node->parent;
+		}
+		return node->filtered;
 	}
 
 	// More generally, get the second ancestor

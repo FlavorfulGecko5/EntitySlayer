@@ -113,6 +113,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	initiateParse(text, &tempRoot, parent, outcome);
 	if(!outcome.success) return outcome;
 
+	// Populate these with nodes we might need to remove/add to the dataview
 	wxDataViewItemArray removedNodes;
 	wxDataViewItemArray addedNodes;
 
@@ -129,7 +130,8 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 		reverse.text.push_back('\n');
 
 		// Deallocate deleted nodes
-		removedNodes.Add(wxDataViewItem(n));
+		if(n->filtered) // Not all nodes we're removing may be filtered in
+			removedNodes.Add(wxDataViewItem(n));
 		freeNode(n);
 	}
 
@@ -138,66 +140,43 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	{
 		EntNode* n = tempRoot.children[i];
 		n->parent = parent;
-		addedNodes.Add(wxDataViewItem(n));
+		if(n->filtered) // Future-proofing
+			addedNodes.Add(wxDataViewItem(n));
 	}
 	
 	/* 
 	* Common Steps for Each Branch:
-	* 1. Determine if we should alert the model
-	* 2. Move everything into the new child buffer
-	* 3. Deallocate the old child buffers
-	* 4. Assign the new child buffer/child count to the parent
+	* 1. Move everything into the new child buffer
+	* 2. Deallocate the old child buffers
+	* 3. Assign the new child buffer/child count to the parent
 	*/
-	bool alertModel = true;
 	int newNumChildren = parent->childCount + tempRoot.childCount - removeCount;
 	if (parent == &root)
 	{ 
-		// If it's the root node, we always alert the model.
-		// However, not every entity we're removing may be filtered in, so we must check them
-		removedNodes.clear();
-		for (int i = 0; i < removeCount; i++)
-		{
-			int index = insertionIndex + i;
-			if(rootchild_filter[index])
-				removedNodes.Add(wxDataViewItem(rootchild_buffer[index]));
-		}
-
 		if (newNumChildren > rootchild_capacity) 
 		{ // Rare enough that we don't care about optimizing recopy versus bloating this branch with more code
 			rootchild_capacity = newNumChildren + 1000;
 
 			EntNode** newBuffer = new EntNode*[rootchild_capacity];
-			bool* newFilter = new bool[rootchild_capacity];
-			for (int i = 0, max = root.childCount; i < max; i++) {
+			for (int i = 0, max = root.childCount; i < max; i++)
 				newBuffer[i] = rootchild_buffer[i];
-				newFilter[i] = rootchild_filter[i];
-			}
 				
 			delete[] rootchild_buffer;
-			delete[] rootchild_filter;
 			rootchild_buffer = newBuffer;
-			rootchild_filter = newFilter;
 			root.children = rootchild_buffer;
 		}
 		int difference = newNumChildren - root.childCount;
 		int min = insertionIndex + removeCount;
 		if (difference > 0) // Must shift to right to expand room
-			for (int i = root.childCount - 1; i >= min; i--) {
+			for (int i = root.childCount - 1; i >= min; i--)
 				rootchild_buffer[i + difference] = rootchild_buffer[i];
-				rootchild_filter[i + difference] = rootchild_filter[i];
-			}
 				
 		if (difference < 0) // Must shift left to contract space
-			for (int i = min, max = root.childCount; i < max; i++) {
+			for (int i = min, max = root.childCount; i < max; i++)
 				rootchild_buffer[i + difference] = rootchild_buffer[i];
-				rootchild_filter[i + difference] = rootchild_filter[i];
-			}
 
-		for (int inc = insertionIndex, i = 0, max = tempRoot.childCount; i < max; inc++, i++) {
+		for (int inc = insertionIndex, i = 0, max = tempRoot.childCount; i < max; inc++, i++)
 			rootchild_buffer[inc] = tempRoot.children[i];
-			rootchild_filter[inc] = true; // New nodes will be filtered-in and shown to the user
-			// Possible future development: first test whether they pass the filters?
-		}
 
 		// Deallocate old data
 		childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
@@ -207,12 +186,6 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	}
 	else 
 	{
-		// For a non-root parent, we should only alert the model if it's
-		// entity ancestor is filtered in
-		EntNode* entity = parent->getEntity();
-		int entityIndex = root.getChildIndex(entity);
-		if(!rootchild_filter[entityIndex]) alertModel = false;
-
 		EntNode** newChildBuffer = childAlloc.reserveBlock(newNumChildren);
 
 		// Copy everything into the new child buffer
@@ -234,7 +207,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	}
 
 	// Must update model AFTER node is given it's new child data
-	if (alertModel)
+	if (parent->isFiltered()) // Filtering checks are optimized so we only check parent + ancestor filter status once, right here
 	{
 		wxDataViewItem parentItem(parent);
 		ItemsDeleted(parentItem, removedNodes);
@@ -279,14 +252,8 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 	node->nameLength = nameLength;
 	node->valLength = (int)text.length() - nameLength;
 
-	// Determine whether to alert model
-	bool alertModel = true;
-	EntNode* entity = node->getEntity(); // Todo: add safeguards so node can't be the root
-	int entityIndex = root.getChildIndex(entity);
-	if(!rootchild_filter[entityIndex]) alertModel = false;
-
 	// Alert model
-	if (alertModel)
+	if (node->isFiltered()) // Todo: add safeguards so node can't be the root
 	{
 		wxDataViewItem item(node);
 		ItemChanged(item);
@@ -314,42 +281,20 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 	// Assemble data
 	EntNode** buffer = parent->children;
 	EntNode* child = buffer[childIndex];
-	bool parentIsRoot = parent == &root;
-	bool alertModel = true;
-	{
-		/*
-		* We should alert the model when:
-		* Parent is Root: Only if the node is filtered in
-		* Parent isn't Root: Only if the entity ancestor is filtered in
-		* Root will never be the node we're moving, so that simplifies our boolean logic
-		*/
-		EntNode* entity = child->getEntity();
-		int entityIndex = root.getChildIndex(entity);
-		if(!rootchild_filter[entityIndex]) alertModel = false;
-	}
 
 	// Shift nodes around
-	if (childIndex < insertionIndex)  { // Shift middle elements up
+	if (childIndex < insertionIndex)  // Shift middle elements up
 		for (int i = childIndex; i < insertionIndex; i++)
 			buffer[i] = buffer[i + 1];
-		if(parentIsRoot) 
-			for (int i = childIndex; i < insertionIndex; i++)
-				rootchild_filter[i] = rootchild_filter[i+1];
-	}
 
-	else  { // Shift middle elements down
+	else  // Shift middle elements down
 		for (int i = childIndex; i > insertionIndex; i--)
 			buffer[i] = buffer[i - 1];
-		if(parentIsRoot)
-			for(int i = childIndex; i > insertionIndex; i--)
-				rootchild_filter[i] = rootchild_filter[i-1];
-	}
 	buffer[insertionIndex] = child;
-	if(parentIsRoot)
-		rootchild_filter[insertionIndex] = alertModel;
 	
-	// Notify model
-	if (alertModel)
+	// Only alert model if node is filtered in 
+	// We assume Root will never be the node we're moving (todo: add safeguards to ensure this)
+	if (child->isFiltered())
 	{
 		wxDataViewItem parentItem(parent);
 		wxDataViewItem childItem(child);
@@ -618,7 +563,6 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 			// be in the temporary vector
 			root.childCount = (int)tempChildren.size();
 			rootchild_capacity = root.childCount + 1000;
-			rootchild_filter = new bool[rootchild_capacity];
 			rootchild_buffer = new EntNode*[rootchild_capacity];
 			root.children = rootchild_buffer;
 			
@@ -626,7 +570,6 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 			for (int i = 0, max = root.childCount; i < max; i++) {
 				rootchild_buffer[i] = tempChildren[i];
 				rootchild_buffer[i]->parent = rootAddr;
-				rootchild_filter[i] = true;
 			}
 				
 			tempChildren.clear();
@@ -730,7 +673,6 @@ void EntityParser::parseContentsFile(EntNode* node) {
 			// be in the temporary vector
 			root.childCount = (int)tempChildren.size();
 			rootchild_capacity = root.childCount + 1000;
-			rootchild_filter = new bool[rootchild_capacity];
 			rootchild_buffer = new EntNode*[rootchild_capacity];
 			root.children = rootchild_buffer;
 			
@@ -738,7 +680,6 @@ void EntityParser::parseContentsFile(EntNode* node) {
 			for (int i = 0, max = root.childCount; i < max; i++) {
 				rootchild_buffer[i] = tempChildren[i];
 				rootchild_buffer[i]->parent = rootAddr;
-				rootchild_filter[i] = true;
 			}
 				
 			tempChildren.clear();
@@ -1205,10 +1146,7 @@ void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool c
 		//wxLogMessage("%s", result->getNameWX());
 
 		// Root should never have text, so this should be safe
-		EntNode* entity = result->getEntity(); 
-		int entityIndex = root.getChildIndex(entity);
-
-		if (rootchild_filter[entityIndex]) {
+		if (result->isFiltered()) {
 			wxDataViewItem item(result);
 			view->UnselectAll();
 			view->Select(item);
@@ -1219,6 +1157,7 @@ void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool c
 			return;
 		}
 
+		// Set sentinel in first loop iteration
 		if(firstResult == nullptr) 
 			firstResult = result;
 		startAfter = result;
@@ -1333,7 +1272,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 			std::string_view classVal = entityDef["class"].getValue();
 			if (classFilters.count(std::string(classVal)) < 1) // TODO: OPTIMIZE ACCESS CASTING
 			{
-				rootchild_filter[i] = false;
+				entity->filtered = false;
 				continue;
 			}
 				
@@ -1344,7 +1283,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 			std::string_view inheritVal = entityDef["inherit"].getValue();
 			if (inheritFilters.count(std::string(inheritVal)) < 1) // TODO: OPTIMIZE CASTING
 			{
-				rootchild_filter[i] = false;
+				entity->filtered = false;
 				continue;
 			}
 		}
@@ -1369,7 +1308,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 			}
 			if (!hasLayer)
 			{
-				rootchild_filter[i] = false;
+				entity->filtered = false;
 				continue;
 			}
 		}
@@ -1399,7 +1338,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 					z = std::stof(std::string(zNode.getValue()));
 			}
 			catch (std::exception) {
-				rootchild_filter[i] = false;
+				entity->filtered = false;
 				continue;
 			}
 
@@ -1410,7 +1349,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 
 			if(distance2 > maxR2)
 			{
-				rootchild_filter[i] = false;
+				entity->filtered = false;
 				continue;
 			}
 		}
@@ -1435,13 +1374,13 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 			//	}
 			if(!containsText)
 			{
-				rootchild_filter[i] = false;
+				entity->filtered = false;
 				continue;
 			}
 		}
 
 		// Node has passed all filters and should be included in the filtered tree
-		rootchild_filter[i] = true;
+		entity->filtered = true;
 	}
 	EntityLogger::logTimeStamps("Time to Filter: ", start);
 }

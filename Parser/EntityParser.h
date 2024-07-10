@@ -43,7 +43,7 @@ class EntityParser : public wxDataViewModel {
 	~EntityParser()
 	{
 		delete[] rootchild_buffer;
-		delete[] rootchild_filter;
+		//delete[] rootchild_filter;
 	}
 
 	/*
@@ -328,7 +328,9 @@ class EntityParser : public wxDataViewModel {
 	// Using this new system we have full control over when we notify the control of changes - allowing us to cancel alerts
 	// for filtered-out nodes. With debug errors gone, we also no longer need to clear the parser's undo/redo history
 	// whenever we change filters
-	bool* rootchild_filter = nullptr; // Should be same size as child buffer. true = include, false = exclude
+	// 
+	// DEPRECATED: Filter system has been refactored to local node variables. However, the same logic as above still applies
+	//bool* rootchild_filter = nullptr; // Should be same size as child buffer. true = include, false = exclude
 
 	public:
 	wxDataViewCtrl* view = nullptr; // Must set this immediately after construction
@@ -390,22 +392,14 @@ class EntityParser : public wxDataViewModel {
 			array.Add(wxDataViewItem((void*)&root)); // !! This is how wxDataViewCtrl finds the root variable
 			return 1;
 		}
-
-		if (node == &root)
-		{
-			bool* boolInc = rootchild_filter;
-			EntNode** childInc = rootchild_buffer;
-			for (int i = 0, max = root.childCount; i < max; i++, childInc++, boolInc++)
-				if (*boolInc)
-					array.Add(wxDataViewItem(*childInc));
-			return array.size();
-		}
-
+		
 		EntNode** childBuffer = node->getChildBuffer();
 		int childCount = node->getChildCount();
+		array.reserve(childCount);
 		for (int i = 0; i < childCount; i++)
-			array.Add(wxDataViewItem((void*)childBuffer[i]));
-		return childCount;
+			if(childBuffer[i]->filtered)
+				array.Add(wxDataViewItem(childBuffer[i]));
+		return array.size();
 	}
 
 	wxDataViewItem GetParent(const wxDataViewItem& item) const override
