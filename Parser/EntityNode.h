@@ -25,9 +25,11 @@ class EntNode
 	EntNode* parent = nullptr;
 	EntNode** children = nullptr; // Unused by value nodes
 	char* textPtr = nullptr; // Pointer to text buffer with data [name][value]
-	int nameLength = 0;
-	int valLength = 0;
 	int childCount = 0;
+	int maxChildren = 0;
+	short nameLength = 0;
+	short valLength = 0;
+
 	NodeType TYPE = NodeType::UNDESIGNATED;
 
 	// If false, don't display this or it's children in a dataview tree GUI.

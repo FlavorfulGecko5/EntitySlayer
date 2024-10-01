@@ -107,6 +107,24 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 		EntityLogger::logTimeStamps("Parsing Duration: ", timeStart);
 }
 
+/*
+New strategy to prevent nodes with irregularly large numbers of children
+from creating runaway allocations. This implementation is more generalized
+and maintainable compared to the original solution meant to exclusively
+handle the large root child counts of .entities files
+*/
+int OptimalMaxChildCount(int childCount) {
+	if (childCount > 100) {
+		// More non-root nodes can have more than 100 children than you might initially believe
+		// Hence we should do multiplication instead of flat adding 1000 to every oversized childCount
+		int addition = childCount * 0.1;
+		if (addition > 1000)
+			addition = 1000;
+		return childCount + addition;
+	}
+	else return childCount;
+}
+
 ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew)
 {
 	ParseResult outcome;
@@ -154,60 +172,46 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	* 3. Assign the new child buffer/child count to the parent
 	*/
 	int newNumChildren = parent->childCount + tempRoot.childCount - removeCount;
-	if (parent == &root)
-	{ 
-		if (newNumChildren > rootchild_capacity) 
-		{ // Rare enough that we don't care about optimizing recopy versus bloating this branch with more code
-			rootchild_capacity = newNumChildren + 1000;
 
-			EntNode** newBuffer = new EntNode*[rootchild_capacity];
-			for (int i = 0, max = root.childCount; i < max; i++)
-				newBuffer[i] = rootchild_buffer[i];
-				
-			delete[] rootchild_buffer;
-			rootchild_buffer = newBuffer;
-			root.children = rootchild_buffer;
-		}
-		int difference = newNumChildren - root.childCount;
-		int min = insertionIndex + removeCount;
-		if (difference > 0) // Must shift to right to expand room
-			for (int i = root.childCount - 1; i >= min; i--)
-				rootchild_buffer[i + difference] = rootchild_buffer[i];
-				
-		if (difference < 0) // Must shift left to contract space
-			for (int i = min, max = root.childCount; i < max; i++)
-				rootchild_buffer[i + difference] = rootchild_buffer[i];
-
-		for (int inc = insertionIndex, i = 0, max = tempRoot.childCount; i < max; inc++, i++)
-			rootchild_buffer[inc] = tempRoot.children[i];
-
-		// Deallocate old data
-		childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
-
-		// Attach new data
-		root.childCount = newNumChildren;
-	}
-	else 
-	{
-		EntNode** newChildBuffer = childAlloc.reserveBlock(newNumChildren);
+	if (newNumChildren > parent->maxChildren) {
+		int newMaxChildren = OptimalMaxChildCount(newNumChildren);
+		EntNode** newChildBuffer = childAlloc.reserveBlock(newMaxChildren);
 
 		// Copy everything into the new child buffer
 		int inc = 0;
-		for(inc = 0; inc < insertionIndex; inc++)
+		for (inc = 0; inc < insertionIndex; inc++)
 			newChildBuffer[inc] = parent->children[inc];
 		for (int i = 0; i < tempRoot.childCount; i++)
 			newChildBuffer[inc++] = tempRoot.children[i];
-		for(int i = insertionIndex + removeCount; i < parent->childCount; i++)
+		for (int i = insertionIndex + removeCount; i < parent->childCount; i++)
 			newChildBuffer[inc++] = parent->children[i];
 
-		// Deallocate child buffers
-		childAlloc.freeBlock(parent->children, parent->childCount);
-		childAlloc.freeBlock(tempRoot.children, tempRoot.childCount);
-
+		// Deallocate old child buffer
+		childAlloc.freeBlock(parent->children, parent->maxChildren);
+		
 		// Finally, attach new data to the parent
-		parent->childCount = newNumChildren;
+		parent->maxChildren = newMaxChildren;
 		parent->children = newChildBuffer;
+		
 	}
+	else {
+		int difference = newNumChildren - parent->childCount;
+		int min = insertionIndex + removeCount;
+		if (difference > 0) // Must shift to right to expand room
+			for (int i = parent->childCount - 1; i >= min; i--)
+				parent->children[i + difference] = parent->children[i];
+					
+		if (difference < 0) // Must shift left to contract space
+			for (int i = min, max = parent->childCount; i < max; i++)
+				parent->children[i + difference] = parent->children[i];
+
+		for (int inc = insertionIndex, i = 0, max = tempRoot.childCount; i < max; inc++, i++)
+			parent->children[inc] = tempRoot.children[i];
+	}
+
+	// Common to both branches
+	childAlloc.freeBlock(tempRoot.children, tempRoot.maxChildren);
+	parent->childCount = newNumChildren;
 
 	// Must update model AFTER node is given it's new child data
 	if (parent->isFiltered()) // Filtering checks are optimized so we only check parent + ancestor filter status once, right here
@@ -464,7 +468,7 @@ void EntityParser::logAllocatorInfo(bool includeBlockList, bool logToLogger, boo
 	msg.append("\nRoot Child Buffer: ");
 	msg.append(std::to_string(root.childCount));
 	msg.append(" / ");
-	msg.append(std::to_string(rootchild_capacity));
+	msg.append(std::to_string(root.maxChildren));
 	msg.append(" Slots Filled");
 	msg.push_back('\n');
 
@@ -531,7 +535,7 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, EntNode* 
 		// then deallocate it's child buffer
 		for (int i = 0; i < tempRoot->childCount; i++)
 			freeNode(tempRoot->children[i]);
-		childAlloc.freeBlock(tempRoot->children, tempRoot->childCount);
+		childAlloc.freeBlock(tempRoot->children, tempRoot->maxChildren);
 
 		results.errorLineNum = errorLine;
 		results.errorMessage = err.what();
@@ -560,24 +564,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 	switch (lastTokenType)
 	{
 		default: // End, BraceClose, Assignment, Value_Number
-		if(node != &root)
-			setNodeChildren(node, childrenStart);
-		else {
-			// At this point, only the root children should
-			// be in the temporary vector
-			root.childCount = (int)tempChildren.size();
-			rootchild_capacity = root.childCount + 1000;
-			rootchild_buffer = new EntNode*[rootchild_capacity];
-			root.children = rootchild_buffer;
-			
-			EntNode* rootAddr = &root;
-			for (int i = 0, max = root.childCount; i < max; i++) {
-				rootchild_buffer[i] = tempChildren[i];
-				rootchild_buffer[i]->parent = rootAddr;
-			}
-				
-			tempChildren.clear();
-		}
+		setNodeChildren(node, childrenStart);
 		return;
 
 		case TokenType::COMMENT:
@@ -670,24 +657,7 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	}
 	if (lastTokenType != TokenType::IDENTIFIER)
 	{
-		if(node != &root)
-			setNodeChildren(node, childrenStart);
-		else {
-			// At this point, only the root children should
-			// be in the temporary vector
-			root.childCount = (int)tempChildren.size();
-			rootchild_capacity = root.childCount + 1000;
-			rootchild_buffer = new EntNode*[rootchild_capacity];
-			root.children = rootchild_buffer;
-			
-			EntNode* rootAddr = &root;
-			for (int i = 0, max = root.childCount; i < max; i++) {
-				rootchild_buffer[i] = tempChildren[i];
-				rootchild_buffer[i]->parent = rootAddr;
-			}
-				
-			tempChildren.clear();
-		}
+		setNodeChildren(node, childrenStart);
 		return;
 	}
 
@@ -833,7 +803,7 @@ void EntityParser::freeNode(EntNode* node)
 	{
 		for (int i = 0; i < node->childCount; i++)
 			freeNode(node->children[i]);
-		childAlloc.freeBlock(node->children, node->childCount);
+		childAlloc.freeBlock(node->children, node->maxChildren);
 	}
 
 	/*
@@ -877,7 +847,8 @@ void EntityParser::setNodeChildren(EntNode* parent, const size_t startIndex)
 	size_t s = tempChildren.size();
 	size_t childCount = s - startIndex;
 	parent->childCount = (int)childCount;
-	parent->children = childAlloc.reserveBlock(childCount);
+	parent->maxChildren = OptimalMaxChildCount(parent->childCount);
+	parent->children = childAlloc.reserveBlock(parent->maxChildren);
 
 	// Fill child buffer, assign parent values to children
 	EntNode **childrenPtr = parent->children, 
@@ -1174,7 +1145,7 @@ void EntityParser::refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox*
 	std::set<std::string_view> newClasses;
 	std::set<std::string_view> newInherits;
 
-	EntNode** children = rootchild_buffer;
+	EntNode** children = root.children;
 	int childCount = root.childCount;
 
 	newLayers.insert(std::string_view(FILTER_NOLAYERS.data() + 1, FILTER_NOLAYERS.length() - 2));
@@ -1266,7 +1237,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 	float maxR2 = spawnSphere.r * spawnSphere.r;
 
 	int childCount = root.childCount;
-	EntNode** childBuffer = rootchild_buffer;
+	EntNode** childBuffer = root.children;
 	for (int i = 0; i < childCount; i++)
 	{
 		EntNode* entity = childBuffer[i];

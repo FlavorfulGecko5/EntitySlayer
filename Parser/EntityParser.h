@@ -42,7 +42,6 @@ class EntityParser : public wxDataViewModel {
 	public:
 	~EntityParser()
 	{
-		delete[] rootchild_buffer;
 		//delete[] rootchild_filter;
 	}
 
@@ -58,13 +57,6 @@ class EntityParser : public wxDataViewModel {
 	BlockAllocator<char> textAlloc = BlockAllocator<char>(1000000);         // Allocator for node name/value buffers
 	BlockAllocator<EntNode> nodeAlloc = BlockAllocator<EntNode>(1000);      // Allocator for the nodes
 	BlockAllocator<EntNode*> childAlloc =  BlockAllocator<EntNode*>(30000); // Allocator for node child buffers
-
-	// Root node's child count is orders of magnitude larger than any other object node
-	// Repeated single-entity additions will create extremely large free blocks that cannot
-	// come close to being filled faster than they're created. Hence, it's smarter to dedicate
-	// a separate buffer, which we expand when necessary, to root children
-	EntNode** rootchild_buffer = nullptr;
-	int rootchild_capacity = 0;
 
 	// Internally tracks whether edits have been written to a file
 	bool fileUpToDate = true;
