@@ -371,6 +371,7 @@ void EntityTab::reloadFile()
 		editor->SetActiveNode(nullptr);
 		Parser = reloaded;
 		root = reloaded->getRoot();
+		reloaded->view = view;
 		//fileUpToDate = true;
 
 		view->AssociateModel(reloaded);
@@ -398,7 +399,7 @@ bool EntityTab::saveFile()
 
 	Parser->WriteToFile(std::string(filePath), compressOnSave && !compressOnSave_ForceDisable);
 
-	if (commitResult < 0)
+	if (commitResult < 0) // Logic Error: This won't pop up if editor is bugged while file is up to date
 		wxMessageBox("File was saved. But you must fix syntax errors before saving contents of text box.",
 			"File Saved", wxICON_WARNING | wxOK);
 	//fileUpToDate = true;
@@ -413,6 +414,7 @@ bool EntityTab::saveFile()
 */
 int EntityTab::CommitEdits()
 {
+	//wxLogMessage("CommitEdits");
 	if (!editor->Modified()) return 0;
 
 	EntNode* replacing = editor->Node();
@@ -427,21 +429,8 @@ int EntityTab::CommitEdits()
 	}
 	Parser->PushGroupCommand();
 
-	// Brainstorming:
-	//if (loadFirstNode)
-	//{
-	//	wxDataViewItemArray items;
-	//	view->GetSelections(items);
-	//	if(items.size() == 0)
-	//		editor->SetActiveNode(nullptr);
-	//	else editor->SetActiveNode((EntNode*)items[0].GetID());
-	//}
-	//else 
-	//{
-	//	
-	//}
-
-	//fileUpToDate = false;
+	// Note: Originally, I wanted to show the text of the first node added to the tree
+	// after a commit, but that's likely too complicated
 	return 1;
 }
 
@@ -506,6 +495,7 @@ void EntityTab::onDataviewChar(wxKeyEvent& event)
 /* Returns true if it's safe to show the right click menu or perform accelerator actions */
 bool EntityTab::dataviewMouseAction(wxDataViewItem item) 
 {
+	//wxLogMessage("Mouse Action");
 	EntNode* selection = (EntNode*)item.GetID();
 
 	// Goals:
@@ -515,10 +505,11 @@ bool EntityTab::dataviewMouseAction(wxDataViewItem item)
 		if(CommitEdits() < 0) return false;
 		editor->SetActiveNode(nullptr);
 	} else {
-		EntNode original(*selection);
-		if(CommitEdits() < 0) return false;
+		bool isDescendant = selection->IsDescendantOf(editor->Node());
+		int commitResult = CommitEdits();
+		if(commitResult < 0) return false;
 
-		if (!original.Equals(selection)) {
+		if (isDescendant && commitResult > 0) {
 			editor->SetActiveNode(nullptr); // Test if the selected node has been modified after committing
 			return false; // Shouldn't show right-click menu if node has been modified during commit
 		} else {

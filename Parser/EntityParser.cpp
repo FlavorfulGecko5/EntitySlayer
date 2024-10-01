@@ -3,6 +3,7 @@
 #include "Oodle.h"
 #include "EntityLogger.h"
 #include "EntityParser.h"
+#include "EntityEditor.h"
 
 const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
 
@@ -26,25 +27,27 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	if (!file.is_open())
 		throw std::runtime_error("Could not open file");
 
-	std::vector<char> rawText;
+	size_t rawLength = 0;
+	char* rawBytes = nullptr;
 	char* decompressedText = nullptr;
-	while (!file.eof())
-	{
-		char temp[2048];
-		file.read(temp, 2048);
-		rawText.insert(rawText.end(), temp, temp + file.gcount());
-	}
+
+	// Technically tellg() is not guaranteed by the standard to give us the length
+	// of the file...but in practice it does for binary streaming
+	file.seekg(0, std::ios_base::end);
+	rawLength = static_cast<size_t>(file.tellg());
+	rawBytes = new char[rawLength + 1]; // Leave room for the null char
+	file.seekg(0, std::ios_base::beg);
+	file.read(rawBytes, rawLength);
 	file.close();
 
-	if (rawText.size() > 16 && (unsigned char)rawText[16] == 0x8C) // Oodle compression signature
+	if (rawLength > 16 && (unsigned char)rawBytes[16] == 0x8C) // Oodle compression signature
 	{
 		fileWasCompressed = true;
-		char* rawData = rawText.data();
-		size_t decompressedSize = ((size_t*)rawData)[0];
-		size_t compressedSize = ((size_t*)rawData)[1];
+		size_t decompressedSize = ((size_t*)rawBytes)[0];
+		size_t compressedSize = ((size_t*)rawBytes)[1];
 		decompressedText = new char[decompressedSize + 1]; // +1 for the null char
 
-		if (!Oodle::DecompressBuffer(rawData + 16, compressedSize, decompressedText, decompressedSize))
+		if (!Oodle::DecompressBuffer(rawBytes + 16, compressedSize, decompressedText, decompressedSize))
 			throw std::runtime_error("Could not decompress .entities file");
 		decompressedText[decompressedSize] = '\0';
 		textView = std::string_view(decompressedText, decompressedSize + 1);
@@ -53,10 +56,9 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	else
 	{
 		fileWasCompressed = false;
-		rawText.push_back('\0');
-		rawText.shrink_to_fit();
-		textView = std::string_view(rawText.data(), rawText.size());
-		ch = rawText.data();
+		rawBytes[rawLength++] = '\0';
+		textView = std::string_view(rawBytes, rawLength);
+		ch = rawBytes;
 	}
 
 	if (debug_logParseTime)
@@ -100,6 +102,7 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	tempChildren.shrink_to_fit();
 	if (fileWasCompressed)
 		delete[] decompressedText;
+	delete[] rawBytes;
 	if (debug_logParseTime)
 		EntityLogger::logTimeStamps("Parsing Duration: ", timeStart);
 }
@@ -412,6 +415,7 @@ void EntityParser::ExecuteCommand(ParseCommand& cmd)
 
 bool EntityParser::Undo()
 {
+	// TODO: ADD SAFEGUARDS FOR UNDOING / REDOING WHILE UNPUSHED GROUP COMMAND EXISTS
 	// Nothing to undo
 	if (redoIndex == 0) return false;
 

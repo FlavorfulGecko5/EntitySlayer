@@ -136,18 +136,13 @@ class EntNode
 		return false;
 	}
 
-	bool Equals(const EntNode* b) 
-	{
-		if(    TYPE       != b->TYPE
-			|| parent     != b->parent
-			|| nameLength != b->nameLength
-			|| valLength  != b->valLength
-			|| textPtr    != b->textPtr
-			|| childCount != b->childCount
-			|| children   != b->children
-		)
-			return false;
-		return true;
+	bool IsDescendantOf(EntNode* ancestor) {
+		EntNode* current = this;
+		while (current != nullptr)
+			if(current == ancestor)
+				return true;
+			else current = current->parent;
+		return false;
 	}
 
 	/*
