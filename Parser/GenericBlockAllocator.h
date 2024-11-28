@@ -2,6 +2,12 @@
 #include <string>
 #include <sstream>
 
+#ifdef _DEBUG
+
+void BlockAllocatorUnitTest();
+
+#endif
+
 /*
 * Realistically speaking, this allocator has some flaws that require
 * users to utilize it the correct way to prevent errors:
@@ -14,10 +20,20 @@
 template <typename T>
 class BlockAllocator
 {
+	public:
+	struct FreeBlock {
+		T* start;
+		T* end;
+
+		size_t length() const {
+			return end - start;
+		}
+	};
+
 	private:
-	std::vector<T*> allBuffers;  // Contains every buffer made by this allocator
-	std::vector<T*> blockStarts; // Sorted starting addresses of free blocks
-	std::vector<T*> blockEnds;   // Sorted ending addresses of free blocks (exclusive)
+	std::vector<FreeBlock> FreeBlocks; // Contains all free blocks
+
+	std::vector<T*> allBuffers;    // Contains every buffer made by this allocator
 
 	T* buffer = nullptr;    // Active buffer
 	size_t max = 0;         // Capacity of the active buffer
@@ -37,21 +53,26 @@ class BlockAllocator
 			delete[] buff; 
 	}
 
+	/*
+	* For Debugging and Unit Testing
+	*/
+	const std::vector<FreeBlock>& GetBlocks() { return FreeBlocks; }
+
 	std::string toString(bool includeBlockList)
 	{
 		std::ostringstream buffer;
 		buffer << "Number of Buffers: " << allBuffers.size();
 		buffer << "\nActive Buffer Status: " << used << " / " << max << " (used / max)";
 		buffer << "\nNew Buffer Sizes: " << newBufferLength;
-		buffer << "\nAvailable Free Blocks: " << blockStarts.size();
+		buffer << "\nAvailable Free Blocks: " << FreeBlocks.size();
 
 		if (includeBlockList)
 		{
 			buffer << "\n\nFree Block Log (Addr / Capacity):\n-----";
-			for (size_t i = 0, s = blockStarts.size(); i < s; i++)
+			for (FreeBlock f : FreeBlocks)
 			{
-				size_t length = blockEnds[i] - blockStarts[i];
-				buffer << '\n' << (void*)blockStarts[i] << " / " << length;
+				size_t length = f.end - f.start;
+				buffer << '\n' << (void*)f.start << " / " << length;
 			}
 		}
 		buffer << '\n';
@@ -84,20 +105,20 @@ class BlockAllocator
 			// Do we have a FreeBlock of sufficient size available? 
 				// If yes, use that and return
 
-			for (size_t i = 0, s = blockStarts.size(); i < s; i++) 
+			for (size_t i = 0, s = FreeBlocks.size(); i < s; i++) 
 			{
-				size_t length = blockEnds[i] - blockStarts[i];
+				FreeBlock fb = FreeBlocks[i];
+				size_t length = fb.end - fb.start;
 				if (length > capacity)
 				{
-					block = blockStarts[i];
-					blockStarts[i] += capacity;
+					block = fb.start;
+					FreeBlocks[i].start += capacity;
 					return block;
 				}
 				else if (length == capacity)
 				{
-					block = blockStarts[i];
-					blockStarts.erase(blockStarts.begin() + i);
-					blockEnds.erase(blockEnds.begin() + i);
+					block = fb.start;
+					FreeBlocks.erase(FreeBlocks.begin() + i);
 					return block;
 				}
 			}
@@ -126,63 +147,49 @@ class BlockAllocator
 	void freeBlock(T* addr, size_t amount)
 	{
 		if(amount == 0) return;
-		T* endAddr = addr + amount;
+		FreeBlock newBlock = {addr, addr + amount};
 
-		size_t s = blockStarts.size();
-		size_t startIndex = 0, endIndex = 0;
-		bool hasStart = binarySearch(blockEnds, addr, 0, s, startIndex);
-			// startIndex gives a lower bound for where the endAddr may be
-		bool hasEnd = binarySearch(blockStarts, endAddr, startIndex, s, endIndex);
-
-		// Simplified rules based on our assumption of
-		// safe allocation/deallocation practices by users of this class:
-		// If it contains that border value, we erase it
-		// If it doesn't contain that border value, we add it
-		// This if/else chain swaps the value when we have one but not the other
-		if (hasStart) {
-			if (hasEnd)
-			{
-				blockEnds.erase(blockEnds.begin() + startIndex);
-				blockStarts.erase(blockStarts.begin() + endIndex);
-			}
-			else blockEnds[startIndex] = endAddr;
-		}
-		else if (hasEnd) {
-			blockStarts[endIndex] = addr;
-		}
-		else {
-			blockEnds.insert(blockEnds.begin() + startIndex, endAddr);
-			blockStarts.insert(blockStarts.begin() + startIndex, addr);
-		}
-	}
-
-	private:
-	/*
-	* Modified binary search algorithm. Finds index an element is located at. If the element is not present,
-	* it finds the index it can be inserted at.
-	* @param list
-	* @param target Element to find
-	* @param minimum Smallest index to search at
-	* @param maximum Largest index+1 to search at (up to the size of the vector)
-	* @param finalPosition The location/insertion index is placed here when found.
-	* 
-	* @returns true if the target is already inside the vector, otherwise false
-	*/
-	bool binarySearch(std::vector<T*> &list, T* target, size_t minimum, size_t maximum, size_t &finalPosition)
-	{
+		/* Binary Search through the FreeBlock array to find a matching block */
+		size_t s = FreeBlocks.size(); 
+		size_t minimum = 0, maximum = s;
+		
 		while (minimum < maximum) {
-			size_t midPoint = minimum + (maximum - minimum) / 2; // Truncation means the left value is favored.
-			if (list[midPoint] == target)
-			{
-				finalPosition = midPoint;
-				return true;
+			//size_t midPoint = minimum + (maximum - minimum) / 2; // TODO: (max + min) / 2 (This seems to truncate differently - defer for now)
+			size_t midPoint = (minimum + maximum) / 2;
+			FreeBlock fb = FreeBlocks[midPoint];
+			
+			if (fb.start == newBlock.end) {
+				// Two Possibilities:
+				// 1. The new block perfectly fills the gap between two currently existing blocks
+				// 2. Grow the midpoint block leftwards.
+				if (midPoint > 0 && FreeBlocks[midPoint - 1].end == newBlock.start) {
+					FreeBlocks[midPoint-1].end = fb.end;
+					FreeBlocks.erase(FreeBlocks.begin() + midPoint);
+				}
+				else {
+					FreeBlocks[midPoint].start = newBlock.start;
+				}
+				return;
 			}
-				
-			if (list[midPoint] > target)
+
+			if (fb.end == newBlock.start) {
+				// Same as above: the new block fills a gap, or extends the midpoint block rightwards
+				if (midPoint < maximum - 1 && FreeBlocks[midPoint + 1].start == newBlock.end) {
+					FreeBlocks[midPoint + 1].start = fb.start;
+					FreeBlocks.erase(FreeBlocks.begin() + midPoint);
+				}
+				else {
+					FreeBlocks[midPoint].end = newBlock.end;
+				}
+				return;
+			}
+
+			if(fb.start > newBlock.end)
 				maximum = midPoint;
-			else minimum = midPoint + 1; // +1 should favor an index with a larger value if it exists
+			else minimum = midPoint + 1; // + 1 should favor an index with a larger value if it exists
 		}
-		finalPosition = minimum; // Minimum will accurately be first insertable index, maximum will not
-		return false;
+
+		// Minimum will accurately be the first insertable index, maximum will not
+		FreeBlocks.insert(FreeBlocks.begin() + minimum, newBlock);
 	}
 };

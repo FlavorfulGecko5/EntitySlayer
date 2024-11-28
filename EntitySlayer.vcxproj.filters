@@ -60,6 +60,7 @@
     <ClCompile Include="EntSlayer\Config.cpp">
       <Filter>Source Files\EntSlayer</Filter>
     </ClCompile>
+    <ClCompile Include="Parser\GenericBlockAllocator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser\EntityLogger.h">
