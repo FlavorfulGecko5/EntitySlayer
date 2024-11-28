@@ -151,26 +151,10 @@ class EntNode
 	* Calling node is assumed to be the root
 	* id should be initialized to 0
 	*/
-	bool findPositionalID(EntNode* n, int& id)
-	{
-		if(this == n) return true;
-		id++;
+	bool findPositionalID(EntNode* n, int& id);
 
-		for(int i = 0; i < childCount; i++)
-			if(children[i]->findPositionalID(n, id)) return true;
-		return false;
-	}
+	EntNode* nodeFromPositionalID(int& decrementor);
 
-	EntNode* nodeFromPositionalID(int& decrementor)
-	{
-		if(decrementor == 0) return this;
-		for (int i = 0; i < childCount; i++)
-		{
-			EntNode* result = children[i]->nodeFromPositionalID(--decrementor);
-			if(result != nullptr) return result;
-		}
-		return nullptr;
-	}
 
 	/*
 	* Searches the node's children for a node whose name equals the given key
@@ -212,127 +196,20 @@ class EntNode
 	/*
 	* SEARCH FUNCTIONS
 	*/
+	bool searchText(const std::string& key, const bool caseSensitive, const bool exactLength);
 
-	bool searchText(const std::string& key, const bool caseSensitive, const bool exactLength)
-	{
-		if(exactLength && key.length() != nameLength + valLength) return false;
-		if (caseSensitive)
-		{
-			std::string_view s(textPtr, nameLength + valLength);
-			return s.find(key) != std::string_view::npos;
-		}
+	EntNode* searchDownwards(const std::string& key, const bool caseSensitive, const bool exactLength, const EntNode* startAfter = nullptr); // Todo: Remove this default parameter
 
-		int k = (int)key.length(), n = nameLength + valLength;
-		int max = n - k + 1; // Don't search where key can't fit.
-		int i = 0;
-
-		char fixedKey0 = key[0];
-		if(fixedKey0 > '`' && fixedKey0 < '{') fixedKey0 -= 32;
-
-		FAILED:
-		while (i < max)
-		{
-			char c1 = textPtr[i++];
-			if(c1 > '`' && c1 < '{') c1-= 32;
-
-			if (c1 == fixedKey0)
-			{
-				for (int j = 1; j < k; j++, i++)
-				{
-					c1 = textPtr[i]; if (c1 > '`' && c1 < '{') c1 -= 32;
-					char c2 = key[j]; if (c2 > '`' && c2 < '{') c2 -= 32;
-					// Do not increment i here: If we fail, we'll want to
-					// check the failing character to see if it == key[0]
-					if (c1 != c2)
-						goto FAILED;
-				}
-
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/*
-	* For searching downwards, we must:
-	* - Check all children of the starting node
-	* - recursively check all nodes listed after the starting node
-	*	- parents in parent chain do not need their values checked
-	*/
-	EntNode* searchDownwards(const std::string& key, const bool caseSensitive, const bool exactLength, const EntNode* startAfter=nullptr) // Todo: Remove this default parameter
-	{
-		int startIndex = 0;
-		if(startAfter != nullptr) // Ensures all children in the starting node are checked
-			while(startIndex < childCount)
-				if(children[startIndex++] == startAfter) break;
-
-		for (int i = startIndex; i < childCount; i++)
-		{
-			EntNode* result = children[i]->searchDownwardsLocal(key, caseSensitive, exactLength);
-			if(result != SEARCH_404) return result;
-		}
-
-		if(parent != nullptr)
-			return parent->searchDownwards(key, caseSensitive, exactLength, this);
-
-		// Wrap around by performing local search on root
-		return searchDownwardsLocal(key, caseSensitive, exactLength);
-	}
-
-	EntNode* searchDownwardsLocal(const std::string& key, const bool caseSensitive, const bool exactLength)
-	{
-		if(searchText(key, caseSensitive, exactLength)) return this;
-		for (int i = 0; i < childCount; i++)
-		{
-			EntNode* result = children[i]->searchDownwardsLocal(key, caseSensitive, exactLength);
-			if(result != SEARCH_404) return result;
-		}
-		return SEARCH_404;
-	}
-
-	/*
-	* Upward Searches require we:
-	* - Do not check the children of the starting node
-	* - Check children above the node
-	* - Parents have their text checked AFTER children are checked
-	*/
+	EntNode* searchDownwardsLocal(const std::string& key, const bool caseSensitive, const bool exactLength);
 
 	/*
 	* Searches up the node tree for the given key, starting with
 	* the node directly above this one.
-	* 
 	*/
-	EntNode* searchUpwards(const std::string &key, const bool caseSensitive, const bool exactLength)
-	{
-		// Wrap around by performing local search on root
-		if(parent == nullptr)
-			return searchUpwardsLocal(key, caseSensitive, exactLength);
+	EntNode* searchUpwards(const std::string& key, const bool caseSensitive, const bool exactLength);
 
-		// Check the parent's child nodes placed above this one
-		int startIndex = parent->childCount - 1;
-		while(startIndex > -1)
-			if(parent->children[startIndex--] == this) break;
+	EntNode* searchUpwardsLocal(const std::string& key, const bool caseSensitive, const bool exactLength);
 
-		for (int i = startIndex; i > -1; i--)
-		{
-			EntNode* result = parent->children[i]->searchUpwardsLocal(key, caseSensitive, exactLength);
-			if(result != SEARCH_404) return result;
-		}
-
-		if(parent->searchText(key, caseSensitive, exactLength)) return parent;
-		return parent->searchUpwards(key, caseSensitive, exactLength);
-	}
-
-	EntNode* searchUpwardsLocal(const std::string& key, const bool caseSensitive, const bool exactLength)
-	{
-		for(int i = childCount - 1; i > -1; i--)
-		{
-			EntNode* result = children[i]->searchUpwardsLocal(key, caseSensitive, exactLength);
-			if(result != SEARCH_404) return result;
-		} // Search children in reverse order, then the node's own text
-		if(searchText(key, caseSensitive, exactLength)) return this;
-		return SEARCH_404;
-	}
 
 	/*
 	* TEXT GENERATION
@@ -345,63 +222,8 @@ class EntNode
 		return buffer;
 	}
 
-	void generateText(std::string& buffer, int wsIndex = 0)
-	{
-		buffer.append(wsIndex, '\t');
-		buffer.append(textPtr, nameLength); // Root shouldn't have a name, so this should be fine
-		switch (TYPE)
-		{
-			case NodeType::UNDESIGNATED:
-			case NodeType::VALUE_LAYER:
-			case NodeType::COMMENT:
-			return;
+	void generateText(std::string& buffer, int wsIndex = 0);
 
-			case NodeType::ROOT:
-			wsIndex--;
-			break;
-
-			case NodeType::VALUE_FILE:
-			buffer.push_back(' ');
-			buffer.append(textPtr + nameLength, valLength);
-			return;
-
-			case NodeType::VALUE_DARKMETAL:
-			buffer.append(" = ");
-			buffer.append(textPtr + nameLength, valLength);
-			return;
-
-			case NodeType::VALUE_COMMON:
-			buffer.append(" = ");
-			buffer.append(textPtr + nameLength, valLength);
-			buffer.push_back(';');
-			return;
-
-			case NodeType::OBJECT_COMMON:
-			buffer.append(" = {\n");
-			break;
-
-			case NodeType::OBJECT_SIMPLE:
-			buffer.append(" {\n");
-			break;
-
-			case NodeType::OBJECT_ENTITYDEF:
-			buffer.push_back(' ');
-			buffer.append(textPtr + nameLength, valLength);
-			buffer.append(" {\n");
-			wsIndex--; 	// Entitydef objects have no inner indentation
-			break;      // and their closing brace is one whitespace char backwards
-		}
-		for (int i = 0; i < childCount; i++)
-		{
-			children[i]->generateText(buffer, wsIndex + 1);
-			buffer.push_back('\n');
-		}
-		if(wsIndex > 0) // If we generate entityDef text directly this will be -1
-			buffer.append(wsIndex, '\t');
-
-		if(TYPE != NodeType::ROOT) // Try to improve this later
-			buffer.push_back('}');
-	}
 
 	/*
 	* Converts the entirety of this node into text and saves
