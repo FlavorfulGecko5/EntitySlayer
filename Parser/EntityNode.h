@@ -1,22 +1,33 @@
 #include <string_view>
 
-enum class NodeType : unsigned char {
-	UNDESIGNATED,
-	COMMENT,
-	VALUE_LAYER,      // [Name]
-	VALUE_FILE,       // [Name] [Value]
-	VALUE_DARKMETAL,  // [Name] = [Value] Specifically for pvp_darkmetal.entities
-	VALUE_COMMON,     // [Name] = [Value];
-	OBJECT_COMMON,    // [Name] = { }
-	OBJECT_SIMPLE,    // [Name] { }
-	OBJECT_ENTITYDEF, // [Name] [Value] { }
-	ROOT
-};
-
 class wxString;
 class EntNode 
 {
 	friend class EntityParser;
+
+	public:
+	
+	/* Node Flags */
+	enum : uint16_t {
+		/* Individual Flags */
+
+		NF_Equals      = 1 << 0,
+		NF_Semicolon   = 1 << 1,
+		NF_Braces      = 1 << 2,
+		NF_NoIndent    = 1 << 3,
+
+		/* Node Flag Combos */
+
+		NFC_RootNode       = NF_NoIndent,
+		NFC_ObjSimple      = NF_Braces,
+		NFC_ObjCommon      = NF_Braces | NF_Equals,
+		NFC_ObjEntitydef   = NF_Braces | NF_NoIndent,
+		NFC_ValueLayer     = 0,
+		NFC_ValueFile      = 0,
+		NFC_ValueDarkmetal = NF_Equals,
+		NFC_ValueCommon    = NF_Equals | NF_Semicolon,
+		NFC_Comment        = 0
+	};
 
 	public:
 	static EntNode* SEARCH_404; // Returned by all search functions if a key-node is not found.
@@ -29,8 +40,9 @@ class EntNode
 	int maxChildren = 0;
 	short nameLength = 0;
 	short valLength = 0;
+	uint16_t nodeFlags = 0;
 
-	NodeType TYPE = NodeType::UNDESIGNATED;
+	//NodeType TYPE = NodeType::UNDESIGNATED;
 
 	// If false, don't display this or it's children in a dataview tree GUI.
 	// Setting this to true by default means newly added nodes are always displayed
@@ -40,13 +52,13 @@ class EntNode
 	public:
 	EntNode() {}
 
-	EntNode(NodeType p_TYPE) : TYPE(p_TYPE) {}
+	EntNode(uint16_t p_Flags) : nodeFlags(p_Flags) {}
 
 	/*
 	* ACCESSOR METHODS
 	*/
 
-	NodeType getType() {return TYPE;}
+	uint16_t getFlags() {return nodeFlags;}
 
 	std::string_view getName() {return std::string_view(textPtr, nameLength); }
 
@@ -72,6 +84,12 @@ class EntNode
 	wxString getValueWX();
 	wxString getNameWXUQ();
 	wxString getValueWXUQ();
+
+	bool IsComment();
+
+	bool IsRoot();
+
+	bool IsContainer();
 
 	int NameLength() { return nameLength; }
 

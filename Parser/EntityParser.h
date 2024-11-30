@@ -53,7 +53,7 @@ class EntityParser : public wxDataViewModel {
 	private:
 	const ParsingMode PARSEMODE;
 	bool fileWasCompressed;
-	EntNode root = EntNode(NodeType::ROOT);
+	EntNode root = EntNode(EntNode::NFC_RootNode);
 	BlockAllocator<char> textAlloc = BlockAllocator<char>(1000000);         // Allocator for node name/value buffers
 	BlockAllocator<EntNode> nodeAlloc = BlockAllocator<EntNode>(1000);      // Allocator for the nodes
 	BlockAllocator<EntNode*> childAlloc =  BlockAllocator<EntNode*>(30000); // Allocator for node child buffers
@@ -76,7 +76,7 @@ class EntityParser : public wxDataViewModel {
 	}
 
 	void WriteToFile(const std::string& filepath, bool compress) {
-		root.writeToFile(filepath, compress);
+		root.writeToFile(filepath, compress, true);
 		fileUpToDate = true;
 	}
 
@@ -94,9 +94,12 @@ class EntityParser : public wxDataViewModel {
 		BRACECLOSE,
 		EQUALSIGN,
 		SEMICOLON,
+		COMMA,
+		PARENCLOSE,
 		COMMENT,
 		IDENTIFIER, // Anything greater is assumed to be a value TokenType
 		VALUE_NUMBER,
+		VALUE_TUPLE,
 		VALUE_STRING,
 		VALUE_KEYWORD
 	};
@@ -108,7 +111,6 @@ class EntityParser : public wxDataViewModel {
 	private:
 	std::string_view textView;					// View of the text we're currently parsing
 	char* ch = nullptr;                         // Ptr to next char to be parsed
-	char* first = nullptr;                      // Ptr to start of current identifier/value token
 	TokenType lastTokenType = TokenType::END;   // Type of the last-parsed token
 	std::string_view lastUniqueToken;			// Stores most recent identifier or value token
 	std::string_view activeID;					// Second-most-recent token (typically an identifier)
@@ -162,7 +164,7 @@ class EntityParser : public wxDataViewModel {
 	void freeNode(EntNode* node);
 
 	template <bool useID, bool useLast>
-	EntNode* pushNode(const NodeType p_type);
+	EntNode* pushNode(const uint16_t p_flags);
 	 
 	void setNodeChildren(EntNode* parent, const size_t startIndex);
 
@@ -369,7 +371,7 @@ class EntityParser : public wxDataViewModel {
 		}
 		else {
 			
-			if (node->TYPE == NodeType::OBJECT_COMMON)
+			if(node->nodeFlags == EntNode::NFC_ObjCommon)
 				variant = (*node)["eventCall"]["eventDef"].getValueWX();
 			else variant = node->getValueWX();
 		}
@@ -410,7 +412,7 @@ class EntityParser : public wxDataViewModel {
 
 		EntNode* node = (EntNode*)item.GetID();
 
-		return node->TYPE > NodeType::VALUE_COMMON; // Todo: ensure this is safe
+		return node->IsContainer();
 	}
 
 	/* These can probably stay defined in the header */

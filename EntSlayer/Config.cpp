@@ -335,7 +335,7 @@ class ParameterDialog : public wxDialog {
 		for (int i = 0, max = args.getChildCount(); i < max; i++) 
 		{
 			EntNode& argNode = *args.ChildAt(i);
-			if(argNode.getType() == NodeType::COMMENT)
+			if(argNode.IsComment())
 				continue;
 
 			// Create Label Text
@@ -422,7 +422,7 @@ bool ConfigInterface::getText(const int menuID, std::string& buffer)
 	// Ensures we don't wind up with a dialog with 0 text boxes
 	bool hasValidArg = false;
 	for(int i = 0, max = args.getChildCount(); i < max; i++)
-		if (args.ChildAt(i)->getType() != NodeType::COMMENT) {
+		if (!args.ChildAt(i)->IsComment()) {
 			hasValidArg = true;
 			break;
 		}

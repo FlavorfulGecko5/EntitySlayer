@@ -28,6 +28,24 @@ wxString EntNode::getValueWXUQ() {
 	return wxString(textPtr + nameLength + 1, valLength - 2);
 }
 
+bool EntNode::IsComment() {
+	if (childCount == 0 && nameLength > 1) {
+		if (textPtr[0] == '/' && textPtr[1] == '/')
+			return true;
+		if (textPtr[0] == '/' && textPtr[1] == '*')
+			return true;
+	}
+	return false;
+}
+
+bool EntNode::IsRoot() {
+	return parent == nullptr && nodeFlags == NFC_RootNode;
+}
+
+bool EntNode::IsContainer() {
+	return childCount > 0 || (nodeFlags & NF_Braces);
+}
+
 bool EntNode::findPositionalID(EntNode* n, int& id)
 {
 	if (this == n) return true;
@@ -169,59 +187,34 @@ EntNode* EntNode::searchUpwardsLocal(const std::string& key, const bool caseSens
 void EntNode::generateText(std::string& buffer, int wsIndex)
 {
 	buffer.append(wsIndex, '\t');
-	buffer.append(textPtr, nameLength); // Root shouldn't have a name, so this should be fine
-	switch (TYPE)
-	{
-		case NodeType::UNDESIGNATED:
-		case NodeType::VALUE_LAYER:
-		case NodeType::COMMENT:
-		return;
+	buffer.append(textPtr, nameLength);
 
-		case NodeType::ROOT:
-		wsIndex--;
-		break;
-
-		case NodeType::VALUE_FILE:
+	if(nodeFlags & NF_Equals)
+		buffer.append(" =");
+	
+	if (valLength > 0) {
 		buffer.push_back(' ');
 		buffer.append(textPtr + nameLength, valLength);
-		return;
-
-		case NodeType::VALUE_DARKMETAL:
-		buffer.append(" = ");
-		buffer.append(textPtr + nameLength, valLength);
-		return;
-
-		case NodeType::VALUE_COMMON:
-		buffer.append(" = ");
-		buffer.append(textPtr + nameLength, valLength);
-		buffer.push_back(';');
-		return;
-
-		case NodeType::OBJECT_COMMON:
-		buffer.append(" = {\n");
-		break;
-
-		case NodeType::OBJECT_SIMPLE:
-		buffer.append(" {\n");
-		break;
-
-		case NodeType::OBJECT_ENTITYDEF:
-		buffer.push_back(' ');
-		buffer.append(textPtr + nameLength, valLength);
-		buffer.append(" {\n");
-		wsIndex--; 	// Entitydef objects have no inner indentation
-		break;      // and their closing brace is one whitespace char backwards
 	}
-	for (int i = 0; i < childCount; i++)
-	{
+
+	if(nodeFlags & NF_Semicolon)
+		buffer.push_back(';');
+
+	if(nodeFlags & NF_Braces)
+		buffer.append(" {\n");
+
+	if(nodeFlags & NF_NoIndent)
+		wsIndex--;
+	
+	for (int i = 0; i < childCount; i++) {
 		children[i]->generateText(buffer, wsIndex + 1);
 		buffer.push_back('\n');
 	}
-	if(wsIndex > 0) // If we generate entityDef text directly this will be -1
-		buffer.append(wsIndex, '\t');
-
-	if(TYPE != NodeType::ROOT) // Try to improve this later
+	if (nodeFlags & NF_Braces) {
+		if(wsIndex > 0)
+			buffer.append(wsIndex, '\t');
 		buffer.push_back('}');
+	}
 }
 
 void EntNode::writeToFile(const std::string filepath, const bool oodleCompress, const bool debug_logTime)
@@ -230,7 +223,13 @@ void EntNode::writeToFile(const std::string filepath, const bool oodleCompress, 
 	// 25% of time spent writing to output buffer, 75% on generateText
 
 	std::string raw;
+	//raw.reserve(50000000);
 	generateText(raw);
+
+	if(debug_logTime)
+		EntityLogger::logTimeStamps("Generate Text Duration: ", timeStart);
+
+	timeStart = std::chrono::high_resolution_clock::now();
 
 	std::ofstream output(filepath, std::ios_base::binary);
 

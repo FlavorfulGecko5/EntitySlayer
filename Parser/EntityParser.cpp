@@ -130,7 +130,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	ParseResult outcome;
 
 	// We must ensure the parse is successful before modifying the existing tree
-	EntNode tempRoot(NodeType::ROOT);
+	EntNode tempRoot(EntNode::NFC_RootNode);
 	initiateParse(text, &tempRoot, parent, outcome);
 	if(!outcome.success) return outcome;
 
@@ -500,25 +500,24 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, EntNode* 
 	textView = std::string_view(text);
 	errorLine = 1;
 	ch = text.data();
-	first = ch;
 
 	try 
 	{
 		if(PARSEMODE == ParsingMode::PERMISSIVE)
 			parseContentsPermissive(tempRoot);
-		else switch (parent->TYPE)
+		else switch (parent->nodeFlags)
 		{
-			case NodeType::ROOT:
+			case EntNode::NFC_RootNode:
 			parseContentsFile(tempRoot);
 			break;
 
-			case NodeType::OBJECT_SIMPLE:
+			case EntNode::NFC_ObjSimple:
 			if (parent->parent == &root)
 				parseContentsEntity(tempRoot);
 			else parseContentsLayer(tempRoot);
 			break;
 
-			case NodeType::OBJECT_ENTITYDEF: case NodeType::OBJECT_COMMON:
+			case EntNode::NFC_ObjEntitydef: case EntNode::NFC_ObjCommon:
 			parseContentsDefinition(tempRoot);
 			break;
 		}
@@ -568,7 +567,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 		return;
 
 		case TokenType::COMMENT:
-		pushNode<false, true>(NodeType::COMMENT);
+		pushNode<false, true>(EntNode::NFC_Comment);
 		goto LABEL_LOOP;
 
 		case TokenType::NEWLINE:
@@ -577,7 +576,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 
 		case TokenType::BRACEOPEN: // Most decl files begin with a nameless brace pair
 		activeID = std::string_view("");
-		n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
+		n = pushNode<true, false>(EntNode::NFC_ObjSimple);
 		parseContentsPermissive(n);
 		assertLastType(TokenType::BRACECLOSE);
 		goto LABEL_LOOP;
@@ -597,7 +596,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 		Tokenize();
 
 		if (lastTokenType == TokenType::BRACEOPEN) {  // Simple objects
-			n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
+			n = pushNode<true, false>(EntNode::NFC_ObjSimple);
 			parseContentsPermissive(n);
 			assertLastType(TokenType::BRACECLOSE);
 			goto LABEL_LOOP;
@@ -607,17 +606,17 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 			Tokenize();
 
 			if (lastTokenType == TokenType::BRACEOPEN) { // Common Objects
-				n = pushNode<true, false>(NodeType::OBJECT_COMMON);
+				n = pushNode<true, false>(EntNode::NFC_ObjCommon);
 				parseContentsPermissive(n);
 				assertLastType(TokenType::BRACECLOSE);
 				goto LABEL_LOOP;
 			}
 
 			else if (lastTokenType >= TokenType::IDENTIFIER) { // Value assignments
-				n = pushNode<true, true>(NodeType::VALUE_DARKMETAL);
+				n = pushNode<true, true>(EntNode::NFC_ValueDarkmetal);
 				Tokenize();
 				if (lastTokenType == TokenType::SEMICOLON) {
-					n->TYPE = NodeType::VALUE_COMMON;
+					n->nodeFlags = EntNode::NFC_ValueCommon;
 					goto LABEL_LOOP;
 				}
 				else goto LABEL_LOOP_SKIP_TOKENIZE;
@@ -627,10 +626,10 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 		}
 
 		else if (lastTokenType >= TokenType::IDENTIFIER) { // Consecutive Identifiers or higher
-			n = pushNode<true, true>(NodeType::VALUE_FILE);
+			n = pushNode<true, true>(EntNode::NFC_ValueFile);
 			Tokenize();
 			if (lastTokenType == TokenType::BRACEOPEN) {
-				n->TYPE = NodeType::OBJECT_ENTITYDEF;
+				n->nodeFlags = EntNode::NFC_ObjEntitydef;
 				parseContentsPermissive(n);
 				assertLastType(TokenType::BRACECLOSE);
 				goto LABEL_LOOP;
@@ -638,7 +637,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 			else goto LABEL_LOOP_SKIP_TOKENIZE;
 		}
 		else if (lastTokenType != TokenType::SEMICOLON) { // EOF, Braceclose, newline, comment
-			pushNode<true, false>(NodeType::VALUE_LAYER);
+			pushNode<true, false>(EntNode::NFC_ValueLayer);
 			goto LABEL_LOOP_SKIP_TOKENIZE;
 		}
 		else throw Error("Unexpected token after identifier or string literal");
@@ -652,7 +651,7 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		pushNode<false, true>(NodeType::COMMENT);
+		pushNode<false, true>(EntNode::NFC_Comment);
 		goto LABEL_LOOP;
 	}
 	if (lastTokenType != TokenType::IDENTIFIER)
@@ -667,11 +666,11 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	{
 		case TokenType::VALUE_NUMBER:
 		case TokenType::VALUE_STRING: case TokenType::VALUE_KEYWORD:
-		pushNode<true, true>(NodeType::VALUE_FILE);
+		pushNode<true, true>(EntNode::NFC_ValueFile);
 		break;
 
 		case TokenType::BRACEOPEN:
-		n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
+		n = pushNode<true, false>(EntNode::NFC_ObjSimple);
 		parseContentsEntity(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
@@ -689,7 +688,7 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		pushNode<false, true>(NodeType::COMMENT);
+		pushNode<false, true>(EntNode::NFC_Comment);
 		goto LABEL_LOOP;
 	}
 	if (lastTokenType == TokenType::VALUE_STRING) // Need this specifically for pvp_darkmetal
@@ -697,7 +696,7 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 		activeID = lastUniqueToken;
 		assertIgnore(TokenType::EQUALSIGN);
 		assertIgnore(TokenType::VALUE_STRING);
-		pushNode<true, true>(NodeType::VALUE_DARKMETAL);
+		pushNode<true, true>(EntNode::NFC_ValueDarkmetal);
 		goto LABEL_LOOP;
 	}
 	if(lastTokenType != TokenType::IDENTIFIER)
@@ -711,13 +710,13 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	{
 		case TokenType::IDENTIFIER:
 		assertIgnore(TokenType::BRACEOPEN);
-		n = pushNode<true, true>(NodeType::OBJECT_ENTITYDEF);
+		n = pushNode<true, true>(EntNode::NFC_ObjEntitydef);
 		parseContentsDefinition(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
 
 		case TokenType::BRACEOPEN:
-		n = pushNode<true, false>(NodeType::OBJECT_SIMPLE);
+		n = pushNode<true, false>(EntNode::NFC_ObjSimple);
 		parseContentsLayer(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
@@ -726,7 +725,7 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 		TokenizeAdjustValue();
 		if (lastTokenType <= TokenType::IDENTIFIER)
 			throw Error("Value expected (entity function)");
-		pushNode<true, true>(NodeType::VALUE_COMMON);
+		pushNode<true, true>(EntNode::NFC_ValueCommon);
 		assertIgnore(TokenType::SEMICOLON);
 		break;
 
@@ -742,7 +741,7 @@ void EntityParser::parseContentsLayer(EntNode* node) {
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		pushNode<false, true>(NodeType::COMMENT);
+		pushNode<false, true>(EntNode::NFC_Comment);
 		goto LABEL_LOOP;
 	}
 	if (lastTokenType != TokenType::VALUE_STRING)
@@ -750,7 +749,7 @@ void EntityParser::parseContentsLayer(EntNode* node) {
 		setNodeChildren(node, childrenStart);
 		return;
 	}
-	pushNode<false, true>(NodeType::VALUE_LAYER);
+	pushNode<false, true>(EntNode::NFC_ValueLayer);
 	goto LABEL_LOOP;
 }
 
@@ -762,7 +761,7 @@ void EntityParser::parseContentsDefinition(EntNode* node)
 	Tokenize();
 	if (lastTokenType == TokenType::COMMENT)
 	{
-		pushNode<false, true>(NodeType::COMMENT);
+		pushNode<false, true>(EntNode::NFC_Comment);
 		goto LABEL_LOOP;
 	}
 	if(lastTokenType != TokenType::IDENTIFIER)
@@ -776,14 +775,14 @@ void EntityParser::parseContentsDefinition(EntNode* node)
 	switch (lastTokenType)
 	{
 		case TokenType::BRACEOPEN:
-		n = pushNode<true, false>(NodeType::OBJECT_COMMON);
+		n = pushNode<true, false>(EntNode::NFC_ObjCommon);
 		parseContentsDefinition(n);
 		assertLastType(TokenType::BRACECLOSE);
 		break;
 
 		case TokenType::VALUE_NUMBER:
 		case TokenType::VALUE_STRING: case TokenType::VALUE_KEYWORD:
-		pushNode<true, true>(NodeType::VALUE_COMMON);
+		pushNode<true, true>(EntNode::NFC_ValueCommon);
 		assertIgnore(TokenType::SEMICOLON);
 		break;
 
@@ -816,10 +815,10 @@ void EntityParser::freeNode(EntNode* node)
 }
 
 template <bool useID, bool useLast>
-EntNode* EntityParser::pushNode(const NodeType p_type)
+EntNode* EntityParser::pushNode(const uint16_t p_flags)
 {
 	EntNode* n = nodeAlloc.reserveBlock(1);
-	n->TYPE = p_type;
+	n->nodeFlags = p_flags;
 	n->textPtr = textAlloc.reserveBlock(
 		(useID ? activeID.length() : 0)
 		+ (useLast ? lastUniqueToken.length() : 0)
@@ -877,8 +876,20 @@ void EntityParser::assertIgnore(TokenType requiredType)
 void EntityParser::TokenizeAdjustValue()
 {
 	Tokenize();
-	if (lastTokenType == TokenType::IDENTIFIER && lastUniqueToken == "true" || lastUniqueToken == "false" || lastUniqueToken == "NULL")
-		lastTokenType = TokenType::VALUE_KEYWORD;
+	/*
+	* A fun little micro-optimization that actually seems to make few-milliseconds difference
+	* It's a simple logic: ensure the CPU is performing as many comparisons simultaneously as possible
+	* Check for false first, since statistically speaking entities files have it more frequently than true
+	*/
+	if (lastTokenType == TokenType::IDENTIFIER) {
+		const char* raw = lastUniqueToken.data();
+		size_t len = lastUniqueToken.length();
+
+		if (len == 5 && memcmp(raw, "false", 5) == 0)
+			lastTokenType = TokenType::VALUE_KEYWORD;
+		else if (len == 4 && memcmp(raw, "true", 4) == 0 || memcmp(raw, "NULL", 4) == 0)
+			lastTokenType = TokenType::VALUE_KEYWORD;
+	}
 }
 
 void EntityParser::Tokenize() 
@@ -886,6 +897,7 @@ void EntityParser::Tokenize()
 	// Faster than STL isalpha(char) and isdigit(char) functions
 	#define isLetter (((unsigned int)(*ch | 32) - 97) < 26U)
 	#define isNum (((unsigned)*ch - '0') < 10u)
+	char* first; // Ptr to start of current identifier/value token
 
 	LABEL_TOKENIZE_START:
 	switch (*ch) // Not auto-incrementing should eliminate unnecessary arithmetic operations
@@ -927,6 +939,42 @@ void EntityParser::Tokenize()
 		ch++;
 		return;
 
+		case ',':
+		lastTokenType = TokenType::COMMA;
+		ch++;
+		return;
+
+		case ')':
+		lastTokenType = TokenType::PARENCLOSE;
+		ch++;
+		return;
+
+		case '(':
+		{
+			first = ch++;
+			int numvalues = 0;
+			
+			LABEL_TUPLE_START:
+			Tokenize();
+			switch (lastTokenType)
+			{
+				case TokenType::IDENTIFIER: // declType( keyword )
+				case TokenType::VALUE_NUMBER:
+				case TokenType::VALUE_TUPLE:
+				case TokenType::COMMA: // TODO: Improve this?
+				goto LABEL_TUPLE_START;
+
+				case TokenType::PARENCLOSE:
+				lastUniqueToken = std::string_view(first, (size_t)(ch - first));
+				lastTokenType = TokenType::VALUE_TUPLE;
+				return;
+
+				default:
+				throw Error("Invalid format for a tuple");
+				break;
+			}
+		}
+
 		case '/':
 		first = ch;
 		if (*++ch == '/') {
@@ -964,27 +1012,6 @@ void EntityParser::Tokenize()
 		else throw Error("Invalid Comment Syntax");
 
 
-		// Todo
-		//case '(':
-		//{
-		//	char* openPtr = ch++;
-		//	
-		//	LABEL_TUPLE_START:
-		//	Tokenize();
-		//	switch (lastTokenType)
-		//	{
-		//		case TokenType::VALUE_NUMBER:
-		//		goto LABEL_TUPLE_START;
-
-		//		// case close parentheses token
-		//		// case comma token
-
-		//		default:
-		//		throw Error("Tuples must contain numbers");
-		//		break;
-		//	}
-		//}
-
 		case '"':
 		first = ch;
 		LABEL_STRING_START:
@@ -1002,9 +1029,9 @@ void EntityParser::Tokenize()
 			goto LABEL_STRING_START;
 		}
 
-		// TEMPORARY COMPROMISES:
-		// 1. Negative sign can't be seperated from the number by whitespace
-		// 2. Number token cannot begin with a period.
+		// NOTES:
+		// 1. PERMANENT: Negative sign can't be seperated from the number by whitespace
+		// 2. CHANGE IN THE FUTURE (?): Number token cannot begin with a period.
 		case '-': //case '.':
 		case '0': case '1': case '2': case '3': case '4':
 		case '5': case '6': case '7': case '8': case '9':
@@ -1040,18 +1067,6 @@ void EntityParser::Tokenize()
 			//else
 			//	lastUniqueToken = new string(rawText, start, it - start);
 		}
-
-		/*
-		case '-':
-			if (minusToken)
-				throw Error("Cannot have consecutive minus signs.");
-			minusToken = true;
-			Tokenize();
-			if (lastTokenType != TokenType::VALUE_NUMBER)
-				throw Error("Numerical value expected after negative sign");
-			minusToken = false;
-			return;
-		*/
 
 		default:
 		{

@@ -307,7 +307,7 @@ void EntityEditor::SetActiveNode(EntNode* node)
     */
     SetWrapMode(wxSTC_WRAP_NONE);
 
-    if (node == nullptr || node->getType() == NodeType::ROOT)
+    if (node == nullptr || node->IsRoot())
     {
         SetText("Select a node to begin editing.");
         SetReadOnly(true);
