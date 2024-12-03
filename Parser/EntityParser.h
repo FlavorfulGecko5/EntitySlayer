@@ -85,24 +85,6 @@ class EntityParser : public wxDataViewModel {
 	* PURPOSE #1: PARSING
 	* ==================
 	*/
-	private:
-	enum class TokenType : unsigned char
-	{
-		END,
-		NEWLINE, // Permissive parsing mode only
-		BRACEOPEN,
-		BRACECLOSE,
-		EQUALSIGN,
-		SEMICOLON,
-		COMMA,
-		PARENCLOSE,
-		COMMENT,
-		IDENTIFIER, // Anything greater is assumed to be a value TokenType
-		VALUE_NUMBER,
-		VALUE_TUPLE,
-		VALUE_STRING,
-		VALUE_KEYWORD
-	};
 
 	/*
 	* Variables used during a parse.
@@ -111,7 +93,7 @@ class EntityParser : public wxDataViewModel {
 	private:
 	std::string_view textView;					// View of the text we're currently parsing
 	char* ch = nullptr;                         // Ptr to next char to be parsed
-	TokenType lastTokenType = TokenType::END;   // Type of the last-parsed token
+	uint32_t lastTokenType;                     // Type of the last-parsed token
 	std::string_view lastUniqueToken;			// Stores most recent identifier or value token
 	std::string_view activeID;					// Second-most-recent token (typically an identifier)
 	size_t errorLine = 1;                       // If a grammar error is detected, this is the line it was found on
@@ -163,8 +145,8 @@ class EntityParser : public wxDataViewModel {
 	*/
 	void freeNode(EntNode* node);
 
-	template <bool useID, bool useLast>
-	EntNode* pushNode(const uint16_t p_flags);
+	EntNode* pushNode(const uint16_t p_flags, const std::string_view p_name);
+	EntNode* pushNodeBoth(const uint16_t p_flags);
 	 
 	void setNodeChildren(EntNode* parent, const size_t startIndex);
 
@@ -174,13 +156,13 @@ class EntityParser : public wxDataViewModel {
 	*/
 
 	/* Throws an error if the last - parsed token is not of the required type */
-	inline void assertLastType(TokenType requiredType);
+	inline void assertLastType(uint32_t requiredType);
 
 	/*
 	 Parses raw text for the next token
 	 Throws an error if the token is not of the required type
 	*/
-	inline void assertIgnore(TokenType requiredType);
+	inline void assertIgnore(uint32_t requiredType);
 
 	/*
 	 Parses raw text for the next token
