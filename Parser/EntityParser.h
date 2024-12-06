@@ -91,8 +91,8 @@ class EntityParser : public wxDataViewModel {
 	* Their values should be reset or cleared at the start/end of each parse
 	*/
 	private:
-	std::string_view textView;					// View of the text we're currently parsing
-	char* ch = nullptr;                         // Ptr to next char to be parsed
+	const char* firstChar = nullptr;            // Ptr to the cstring we're parsing
+	const char* ch = nullptr;                   // Ptr to next char to be parsed
 	uint32_t lastTokenType;                     // Type of the last-parsed token
 	std::string_view lastUniqueToken;			// Stores most recent identifier or value token
 	std::string_view activeID;					// Second-most-recent token (typically an identifier)
@@ -132,8 +132,12 @@ class EntityParser : public wxDataViewModel {
 
 	// TODO: Get rid of intiateParse somehow - it's sloppy (or not - we may need it when we have multiple parsing modes)
 	// Consider renaming these other functions?
-	void initiateParse(std::string& text, EntNode* tempRoot, EntNode* parent,
-		ParseResult& results);
+
+	/*
+	* Begin parsing a text string
+	* @param cstring - The null-terminated string to parse
+	*/
+	void initiateParse(const char* cstring, EntNode* tempRoot, EntNode* parent, ParseResult& results);
 	void parseContentsFile(EntNode* node);
 	void parseContentsEntity(EntNode* node);
 	void parseContentsLayer(EntNode* node);

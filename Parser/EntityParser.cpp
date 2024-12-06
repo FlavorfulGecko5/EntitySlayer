@@ -36,12 +36,8 @@ EntityParser::EntityParser() : fileWasCompressed(false), PARSEMODE(ParsingMode::
 {
 	// Cannot append a null character to a string? Hence const char* instead
 	const char* rawText = "Version 7\nHierarchyVersion 1\0";
-	textView = std::string_view(rawText, 29);
-	ch = (char*)rawText; // Probably not a very good practice
-
-	parseContentsFile(&root);
-	assertLastType(TT_End);
-	tempChildren.shrink_to_fit();
+	ParseResult presult;
+	initiateParse(rawText, &root, &root, presult);
 }
 
 EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, const bool debug_logParseTime)
@@ -55,6 +51,7 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	size_t rawLength = 0;
 	char* rawBytes = nullptr;
 	char* decompressedText = nullptr;
+	std::string_view textView;
 
 	// Technically tellg() is not guaranteed by the standard to give us the length
 	// of the file...but in practice it does for binary streaming
@@ -76,14 +73,12 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 			throw std::runtime_error("Could not decompress .entities file");
 		decompressedText[decompressedSize] = '\0';
 		textView = std::string_view(decompressedText, decompressedSize + 1);
-		ch = decompressedText;
 	}
 	else
 	{
 		fileWasCompressed = false;
 		rawBytes[rawLength++] = '\0';
 		textView = std::string_view(rawBytes, rawLength);
-		ch = rawBytes;
 	}
 
 	if (debug_logParseTime)
@@ -118,13 +113,9 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 		timeStart = std::chrono::high_resolution_clock::now();
 	}
 
-	if(mode == ParsingMode::ENTITIES)
-		parseContentsFile(&root); // During construction we allow exceptions to propagate and the parser to be destroyed
-	else if(mode == ParsingMode::PERMISSIVE)
-		parseContentsPermissive(&root);
-	assertLastType(TT_End);
+	ParseResult presult;
+	initiateParse(textView.data(), &root, &root, presult);
 
-	tempChildren.shrink_to_fit();
 	if (fileWasCompressed)
 		delete[] decompressedText;
 	delete[] rawBytes;
@@ -156,7 +147,8 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 
 	// We must ensure the parse is successful before modifying the existing tree
 	EntNode tempRoot(EntNode::NFC_RootNode);
-	initiateParse(text, &tempRoot, parent, outcome);
+	text.push_back('\0');
+	initiateParse(text.data(), &tempRoot, parent, outcome);
 	if(!outcome.success) return outcome;
 
 	// Populate these with nodes we might need to remove/add to the dataview
@@ -510,21 +502,19 @@ void EntityParser::logAllocatorInfo(bool includeBlockList, bool logToLogger, boo
 
 std::runtime_error EntityParser::Error(std::string msg)
 {
-	const char *min = textView.data();
-	for (char* inc = ch - 1; inc >= min; inc--) //ch will equal next char to be parsed - if == \n an extra newline would be added
+	for (const char* inc = ch - 1; inc >= firstChar; inc--) //ch will equal next char to be parsed - if == \n an extra newline would be added
 		if (*inc == '\n') errorLine++;
 	return std::runtime_error("Entities parsing failed (line " + std::to_string(errorLine) + "): " + msg);
 }
 
 
-void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, EntNode* parent,
+void EntityParser::initiateParse(const char* cstring, EntNode* tempRoot, EntNode* parent,
 	ParseResult& results)
 {
 	// Setup variables
-	text.push_back('\0');
-	textView = std::string_view(text);
+	firstChar = cstring;
 	errorLine = 1;
-	ch = text.data();
+	ch = cstring;
 
 	try 
 	{
@@ -550,6 +540,12 @@ void EntityParser::initiateParse(std::string &text, EntNode* tempRoot, EntNode* 
 	}
 	catch (std::runtime_error err)
 	{
+		// If this is the initial parse, don't waste time
+		// deallocating everything
+		if (tempRoot == parent) {
+			throw err;
+		}
+
 		// Deallocate and clear everything in the temporary vector
 		for (EntNode* e : tempChildren)
 			freeNode(e);
@@ -761,20 +757,13 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 
 void EntityParser::parseContentsLayer(EntNode* node) {
 	size_t childrenStart = tempChildren.size();
-	LABEL_LOOP:
+
 	Tokenize();
-	if (lastTokenType == TT_Comment)
-	{
+	while (lastTokenType & (TT_Comment | TT_String)) {
 		pushNode(EntNode::NFC_Comment, lastUniqueToken);
-		goto LABEL_LOOP;
+		Tokenize();
 	}
-	if (lastTokenType != TT_String)
-	{
-		setNodeChildren(node, childrenStart);
-		return;
-	}
-	pushNode(EntNode::NFC_ValueLayer, lastUniqueToken);
-	goto LABEL_LOOP;
+	setNodeChildren(node, childrenStart);
 }
 
 void EntityParser::parseContentsDefinition(EntNode* node)
@@ -922,7 +911,7 @@ void EntityParser::Tokenize()
 	// Faster than STL isalpha(char) and isdigit(char) functions
 	#define isLetter (((unsigned int)(*ch | 32) - 97) < 26U)
 	#define isNum (((unsigned)*ch - '0') < 10u)
-	char* first; // Ptr to start of current identifier/value token
+	const char* first; // Ptr to start of current identifier/value token
 
 	LABEL_TOKENIZE_START:
 	switch (*ch) // Not auto-incrementing should eliminate unnecessary arithmetic operations
