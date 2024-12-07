@@ -34,7 +34,8 @@ struct ParseResult {
 
 enum class ParsingMode {
 	ENTITIES,
-	PERMISSIVE
+	PERMISSIVE,
+	JSON
 };
 
 class EntityParser : public wxDataViewModel {
@@ -138,21 +139,21 @@ class EntityParser : public wxDataViewModel {
 	* @param cstring - The null-terminated string to parse
 	*/
 	void initiateParse(const char* cstring, EntNode* tempRoot, EntNode* parent, ParseResult& results);
-	void parseContentsFile(EntNode* node);
-	void parseContentsEntity(EntNode* node);
-	void parseContentsLayer(EntNode* node);
-	void parseContentsDefinition(EntNode* node);
-	void parseContentsPermissive(EntNode* node);
+	void parseContentsFile();
+	void parseContentsEntity();
+	void parseContentsLayer();
+	void parseContentsDefinition();
+	void parseContentsPermissive();
 
 	/*
 	* ALLOCATION / DEALLOCATION FUNCTIONS
 	*/
 	void freeNode(EntNode* node);
 
-	EntNode* pushNode(const uint16_t p_flags, const std::string_view p_name);
-	EntNode* pushNodeBoth(const uint16_t p_flags);
+	void pushNode(const uint16_t p_flags, const std::string_view p_name);
+	void pushNodeBoth(const uint16_t p_flags);
 	 
-	void setNodeChildren(EntNode* parent, const size_t startIndex);
+	void setNodeChildren(const size_t startIndex);
 
 
 	/*

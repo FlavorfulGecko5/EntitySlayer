@@ -515,28 +515,30 @@ void EntityParser::initiateParse(const char* cstring, EntNode* tempRoot, EntNode
 	firstChar = cstring;
 	errorLine = 1;
 	ch = cstring;
+	tempChildren.push_back(tempRoot);
 
 	try 
 	{
 		if(PARSEMODE == ParsingMode::PERMISSIVE)
-			parseContentsPermissive(tempRoot);
+			parseContentsPermissive();
 		else switch (parent->nodeFlags)
 		{
 			case EntNode::NFC_RootNode:
-			parseContentsFile(tempRoot);
+			parseContentsFile();
 			break;
 
 			case EntNode::NFC_ObjSimple:
 			if (parent->parent == &root)
-				parseContentsEntity(tempRoot);
-			else parseContentsLayer(tempRoot);
+				parseContentsEntity();
+			else parseContentsLayer();
 			break;
 
 			case EntNode::NFC_ObjEntitydef: case EntNode::NFC_ObjCommon:
-			parseContentsDefinition(tempRoot);
+			parseContentsDefinition();
 			break;
 		}
 		assertLastType(TT_End);
+		tempChildren.pop_back();
 	}
 	catch (std::runtime_error err)
 	{
@@ -547,8 +549,10 @@ void EntityParser::initiateParse(const char* cstring, EntNode* tempRoot, EntNode
 		}
 
 		// Deallocate and clear everything in the temporary vector
-		for (EntNode* e : tempChildren)
-			freeNode(e);
+		// Skip over the temporary root node, since we assume it
+		// wasn't allocated normally
+		for(size_t i = 1; i < tempChildren.size(); i++)
+			freeNode(tempChildren[i]);
 		tempChildren.clear();
 
 		// Deallocate everything in the temporary root node,
@@ -572,9 +576,8 @@ to be given a free pass if they're not completely wrong.
 This will eventually be used to parse the append menu file, and may see further use if/when EntitySlayer's is
 expanded to work with .decl files
 */
-void EntityParser::parseContentsPermissive(EntNode* node)
+void EntityParser::parseContentsPermissive()
 {
-	EntNode* n = nullptr;
 	size_t childrenStart = tempChildren.size();
 	
 	LABEL_LOOP:
@@ -584,7 +587,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 	switch (lastTokenType)
 	{
 		default: // End, BraceClose, Assignment, Value_Number
-		setNodeChildren(node, childrenStart);
+		setNodeChildren(childrenStart);
 		return;
 
 		case TT_Comment:
@@ -596,8 +599,8 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 		goto LABEL_LOOP;
 
 		case TT_BraceOpen: // Most decl files begin with a nameless brace pair
-		n = pushNode(EntNode::NFC_ObjSimple, "");
-		parseContentsPermissive(n);
+		pushNode(EntNode::NFC_ObjSimple, "");
+		parseContentsPermissive();
 		assertLastType(TT_BraceClose);
 		goto LABEL_LOOP;
 
@@ -616,8 +619,8 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 		Tokenize();
 
 		if (lastTokenType == TT_BraceOpen) {  // Simple objects
-			n = pushNode(EntNode::NFC_ObjSimple, activeID);
-			parseContentsPermissive(n);
+			pushNode(EntNode::NFC_ObjSimple, activeID);
+			parseContentsPermissive();
 			assertLastType(TT_BraceClose);
 			goto LABEL_LOOP;
 		}
@@ -626,17 +629,17 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 			Tokenize();
 
 			if (lastTokenType == TT_BraceOpen) { // Common Objects
-				n = pushNode(EntNode::NFC_ObjCommon, activeID);
-				parseContentsPermissive(n);
+				pushNode(EntNode::NFC_ObjCommon, activeID);
+				parseContentsPermissive();
 				assertLastType(TT_BraceClose);
 				goto LABEL_LOOP;
 			}
 
 			else if (lastTokenType & TTC_PermissiveKey) { // Value assignments
-				n = pushNodeBoth(EntNode::NFC_ValueDarkmetal);
+				pushNodeBoth(EntNode::NFC_ValueDarkmetal);
 				Tokenize();
 				if (lastTokenType == TT_Semicolon) {
-					n->nodeFlags = EntNode::NFC_ValueCommon;
+					tempChildren.back()->nodeFlags = EntNode::NFC_ValueCommon;
 					goto LABEL_LOOP;
 				}
 				else goto LABEL_LOOP_SKIP_TOKENIZE;
@@ -646,11 +649,11 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 		}
 
 		else if (lastTokenType & TTC_PermissiveKey) { // Consecutive Identifiers or higher
-			n = pushNodeBoth(EntNode::NFC_ValueFile);
+			pushNodeBoth(EntNode::NFC_ValueFile);
 			Tokenize();
 			if (lastTokenType == TT_BraceOpen) {
-				n->nodeFlags = EntNode::NFC_ObjEntitydef;
-				parseContentsPermissive(n);
+				tempChildren.back()->nodeFlags = EntNode::NFC_ObjEntitydef;
+				parseContentsPermissive();
 				assertLastType(TT_BraceClose);
 				goto LABEL_LOOP;
 			}
@@ -664,8 +667,7 @@ void EntityParser::parseContentsPermissive(EntNode* node)
 	}
 }
 
-void EntityParser::parseContentsFile(EntNode* node) {
-	EntNode* n = nullptr;
+void EntityParser::parseContentsFile() {
 	size_t childrenStart = tempChildren.size();
 	LABEL_LOOP:
 	Tokenize();
@@ -676,7 +678,7 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	}
 	if (lastTokenType != TT_Identifier)
 	{
-		setNodeChildren(node, childrenStart);
+		setNodeChildren(childrenStart);
 		return;
 	}
 
@@ -690,8 +692,8 @@ void EntityParser::parseContentsFile(EntNode* node) {
 		break;
 
 		case TT_BraceOpen:
-		n = pushNode(EntNode::NFC_ObjSimple, activeID);
-		parseContentsEntity(n);
+		pushNode(EntNode::NFC_ObjSimple, activeID);
+		parseContentsEntity();
 		assertLastType(TT_BraceClose);
 		break;
 
@@ -701,8 +703,7 @@ void EntityParser::parseContentsFile(EntNode* node) {
 	goto LABEL_LOOP;
 }
 
-void EntityParser::parseContentsEntity(EntNode* node) {
-	EntNode* n = nullptr;
+void EntityParser::parseContentsEntity() {
 	size_t childrenStart = tempChildren.size();
 	LABEL_LOOP:
 	Tokenize();
@@ -721,7 +722,7 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	}
 	if(lastTokenType != TT_Identifier)
 	{
-		setNodeChildren(node, childrenStart);
+		setNodeChildren(childrenStart);
 		return;
 	}
 	activeID = lastUniqueToken;
@@ -730,14 +731,14 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	{
 		case TT_Identifier:
 		assertIgnore(TT_BraceOpen);
-		n = pushNodeBoth(EntNode::NFC_ObjEntitydef);
-		parseContentsDefinition(n);
+		pushNodeBoth(EntNode::NFC_ObjEntitydef);
+		parseContentsDefinition();
 		assertLastType(TT_BraceClose);
 		break;
 
 		case TT_BraceOpen:
-		n = pushNode(EntNode::NFC_ObjSimple, activeID);
-		parseContentsLayer(n);
+		pushNode(EntNode::NFC_ObjSimple, activeID);
+		parseContentsLayer();
 		assertLastType(TT_BraceClose);
 		break;
 
@@ -755,7 +756,7 @@ void EntityParser::parseContentsEntity(EntNode* node) {
 	goto LABEL_LOOP;
 }
 
-void EntityParser::parseContentsLayer(EntNode* node) {
+void EntityParser::parseContentsLayer() {
 	size_t childrenStart = tempChildren.size();
 
 	Tokenize();
@@ -763,12 +764,11 @@ void EntityParser::parseContentsLayer(EntNode* node) {
 		pushNode(EntNode::NFC_Comment, lastUniqueToken);
 		Tokenize();
 	}
-	setNodeChildren(node, childrenStart);
+	setNodeChildren(childrenStart);
 }
 
-void EntityParser::parseContentsDefinition(EntNode* node)
+void EntityParser::parseContentsDefinition()
 {
-	EntNode *n = nullptr;
 	size_t childrenStart = tempChildren.size();
 	LABEL_LOOP:
 	Tokenize();
@@ -779,7 +779,7 @@ void EntityParser::parseContentsDefinition(EntNode* node)
 	}
 	if(lastTokenType != TT_Identifier)
 	{
-		setNodeChildren(node, childrenStart);
+		setNodeChildren(childrenStart);
 		return;
 	}
 	assertIgnore(TT_EqualSign);
@@ -788,8 +788,8 @@ void EntityParser::parseContentsDefinition(EntNode* node)
 	switch (lastTokenType)
 	{
 		case TT_BraceOpen:
-		n = pushNode(EntNode::NFC_ObjCommon, activeID);
-		parseContentsDefinition(n);
+		pushNode(EntNode::NFC_ObjCommon, activeID);
+		parseContentsDefinition();
 		assertLastType(TT_BraceClose);
 		break;
 
@@ -827,7 +827,7 @@ void EntityParser::freeNode(EntNode* node)
 	nodeAlloc.freeBlock(node, 1);
 }
 
-EntNode* EntityParser::pushNode(const uint16_t p_flags, const std::string_view p_name)
+void EntityParser::pushNode(const uint16_t p_flags, const std::string_view p_name)
 {
 	EntNode* n = nodeAlloc.reserveBlock(1);
 	n->textPtr = textAlloc.reserveBlock(p_name.length());
@@ -837,10 +837,9 @@ EntNode* EntityParser::pushNode(const uint16_t p_flags, const std::string_view p
 	memcpy(n->textPtr, p_name.data(), p_name.length());
 
 	tempChildren.push_back(n);
-	return n;
 }
 
-EntNode* EntityParser::pushNodeBoth(const uint16_t p_flags)
+void EntityParser::pushNodeBoth(const uint16_t p_flags)
 {
 	EntNode* n = nodeAlloc.reserveBlock(1);
 	n->textPtr = textAlloc.reserveBlock(activeID.length() + lastUniqueToken.length());
@@ -852,13 +851,13 @@ EntNode* EntityParser::pushNodeBoth(const uint16_t p_flags)
 	memcpy(n->textPtr + activeID.length(), lastUniqueToken.data(), lastUniqueToken.length());
 
 	tempChildren.push_back(n);
-	return n;
 }
 
-void EntityParser::setNodeChildren(EntNode* parent, const size_t startIndex)
+void EntityParser::setNodeChildren(const size_t startIndex)
 {
 	size_t s = tempChildren.size();
 	size_t childCount = s - startIndex;
+	EntNode* parent = tempChildren[startIndex - 1];
 	parent->childCount = (int)childCount;
 	parent->maxChildren = OptimalMaxChildCount(parent->childCount);
 	parent->children = childAlloc.reserveBlock(parent->maxChildren);
