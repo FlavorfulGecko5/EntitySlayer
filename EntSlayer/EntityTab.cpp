@@ -77,6 +77,8 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 
 		if(lowercase.EndsWith(".entities"))
 			mode = ParsingMode::ENTITIES;
+		else if (lowercase.EndsWith(".json"))
+			mode = ParsingMode::JSON;
 
 		if (mode == ParsingMode::PERMISSIVE) {
 			wxLogMessage("WARNING: Permissive parsing mode enabled for this file. Automatic list renumbering has been disabled (re-enable it in the 'Tab' menu)");
@@ -86,7 +88,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		Parser = new EntityParser(std::string(path), mode, true);
 		//openTime = std::filesystem::last_write_time(std::string(path));
 	}
-		
+
 	compressOnSave = Parser->wasFileCompressed();
 	root = Parser->getRoot();
 

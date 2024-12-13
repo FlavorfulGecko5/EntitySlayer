@@ -15,6 +15,9 @@ class EntNode
 		NF_Semicolon   = 1 << 1,
 		NF_Braces      = 1 << 2,
 		NF_NoIndent    = 1 << 3,
+		NF_Colon       = 1 << 4,
+		NF_Comma       = 1 << 5,
+		NF_Brackets    = 1 << 6,
 
 		/* Node Flag Combos */
 
@@ -26,7 +29,7 @@ class EntNode
 		NFC_ValueFile      = 0,
 		NFC_ValueDarkmetal = NF_Equals,
 		NFC_ValueCommon    = NF_Equals | NF_Semicolon,
-		NFC_Comment        = 0
+		NFC_Comment        = 0,
 	};
 
 	public:
@@ -247,8 +250,10 @@ class EntNode
 	* Converts the entirety of this node into text and saves
 	* the result to a file
 	* @param filepath File to write to
+	* @param sizeHint Estimation of the uncompressed file size
 	* @param oodleCompress If true, compress the file
 	* @param debug_logTime If true, output execution time data.
+	* @return The uncompressed file size
 	*/
-	void writeToFile(const std::string filepath, const bool oodleCompress, const bool debug_logTime = false);
+	size_t writeToFile(const std::string filepath, const size_t sizeHint, const bool oodleCompress, const bool debug_logTime = false);
 };

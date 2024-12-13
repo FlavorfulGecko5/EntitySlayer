@@ -21,6 +21,9 @@ enum TokenType : uint32_t
 	TT_Tuple        = 1 << 11,
 	TT_String       = 1 << 12,
 	TT_Keyword      = 1 << 13,
+	TT_Colon        = 1 << 14,
+	TT_BracketOpen  = 1 << 15,
+	TT_BracketClose = 1 << 16,
 
 	/* Token Type Combos */
 	TTC_PermissiveKey = TT_Identifier | TT_Number | TT_Tuple | TT_String | TT_Keyword,
@@ -44,23 +47,24 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	: PARSEMODE(mode)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
-	std::ifstream file(filepath, std::ios_base::binary); // Binary mode 50% faster than 'in' mode, keeps CR chars
-	if (!file.is_open())
-		throw std::runtime_error("Could not open file");
-
 	size_t rawLength = 0;
 	char* rawBytes = nullptr;
 	char* decompressedText = nullptr;
 	std::string_view textView;
 
-	// Technically tellg() is not guaranteed by the standard to give us the length
-	// of the file...but in practice it does for binary streaming
-	file.seekg(0, std::ios_base::end);
-	rawLength = static_cast<size_t>(file.tellg());
-	rawBytes = new char[rawLength + 1]; // Leave room for the null char
-	file.seekg(0, std::ios_base::beg);
-	file.read(rawBytes, rawLength);
-	file.close();
+	{
+		std::ifstream file(filepath, std::ios_base::binary); // Binary mode 50% faster than 'in' mode, keeps CR chars
+		if (!file.is_open())
+			throw std::runtime_error("Could not open file");
+
+		// Tellg() does not guarantee the length of the file but this works in practice for binary mode
+		file.seekg(0, std::ios_base::end);
+		rawLength = static_cast<size_t>(file.tellg());
+		rawBytes = new char[rawLength + 1]; // Leave room for the null char
+		file.seekg(0, std::ios_base::beg);
+		file.read(rawBytes, rawLength);
+		file.close();
+	}
 
 	if (rawLength > 16 && (unsigned char)rawBytes[16] == 0x8C) // Oodle compression signature
 	{
@@ -77,9 +81,11 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	else
 	{
 		fileWasCompressed = false;
-		rawBytes[rawLength++] = '\0';
-		textView = std::string_view(rawBytes, rawLength);
+		rawBytes[rawLength] = '\0';
+		textView = std::string_view(rawBytes, rawLength + 1);
 	}
+
+	lastUncompressedSize = textView.length();
 
 	if (debug_logParseTime)
 	{
@@ -89,23 +95,37 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 
 	// Simpler char analysis algorithm that runs ~10 MS faster compared to old doubled runtime
 	size_t counts[256] = { 0 };
-	for (char c : textView)
+	for (uint8_t c : textView) // Ensure it's unsigned if you don't want cursed stack corruption
 		counts[c]++;
 
 	// Distinguishes between the number of chars comprising actual identifiers/values versus syntax chars
-	size_t charBufferSize = textView.length()
-		- counts['\t'] - counts['\n'] - counts['\r'] - counts['}'] - counts['{'] - counts[';']
-		- counts['=']
-		- counts[' '] // This is an overestimate - string values will uncommonly contain spaces
-		+ 100000;
-	textAlloc.setActiveBuffer(charBufferSize);
+	if (PARSEMODE == ParsingMode::JSON) {
+		size_t charBufferSize = textView.length()
+			- counts['\t'] - counts['\n'] - counts['\r'] - counts['}'] - counts['{']
+			- counts[':'] - counts[','] - counts['['] - counts[']'] - counts[' ']
+			+ 100000;
+		textAlloc.setActiveBuffer(charBufferSize);
 
-	// For a well-formatted .entities file, we can get an exact count of how many nodes we must
-	// allocate by subtracting the number of closing braces from the number of lines
-	size_t numCloseBraces = counts['}'] > counts['\n'] ? counts['\n'] : counts['}']; // Prevents disastrous overflow
-	size_t initialBufferSize = counts['\n'] - numCloseBraces + 1000;
-	nodeAlloc.setActiveBuffer(initialBufferSize);
-	childAlloc.setActiveBuffer(initialBufferSize);
+		// This should give us an exact count of how many nodes exist in the file
+		size_t nodeCount = counts[','] + counts['{'] + counts['['] + 1000;
+		nodeAlloc.setActiveBuffer(nodeCount);
+		childAlloc.setActiveBuffer(nodeCount);
+	}
+	else {
+		size_t charBufferSize = textView.length()
+			- counts['\t'] - counts['\n'] - counts['\r'] - counts['}'] - counts['{'] - counts[';']
+			- counts['=']
+			- counts[' '] // This is an overestimate - string values will uncommonly contain spaces
+			+ 100000;
+		textAlloc.setActiveBuffer(charBufferSize);
+
+		// For a well-formatted .entities file, we can get an exact count of how many nodes we must
+		// allocate by subtracting the number of closing braces from the number of lines
+		size_t numCloseBraces = counts['}'] > counts['\n'] ? counts['\n'] : counts['}']; // Prevents disastrous overflow
+		size_t initialBufferSize = counts['\n'] - numCloseBraces + 1000;
+		nodeAlloc.setActiveBuffer(initialBufferSize);
+		childAlloc.setActiveBuffer(initialBufferSize);
+	}
 
 	if (debug_logParseTime)
 	{
@@ -113,8 +133,16 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 		timeStart = std::chrono::high_resolution_clock::now();
 	}
 
-	ParseResult presult;
-	initiateParse(textView.data(), &root, &root, presult);
+	try {
+		ParseResult presult;
+		initiateParse(textView.data(), &root, &root, presult);
+	} // How did I never notice this memory leak until now...?
+	catch (std::runtime_error err) {
+		if(fileWasCompressed)
+			delete[] decompressedText;
+		delete[] rawBytes;
+		throw err;
+	}
 
 	if (fileWasCompressed)
 		delete[] decompressedText;
@@ -150,6 +178,16 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	text.push_back('\0');
 	initiateParse(text.data(), &tempRoot, parent, outcome);
 	if(!outcome.success) return outcome;
+
+	// Give every node a comma - we'll ensure the (possibly new) last child has no
+	// comma after merging the children
+	if (PARSEMODE == ParsingMode::JSON) {
+		if(parent->childCount > 0)
+			parent->children[parent->childCount - 1]->nodeFlags |= EntNode::NF_Comma;
+
+		if(tempRoot.childCount > 0)
+			tempRoot.children[tempRoot.childCount - 1]->nodeFlags |= EntNode::NF_Comma;
+	}
 
 	// Populate these with nodes we might need to remove/add to the dataview
 	wxDataViewItemArray removedNodes;
@@ -229,6 +267,11 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	// Common to both branches
 	childAlloc.freeBlock(tempRoot.children, tempRoot.maxChildren);
 	parent->childCount = newNumChildren;
+
+	if (PARSEMODE == ParsingMode::JSON) {
+		if(parent->childCount > 0)
+			parent->children[parent->childCount - 1]->nodeFlags &= ~EntNode::NF_Comma;
+	}
 
 	// Must update model AFTER node is given it's new child data
 	if (parent->isFiltered()) // Filtering checks are optimized so we only check parent + ancestor filter status once, right here
@@ -521,6 +564,13 @@ void EntityParser::initiateParse(const char* cstring, EntNode* tempRoot, EntNode
 	{
 		if(PARSEMODE == ParsingMode::PERMISSIVE)
 			parseContentsPermissive();
+		else if (PARSEMODE == ParsingMode::JSON) {
+			if (parent->nodeFlags & EntNode::NF_Braces)
+				parseJsonObject();
+			else if (parent->nodeFlags & EntNode::NF_Brackets)
+				parseJsonArray();
+			else parseJsonRoot();
+		}
 		else switch (parent->nodeFlags)
 		{
 			case EntNode::NFC_RootNode:
@@ -805,6 +855,126 @@ void EntityParser::parseContentsDefinition()
 	goto LABEL_LOOP;
 }
 
+void EntityParser::parseJsonRoot()
+{
+	size_t childrenStart = tempChildren.size();
+	TokenizeAdjustJson();
+
+	switch (lastTokenType)
+	{
+		case TT_Keyword:
+		case TT_Number:
+		case TT_String:
+		pushNode(0, lastUniqueToken);
+		break;
+
+		case TT_BraceOpen:
+		pushNode(EntNode::NF_Braces, "");
+		parseJsonObject();
+		assertLastType(TT_BraceClose);
+		break;
+
+		case TT_BracketOpen:
+		pushNode(EntNode::NF_Brackets, "");
+		parseJsonArray();
+		assertLastType(TT_BracketClose);
+		break;
+
+		default:
+		throw Error("Bad Token Type JSON Root Function");
+	}
+	setNodeChildren(childrenStart);
+	Tokenize(); // Ensures the last type is the end
+}
+
+void EntityParser::parseJsonObject()
+{
+	size_t childrenStart = tempChildren.size();
+
+	while (true) {
+		Tokenize();
+
+		// This conditional lets us parse the json whether or not there's
+		// a trailing comma - good for editing
+		if(lastTokenType != TT_String)
+			goto LOOP_EXIT;
+		activeID = lastUniqueToken;
+
+		assertIgnore(TT_Colon);
+		TokenizeAdjustJson();
+		switch (lastTokenType)
+		{
+			case TT_Keyword:
+			case TT_Number:
+			case TT_String:
+			pushNodeBoth(EntNode::NF_Colon | EntNode::NF_Comma);
+			break;
+			
+			case TT_BraceOpen:
+			pushNode(EntNode::NF_Colon | EntNode::NF_Braces | EntNode::NF_Comma, activeID);
+			parseJsonObject();
+			assertLastType(TT_BraceClose);
+			break;
+
+			case TT_BracketOpen:
+			pushNode(EntNode::NF_Colon | EntNode::NF_Brackets | EntNode::NF_Comma, activeID);
+			parseJsonArray();
+			assertLastType(TT_BracketClose);
+			break;
+
+			default:
+			throw Error("Invalid Value token JSON Object function");
+		}
+		Tokenize();
+		if(lastTokenType != TT_Comma)
+			goto LOOP_EXIT;
+	}
+
+	LOOP_EXIT:
+	setNodeChildren(childrenStart);
+}
+
+void EntityParser::parseJsonArray()
+{
+	size_t childrenStart = tempChildren.size();
+
+	LABEL_LOOP:
+	TokenizeAdjustJson();
+	switch (lastTokenType)
+	{
+		case TT_Keyword:
+		case TT_Number: 
+		case TT_String:
+		pushNode(EntNode::NF_Comma, lastUniqueToken);
+		break;
+
+		case TT_BraceOpen:
+		pushNode(EntNode::NF_Braces | EntNode::NF_Comma, "");
+		parseJsonObject();
+		assertLastType(TT_BraceClose);
+		break;
+
+		case TT_BracketOpen:
+		pushNode(EntNode::NF_Brackets | EntNode::NF_Comma, "");
+		parseJsonArray();
+		assertLastType(TT_BracketClose);
+		break;
+
+		// Currently, this will return and resolve correctly if the last
+		// token in brackets is a comma. Seems fine - an unintentional,
+		// convenient syntax corrector
+		default:
+		setNodeChildren(childrenStart);
+		return;
+	}
+	Tokenize();
+	if (lastTokenType != TT_Comma) {
+		setNodeChildren(childrenStart);
+		return;
+	}
+	goto LABEL_LOOP;
+}
+
 void EntityParser::freeNode(EntNode* node)
 {
 	// Free the allocated text block
@@ -871,6 +1041,11 @@ void EntityParser::setNodeChildren(const size_t startIndex)
 		*childrenPtr++ = *tempPtr++;
 	}
 	tempChildren.resize(startIndex);
+
+	// Strategy for simplifying the state machines: Just add the comma flag to every
+	// JSON node, then remove it from every final child
+	if(PARSEMODE == ParsingMode::JSON && parent->childCount > 0)
+		parent->children[parent->childCount - 1]->nodeFlags &= ~EntNode::NF_Comma;
 }
 
 void EntityParser::assertLastType(uint32_t requiredType)
@@ -905,6 +1080,21 @@ void EntityParser::TokenizeAdjustValue()
 	}
 }
 
+void EntityParser::TokenizeAdjustJson()
+{
+	/* Same as TokenizeAdjustValue except JSON has "null" written in lowercase instead of uppercase */
+	Tokenize();
+	if (lastTokenType == TT_Identifier) {
+		const char* raw = lastUniqueToken.data();
+		size_t len = lastUniqueToken.length();
+
+		if (len == 5 && memcmp(raw, "false", 5) == 0)
+			lastTokenType = TT_Keyword;
+		else if (len == 4 && memcmp(raw, "true", 4) == 0 || memcmp(raw, "null", 4) == 0)
+			lastTokenType = TT_Keyword;
+	}
+}
+
 void EntityParser::Tokenize() 
 {
 	// Faster than STL isalpha(char) and isdigit(char) functions
@@ -934,6 +1124,21 @@ void EntityParser::Tokenize()
 
 		case ';':
 		lastTokenType = TT_Semicolon;
+		ch++;
+		return;
+
+		case ':':
+		lastTokenType = TT_Colon;
+		ch++;
+		return;
+
+		case '[':
+		lastTokenType = TT_BracketOpen;
+		ch++;
+		return;
+
+		case ']':
+		lastTokenType = TT_BracketClose;
 		ch++;
 		return;
 
@@ -1037,6 +1242,10 @@ void EntityParser::Tokenize()
 
 			case '\r': case '\n': case '\0': // Again, relies on string ending in null character
 			throw Error("No end-quote to complete string literal");
+
+			case '\\':
+			if(*(ch+1) == '"') ch++;
+			goto LABEL_STRING_START;
 
 			default:
 			goto LABEL_STRING_START;

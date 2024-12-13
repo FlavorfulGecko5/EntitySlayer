@@ -61,6 +61,7 @@ class EntityParser : public wxDataViewModel {
 
 	// Internally tracks whether edits have been written to a file
 	bool fileUpToDate = true;
+	size_t lastUncompressedSize = 0;
 
 	/* Accessors */
 	public:
@@ -77,7 +78,7 @@ class EntityParser : public wxDataViewModel {
 	}
 
 	void WriteToFile(const std::string& filepath, bool compress) {
-		root.writeToFile(filepath, compress, true);
+		lastUncompressedSize = root.writeToFile(filepath, lastUncompressedSize + 10000, compress, true);
 		fileUpToDate = true;
 	}
 
@@ -144,6 +145,9 @@ class EntityParser : public wxDataViewModel {
 	void parseContentsLayer();
 	void parseContentsDefinition();
 	void parseContentsPermissive();
+	void parseJsonRoot();
+	void parseJsonObject();
+	void parseJsonArray();
 
 	/*
 	* ALLOCATION / DEALLOCATION FUNCTIONS
@@ -174,6 +178,7 @@ class EntityParser : public wxDataViewModel {
 	 If it's an identifier, distinguish whether it's a true ID or special keyword value
 	*/
 	inline void TokenizeAdjustValue();
+	inline void TokenizeAdjustJson();
 
 	/* Parses raw text for the next token, writes results to instance variables */
 	void Tokenize(); 

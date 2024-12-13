@@ -98,6 +98,10 @@ wxEND_EVENT_TABLE()
 
 EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 {
+	#ifdef _DEBUG
+	BlockAllocatorUnitTest();
+	#endif
+
 	if (!Oodle::init())
 		wxMessageBox("You can open uncompressed entities files but must decompress them separately.\nPut oo2core_8_win64.dll in the same folder as EntitySlayer.exe",
 			"Warning: oo2core_8_win64.dll is missing or corrupted.",
@@ -411,7 +415,7 @@ void EntityFrame::onOpenConfig(wxCommandEvent& event)
 void EntityFrame::onFileOpen(wxCommandEvent& event)
 {
 	wxFileDialog openFileDialog(this, "Open File", wxEmptyString, wxEmptyString,
-		"All Files (*.entities;*.txt)|*.entities;*.txt|Doom Files (*.entities)|*.entities",
+		"All Files (*.entities;*.txt;*.json)|*.entities;*.txt;*.json",
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
@@ -500,7 +504,7 @@ void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
 			if(++itemCount > ITEM_LIMIT)
 				return wxDIR_STOP;
 
-			if(filename.EndsWith(".entities") || filename.EndsWith(".txt"))
+			if(filename.EndsWith(".entities") || filename.EndsWith(".txt") || filename.EndsWith(".json"))
 				files.push_back(filename);
 			return wxDIR_CONTINUE;
 		}
@@ -629,7 +633,7 @@ void EntityFrame::onFileSave(wxCommandEvent& event)
 void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 {
 	wxFileDialog saveFileDialog(this, "Save File", wxEmptyString, activeTab->filePath,
-		"Entities File (*.entities)|*.entities|Text File (*.txt)|*.txt", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		"Entities File (*.entities)|*.entities|Text File (*.txt)|*.txt|JSON File (*.json)|*.json", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (saveFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
@@ -900,10 +904,4 @@ void EntityFrame::onSpecial_DumpAllocatorInfo(wxCommandEvent& event)
 
 void EntityFrame::onDebugMenuOne(wxCommandEvent& event)
 {
-	//TIMESTART
-	//std::string buffer;
-	////buffer.reserve(45000000);
-	//activeTab->root->generateText(buffer);
-	//TIMESTOP("Generation Time: ");
-	wxLogMessage("%zu", sizeof(EntNode));
 }

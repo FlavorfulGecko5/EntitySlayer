@@ -191,6 +191,8 @@ void EntNode::generateText(std::string& buffer, int wsIndex)
 
 	if(nodeFlags & NF_Equals)
 		buffer.append(" =");
+	if(nodeFlags & NF_Colon)
+		buffer.push_back(':');
 	
 	if (valLength > 0) {
 		buffer.push_back(' ');
@@ -202,6 +204,8 @@ void EntNode::generateText(std::string& buffer, int wsIndex)
 
 	if(nodeFlags & NF_Braces)
 		buffer.append(" {\n");
+	else if(nodeFlags & NF_Brackets)
+		buffer.append(" [\n");
 
 	if(nodeFlags & NF_NoIndent)
 		wsIndex--;
@@ -215,15 +219,21 @@ void EntNode::generateText(std::string& buffer, int wsIndex)
 			buffer.append(wsIndex, '\t');
 		buffer.push_back('}');
 	}
+	else if (nodeFlags & NF_Brackets) {
+		buffer.append(wsIndex, '\t');
+		buffer.push_back(']');
+	}
+	if(nodeFlags & NF_Comma)
+		buffer.push_back(',');
 }
 
-void EntNode::writeToFile(const std::string filepath, const bool oodleCompress, const bool debug_logTime)
+size_t EntNode::writeToFile(const std::string filepath, const size_t sizeHint, const bool oodleCompress, const bool debug_logTime)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
 	// 25% of time spent writing to output buffer, 75% on generateText
 
 	std::string raw;
-	//raw.reserve(50000000);
+	raw.reserve(sizeHint);
 	generateText(raw);
 
 	if(debug_logTime)
@@ -253,4 +263,5 @@ void EntNode::writeToFile(const std::string filepath, const bool oodleCompress, 
 	output.close();
 	if (debug_logTime)
 		EntityLogger::logTimeStamps("Writing Duration: ", timeStart);
+	return raw.length();
 }
