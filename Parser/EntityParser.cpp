@@ -138,6 +138,14 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 		initiateParse(textView.data(), &root, &root, presult);
 	} // How did I never notice this memory leak until now...?
 	catch (std::runtime_error err) {
+		if (fileWasCompressed) {
+			wxLogMessage("Decompressing %s so you can find and fix errors", filepath);
+
+			std::ofstream decompressor(filepath, std::ios_base::binary);
+			decompressor.write(textView.data(), textView.length() - 1);
+			decompressor.close();
+		}
+
 		if(fileWasCompressed)
 			delete[] decompressedText;
 		delete[] rawBytes;
@@ -931,6 +939,8 @@ void EntityParser::parseJsonObject()
 	}
 
 	LOOP_EXIT:
+	if(tempChildren.size() > childrenStart)
+		tempChildren.back()->nodeFlags &= ~EntNode::NF_Comma;
 	setNodeChildren(childrenStart);
 }
 
@@ -938,41 +948,39 @@ void EntityParser::parseJsonArray()
 {
 	size_t childrenStart = tempChildren.size();
 
-	LABEL_LOOP:
-	TokenizeAdjustJson();
-	switch (lastTokenType)
-	{
-		case TT_Keyword:
-		case TT_Number: 
-		case TT_String:
-		pushNode(EntNode::NF_Comma, lastUniqueToken);
-		break;
+	while (true) {
+		TokenizeAdjustJson();
+		switch (lastTokenType)
+		{
+			case TT_Keyword:
+			case TT_Number: 
+			case TT_String:
+			pushNode(EntNode::NF_Comma, lastUniqueToken);
+			break;
 
-		case TT_BraceOpen:
-		pushNode(EntNode::NF_Braces | EntNode::NF_Comma, "");
-		parseJsonObject();
-		assertLastType(TT_BraceClose);
-		break;
+			case TT_BraceOpen:
+			pushNode(EntNode::NF_Braces | EntNode::NF_Comma, "");
+			parseJsonObject();
+			assertLastType(TT_BraceClose);
+			break;
 
-		case TT_BracketOpen:
-		pushNode(EntNode::NF_Brackets | EntNode::NF_Comma, "");
-		parseJsonArray();
-		assertLastType(TT_BracketClose);
-		break;
-
-		// Currently, this will return and resolve correctly if the last
-		// token in brackets is a comma. Seems fine - an unintentional,
-		// convenient syntax corrector
-		default:
-		setNodeChildren(childrenStart);
-		return;
+			case TT_BracketOpen:
+			pushNode(EntNode::NF_Brackets | EntNode::NF_Comma, "");
+			parseJsonArray();
+			assertLastType(TT_BracketClose);
+			break;
+			
+			default:
+			goto LOOP_EXIT;
+		}
+		Tokenize();
+		if(lastTokenType != TT_Comma)
+			goto LOOP_EXIT;
 	}
-	Tokenize();
-	if (lastTokenType != TT_Comma) {
-		setNodeChildren(childrenStart);
-		return;
-	}
-	goto LABEL_LOOP;
+	LOOP_EXIT:
+	if (tempChildren.size() > childrenStart)
+		tempChildren.back()->nodeFlags &= ~EntNode::NF_Comma;
+	setNodeChildren(childrenStart);
 }
 
 void EntityParser::freeNode(EntNode* node)
@@ -1041,11 +1049,6 @@ void EntityParser::setNodeChildren(const size_t startIndex)
 		*childrenPtr++ = *tempPtr++;
 	}
 	tempChildren.resize(startIndex);
-
-	// Strategy for simplifying the state machines: Just add the comma flag to every
-	// JSON node, then remove it from every final child
-	if(PARSEMODE == ParsingMode::JSON && parent->childCount > 0)
-		parent->children[parent->childCount - 1]->nodeFlags &= ~EntNode::NF_Comma;
 }
 
 void EntityParser::assertLastType(uint32_t requiredType)
@@ -1317,6 +1320,10 @@ void EntityParser::Tokenize()
 					default:
 					throw Error("Improper bracket usage in identifer");
 				}
+				break;
+
+				case '(': // declType(keyword)
+				Tokenize();
 				break;
 
 				default:

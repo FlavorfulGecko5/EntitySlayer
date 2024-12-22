@@ -350,6 +350,18 @@ class EntityParser : public wxDataViewModel {
 
 		if (col == 0) {
 			// Use value in entityDef node instead of "entity"
+
+			if (PARSEMODE == ParsingMode::JSON) {
+				if (node->nameLength == 0) {
+					if(node->nodeFlags & EntNode::NF_Braces)
+						variant = "{}";
+					else if(node->nodeFlags & EntNode::NF_Brackets)
+						variant = "[]";
+				}
+				else variant = node->getNameWX();
+				return;
+			}
+
 			if (node->parent == &root)
 			{
 				EntNode& entityDef = (*node)["entityDef"];
@@ -362,7 +374,7 @@ class EntityParser : public wxDataViewModel {
 			variant = node->getNameWX();
 		}
 		else {
-			
+		
 			if(node->nodeFlags == EntNode::NFC_ObjCommon)
 				variant = (*node)["eventCall"]["eventDef"].getValueWX();
 			else variant = node->getValueWX();

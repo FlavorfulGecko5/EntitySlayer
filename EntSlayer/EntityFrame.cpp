@@ -152,7 +152,8 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		wxMenu* specialMenu = new wxMenu;
 		specialMenu->Append(SPECIAL_PROPMOVERS, "Bind idProp2 Entities to idMovers",
 			"For Modded Multiplayer developers. Use this to fix idProp2 entity offsets");
-		specialMenu->Append(SPECIAL_TRAVERSALINHERIT, "Fix Generated Traversals");
+		specialMenu->Append(SPECIAL_TRAVERSALINHERIT, "Fix Generated Traversals",
+			"For Proteh's Traversal Generator. Adds 'inherit' statements missing from traversal entities");
 		specialMenu->AppendSeparator();
 		specialMenu->Append(SPECIAL_DEBUG_DUMPBUFFERS, "Write Allocator Data",
 			"For debugging. Writes parser allocation data for the current tab to a file.");
@@ -160,8 +161,8 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		wxMenu* helpMenu = new wxMenu;
 		helpMenu->Append(HELP_ABOUT, "About");
 
-		wxMenu* debugMenu = new wxMenu;
-		debugMenu->Append(DEBUG_MENUONE, "One");
+		//wxMenu* debugMenu = new wxMenu;
+		//debugMenu->Append(DEBUG_MENUONE, "One");
 
 		wxMenuBar* bar = new wxMenuBar;
 		bar->Append(fileMenu, "File");
@@ -169,7 +170,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		bar->Append(mhMenu, "Meathook");
 		bar->Append(specialMenu, "Advanced");
 		bar->Append(helpMenu, "Help");
-		bar->Append(debugMenu, "Debug");
+		//bar->Append(debugMenu, "Debug");
 		SetMenuBar(bar);
 	}
 
@@ -415,7 +416,7 @@ void EntityFrame::onOpenConfig(wxCommandEvent& event)
 void EntityFrame::onFileOpen(wxCommandEvent& event)
 {
 	wxFileDialog openFileDialog(this, "Open File", wxEmptyString, wxEmptyString,
-		"All Files (*.entities;*.txt;*.json)|*.entities;*.txt;*.json",
+		"Officially Supported Files (*.entities;*.txt;*.json)|*.entities;*.txt;*.json|All Files (*.*)|*.*",
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
@@ -633,7 +634,8 @@ void EntityFrame::onFileSave(wxCommandEvent& event)
 void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 {
 	wxFileDialog saveFileDialog(this, "Save File", wxEmptyString, activeTab->filePath,
-		"Entities File (*.entities)|*.entities|Text File (*.txt)|*.txt|JSON File (*.json)|*.json", wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		wxFileSelectorDefaultWildcardStr, 
+		wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (saveFileDialog.ShowModal() == wxID_CANCEL)
 		return;
 
@@ -703,7 +705,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("BETA 4.X DEBUG BUILD");
+	info.SetVersion("Beta 5.0 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

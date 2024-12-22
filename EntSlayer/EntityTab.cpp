@@ -75,13 +75,18 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		ParsingMode mode = ParsingMode::PERMISSIVE;
 		wxString lowercase = filePath.Lower();
 
-		if(lowercase.EndsWith(".entities"))
+		if(lowercase.EndsWith(".entities")) {
 			mode = ParsingMode::ENTITIES;
-		else if (lowercase.EndsWith(".json"))
+		}
+		else if (lowercase.EndsWith(".json")) {
 			mode = ParsingMode::JSON;
+		}
+		else if (!lowercase.EndsWith(".txt")) {
+			wxLogMessage("WARNING: Unsupported filetype detected. Permissive parsing mode enabled. Please verify data integrity when done editing.");
+		}
 
-		if (mode == ParsingMode::PERMISSIVE) {
-			wxLogMessage("WARNING: Permissive parsing mode enabled for this file. Automatic list renumbering has been disabled (re-enable it in the 'Tab' menu)");
+		if (mode != ParsingMode::ENTITIES) {
+			wxLogMessage("WARNING: Non-entities file detected. Automatic list renumbering has been disabled (re-enable it in the 'Tab' menu)");
 			autoNumberLists = false;
 		}
 

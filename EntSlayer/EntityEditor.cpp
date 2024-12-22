@@ -285,7 +285,7 @@ void EntityEditor::OnCharAdded(wxStyledTextEvent& event)
                 numQuotes++;
 
         if(numQuotes == 1)
-            InsertText(GetCurrentPos(), "\";");
+            InsertText(GetCurrentPos(), "\"");
     }
 
 
