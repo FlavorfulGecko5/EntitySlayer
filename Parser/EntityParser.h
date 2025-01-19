@@ -38,6 +38,7 @@ enum class ParsingMode {
 	JSON
 };
 
+class FilterCtrl;
 class EntityParser : public wxDataViewModel {
 
 	public:
@@ -300,6 +301,7 @@ class EntityParser : public wxDataViewModel {
 
 	private:
 	static const std::string FILTER_NOLAYERS;
+	static const std::string FILTER_NOCOMPONENTS;
 
 	// To represent filtering we have a buffer of booleans, the same length as the root child buffer
 	// If a node passes all the filters, it's boolean value is true. If a node is filtered out, it's value is false
@@ -330,9 +332,9 @@ class EntityParser : public wxDataViewModel {
 	  Checks for newly created layers/classes/inherits and adds them to their respective filter checklists
 	  Previously identified values are NOT removed from the checklists
 	*/
-	void refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu);
+	void refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMenu, FilterCtrl* inheritMenu, FilterCtrl* componentMenu);
 
-	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu,
+	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu, wxCheckListBox* componentMenu,
 		bool filterSpawnPosition, Sphere spawnSphere, wxCheckListBox* textMenu, bool caseSensitiveText);
 
 	void FilteredSearch(const std::string& key, bool backwards, bool caseSensitive, bool exactLength);
@@ -371,10 +373,16 @@ class EntityParser : public wxDataViewModel {
 					return;
 				}
 			}
+			if (node->nodeFlags == EntNode::NFC_ObjCommon) { // Indiana Jones Entity Component System
+				if (node->HasParent() && node->parent->getName() == "components") {
+					variant = (*node)["className"].getValueWX();
+					return;
+				}
+			}
 			variant = node->getNameWX();
 		}
 		else {
-		
+
 			if(node->nodeFlags == EntNode::NFC_ObjCommon)
 				variant = (*node)["eventCall"]["eventDef"].getValueWX();
 			else variant = node->getValueWX();

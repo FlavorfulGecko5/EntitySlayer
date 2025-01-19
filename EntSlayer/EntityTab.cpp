@@ -12,10 +12,13 @@ enum TabID
 
 	NODEVIEW_UNDO,
 	NODEVIEW_REDO,
+	NODEVIEW_CUTSELECTED,
+	NODEVIEW_CUTSELECTED_ACCEL,
 	NODEVIEW_COPYSELECTED,
 	NODEVIEW_COPYSELECTED_ACCEL,
 	NODEVIEW_PASTE,
 	NODEVIEW_PASTE_ACCEL,
+	NODEVIEW_EXPANDENT,
 	NODEVIEW_SELECTALLENTS,
 	NODEVIEW_SELECTALLENTS_ACCEL,
 	NODEVIEW_DELETESELECTED,
@@ -36,18 +39,22 @@ wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
 	EVT_COLLAPSIBLEPANE_CHANGED(wxID_ANY, onFilterMenuShowHide)
 
 	EVT_DATAVIEW_SELECTION_CHANGED(wxID_ANY, onNodeSelection)
+	EVT_DATAVIEW_ITEM_ACTIVATED(wxID_ANY, onNodeDoubleClick)
 	EVT_DATAVIEW_ITEM_CONTEXT_MENU(wxID_ANY, onNodeContextMenu)
 
 	EVT_MENU(NODEVIEW_UNDO, onUndo)
 	EVT_MENU(NODEVIEW_REDO, onRedo)
+	EVT_MENU(NODEVIEW_CUTSELECTED, onCutSelectedNodes)
 	EVT_MENU(NODEVIEW_COPYSELECTED, onCopySelectedNodes)
 	EVT_MENU(NODEVIEW_PASTE, onPaste)
+	EVT_MENU(NODEVIEW_EXPANDENT, onExpandEntity)
 	EVT_MENU(NODEVIEW_SELECTALLENTS, onSelectAllEntities)
 	EVT_MENU(NODEVIEW_DELETESELECTED, EntityTab::onDeleteSelectedNodes)
 	EVT_MENU(NODEVIEW_SETPOSITION, EntityTab::onSetSpawnPosition)
 	EVT_MENU(NODEVIEW_SETORIENTATION, EntityTab::onSetSpawnOrientation)
 	EVT_MENU(NODEVIEW_TELEPORTPOSITION, EntityTab::onTeleportToEntity)
 
+	EVT_MENU(NODEVIEW_CUTSELECTED_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_COPYSELECTED_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_PASTE_ACCEL, onNodeContextAccelerator)
 	EVT_MENU(NODEVIEW_SELECTALLENTS_ACCEL, onNodeContextAccelerator)
@@ -108,10 +115,19 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		layerMenu = new FilterCtrl(this, topWindow, "Layers", false);
 		classMenu = new FilterCtrl(this, topWindow, "Classes", false);
 		inheritMenu = new FilterCtrl(this, topWindow, "Inherits", false);
+		componentMenu = new FilterCtrl(this, topWindow, "Components", false);
+		checklistSizer->Add(componentMenu->container, 1, wxLEFT | wxRIGHT, 10);
 		checklistSizer->Add(layerMenu->container, 1, wxLEFT | wxRIGHT, 10);
 		checklistSizer->Add(classMenu->container, 1, wxLEFT | wxRIGHT, 10);
 		checklistSizer->Add(inheritMenu->container, 1, wxLEFT | wxRIGHT, 10);
 		refreshFilters();
+		if (componentMenu->list->GetCount() > 1) { // No Components option gives a minimum value of 1
+			checklistSizer->Hide(layerMenu->container);
+		}
+		else {
+			checklistSizer->Hide(componentMenu->container);
+		}
+			
 
 		/* Spawn Position Filter */
 		spawnMenu = new SpawnFilter(this, topWindow);
@@ -181,9 +197,11 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		viewMenu.Append(NODEVIEW_UNDO, "Undo\tCtrl+Z");
 		viewMenu.Append(NODEVIEW_REDO, "Redo\tCtrl+Y");
 		viewMenu.AppendSeparator();
+		viewMenu.Append(NODEVIEW_CUTSELECTED, "Cut Selected\tCtrl+X");
 		viewMenu.Append(NODEVIEW_COPYSELECTED, "Copy Selected\tCtrl+C");
 		viewMenu.Append(NODEVIEW_PASTE, "Paste\tCtrl+V");
 		viewMenu.AppendSeparator();
+		viewMenu.Append(NODEVIEW_EXPANDENT, "Expand/Collapse Entity\tDouble Click or Enter");
 		viewMenu.Append(NODEVIEW_SELECTALLENTS, "Select All Entities\tCtrl+A");
 		viewMenu.Append(NODEVIEW_DELETESELECTED, "Delete Selected\tCtrl+D or Del");
 		viewMenu.AppendSeparator();
@@ -243,12 +261,13 @@ void EntityTab::setAppendMenu()
 	appendMenu = ConfigInterface::getMenu();
 	viewMenu.Insert(index, NODEVIEW_APPENDMENU_ID, "Append", appendMenu);
 
-	size_t bindCount = appendMenu->GetAccelCount() + 10;
+	size_t bindCount = appendMenu->GetAccelCount() + 11;
 	wxAcceleratorEntry* entries = new wxAcceleratorEntry[bindCount];
 	wxAcceleratorEntry* inc = entries;
 
 	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'Z', NODEVIEW_UNDO);
 	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'Y', NODEVIEW_REDO);
+	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'X', NODEVIEW_CUTSELECTED_ACCEL);
 	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'C', NODEVIEW_COPYSELECTED_ACCEL);
 	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'V', NODEVIEW_PASTE_ACCEL);
 	new (inc++) wxAcceleratorEntry(wxACCEL_CTRL, 'A', NODEVIEW_SELECTALLENTS_ACCEL);
@@ -273,10 +292,9 @@ void EntityTab::onFilterRefresh(wxCommandEvent& event)
 }
 
 void EntityTab::refreshFilters() {
-	Parser->refreshFilterMenus(layerMenu->list, classMenu->list, inheritMenu->list);
-	layerMenu->refreshAutocomplete();
-	classMenu->refreshAutocomplete();
-	inheritMenu->refreshAutocomplete();
+	//TIMESTART
+	Parser->refreshFilterMenus(layerMenu, classMenu, inheritMenu, componentMenu);
+	//TIMESTOP("Refresh Filters")
 }
 
 void EntityTab::onFilterCaseCheck(wxCommandEvent& event)
@@ -330,6 +348,7 @@ void EntityTab::applyFilters(bool clearAll)
 	if (clearAll)
 	{
 		inheritMenu->uncheckAll();
+		componentMenu->uncheckAll();
 		classMenu->uncheckAll();
 		layerMenu->uncheckAll();
 		keyMenu->uncheckAll();
@@ -339,7 +358,7 @@ void EntityTab::applyFilters(bool clearAll)
 	Sphere newSphere;
 	bool filterSpawns = spawnMenu->activated() && spawnMenu->getData(newSphere);
 
-	Parser->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list,
+	Parser->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list, componentMenu->list,
 		filterSpawns, newSphere, keyMenu->list, caseSensCheck->IsChecked());
 	wxDataViewItem p(nullptr); // Todo: should try to improve this so we don't destroy entire root
 	wxDataViewItem r(root);
@@ -541,6 +560,51 @@ void EntityTab::onNodeSelection(wxDataViewEvent& event)
 	dataviewMouseAction(event.GetItem());
 }
 
+void EntityTab::onNodeDoubleClick(wxDataViewEvent& event)
+{
+	// Implementation Note: If edit/components are not containers, then it will always attempt
+	// to expand instead of collapse. But realistically...this should be acceptable
+	//wxLogMessage("Double click");
+	EntNode* node = (EntNode*)event.GetItem().GetID();
+	if(node == nullptr || node == Parser->getRoot())
+		return;
+
+	EntNode* entity = node->getEntity();
+	EntNode& editNode = (*entity)["entityDef"]["edit"];
+	if (&editNode == EntNode::SEARCH_404)
+		return;
+
+	// NEW
+	EntNode* options[] = {
+		&editNode["components"], // idComponentEntity
+		&editNode["componentTimeLine"]["entityEvents"], // idTarget_Timeline
+		&editNode["encounterComponent"]["entityEvents"]["item[0]"]["events"], // idEncounterManager
+		&editNode // Other entities
+	};
+
+	for (int i = 0; i < sizeof(options) / sizeof(EntNode*); i++) {
+		if(options[i] == EntNode::SEARCH_404)
+			continue;
+
+		wxDataViewItem optionItem(options[i]);
+		if(view->IsExpanded(optionItem))
+			view->Collapse(wxDataViewItem(entity));
+		else {
+			view->Expand(optionItem);
+			view->EnsureVisible(optionItem);
+		}
+
+		return;
+	}
+}
+
+void EntityTab::onExpandEntity(wxCommandEvent& event)
+{
+	// This is probably okay to do...
+	wxDataViewEvent temp(wxEVT_DATAVIEW_ITEM_ACTIVATED, view, view->GetCurrentItem());
+	onNodeDoubleClick(temp);
+}
+
 /* 
 * It's best that we nullify the normal behavior when right-mouse-down occurs in the dataview,
 * to prevent duplicate commit attempts and the context menu popping up for the wrong node.
@@ -570,8 +634,10 @@ void EntityTab::onNodeContextMenu(wxDataViewEvent& event)
 		// the functions
 		viewMenu.Enable(NODEVIEW_UNDO, true);
 		viewMenu.Enable(NODEVIEW_REDO, true);
+		viewMenu.Enable(NODEVIEW_CUTSELECTED, view->HasSelection());
 		viewMenu.Enable(NODEVIEW_COPYSELECTED, view->HasSelection());
 		viewMenu.Enable(NODEVIEW_PASTE, node != nullptr && node != root);
+		viewMenu.Enable(NODEVIEW_EXPANDENT, node!= nullptr && node != root);
 		viewMenu.Enable(NODEVIEW_SELECTALLENTS, true);
 		viewMenu.Enable(NODEVIEW_DELETESELECTED, view->HasSelection());
 		viewMenu.Enable(NODEVIEW_APPENDMENU_ID, node != nullptr && node != root);
@@ -597,6 +663,10 @@ void EntityTab::onNodeContextAccelerator(wxCommandEvent& event)
 
 	switch (event.GetId())
 	{
+		case NODEVIEW_CUTSELECTED_ACCEL:
+		onCutSelectedNodes(event);
+		break;
+
 		case NODEVIEW_COPYSELECTED_ACCEL:
 		onCopySelectedNodes(event);
 		break;
@@ -661,6 +731,12 @@ void EntityTab::onUndo(wxCommandEvent& event)
 void EntityTab::onRedo(wxCommandEvent& event)
 {
 	UndoRedo(false);
+}
+
+void EntityTab::onCutSelectedNodes(wxCommandEvent& event)
+{
+	onCopySelectedNodes(event);
+	onDeleteSelectedNodes(event);
 }
 
 void EntityTab::onCopySelectedNodes(wxCommandEvent& event)

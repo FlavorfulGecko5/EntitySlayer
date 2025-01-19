@@ -1,6 +1,8 @@
 #include "wx/wx.h"
 #include "wx/checklst.h"
 #include "wx/combo.h"
+#include <set>
+#include <string_view>
 
 class FilterListCombo : public wxCheckListBox, public wxComboPopup
 {
@@ -51,6 +53,7 @@ class FilterCtrl : public wxComboCtrl
 	void uncheckAll();
 	void onListLeftDown(wxMouseEvent& event);
 	void onQuickInputEnter(wxCommandEvent& event);
+	void setItems(const std::set<std::string_view>& newItems);
 };
 
 class SpawnFilter : public wxBoxSizer 

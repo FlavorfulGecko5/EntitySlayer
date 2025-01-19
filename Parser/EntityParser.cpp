@@ -4,6 +4,7 @@
 #include "EntityLogger.h"
 #include "EntityParser.h"
 #include "EntityEditor.h"
+#include "FilterMenus.h"
 
 enum TokenType : uint32_t
 {
@@ -24,6 +25,7 @@ enum TokenType : uint32_t
 	TT_Colon        = 1 << 14,
 	TT_BracketOpen  = 1 << 15,
 	TT_BracketClose = 1 << 16,
+	TT_IndyHex      = 1 << 17,
 
 	/* Token Type Combos */
 	TTC_PermissiveKey = TT_Identifier | TT_Number | TT_Tuple | TT_String | TT_Keyword,
@@ -34,6 +36,7 @@ enum TokenType : uint32_t
 };
 
 const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
+const std::string EntityParser::FILTER_NOCOMPONENTS = "\"No Components\"";
 
 EntityParser::EntityParser() : fileWasCompressed(false), PARSEMODE(ParsingMode::ENTITIES)
 {
@@ -383,6 +386,17 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 
 void EntityParser::fixListNumberings(EntNode* parent, bool recursive, bool highlight)
 {
+	// Do not renumber the ids of Indiana Jones components
+	if (parent->getName() == "components") {
+		for (int i = 0; i < parent->childCount; i++)
+		{
+			EntNode* current = parent->children[i];
+			if (current->childCount > 0 && recursive)
+				fixListNumberings(current, true, highlight);
+		}
+		return;
+	}
+
 	int listItems = 0;
 	for (int i = 0; i < parent->childCount; i++) 
 	{
@@ -835,7 +849,7 @@ void EntityParser::parseContentsDefinition()
 		pushNode(EntNode::NFC_Comment, lastUniqueToken);
 		goto LABEL_LOOP;
 	}
-	if(lastTokenType != TT_Identifier)
+	if(lastTokenType != TT_Identifier && lastTokenType != TT_String)
 	{
 		setNodeChildren(childrenStart);
 		return;
@@ -851,7 +865,7 @@ void EntityParser::parseContentsDefinition()
 		assertLastType(TT_BraceClose);
 		break;
 
-		case TT_Number:
+		case TT_Number: case TT_IndyHex:
 		case TT_String: case TT_Keyword:
 		pushNodeBoth(EntNode::NFC_ValueCommon);
 		assertIgnore(TT_Semicolon);
@@ -1254,6 +1268,36 @@ void EntityParser::Tokenize()
 			goto LABEL_STRING_START;
 		}
 
+		case '$':
+		{
+			first = ch;
+
+			// Multiple prefixes in one conditional creates spooky, undefined behavior
+			if(*(ch + 1) != '0' || *(ch + 2) != 'x')
+				throw Error("Bad start to dollar sign hexadecimal");
+			ch += 3;
+
+			LABEL_HEX_START:
+			if (isNum || (*ch >= 'A' && *ch <= 'F') || (*ch >= 'a' && *ch <='f')) {
+				ch++;
+				goto LABEL_HEX_START;
+			}
+
+			Tokenize();
+			if (lastTokenType != TT_Number) {
+				throw Error("Number expected after dollar sign hex");
+			}
+				
+			// The optimistic approach: Given that float fields will randomly not use hex numbers
+			// throughout the Indiana entities files, I will assume they're entirely optional and
+			// opt to ignore them in favor of the decimal number tokens. This approach ensures
+			// compatability with existing spawnPosition/spawnOrientation related code
+
+			//lastTokenType = TT_IndyHex;
+			//lastUniqueToken = std::string_view(first, (size_t)(ch-first));
+			return;
+		}
+
 		// NOTES:
 		// 1. PERMANENT: Negative sign can't be seperated from the number by whitespace
 		// 2. CHANGE IN THE FUTURE (?): Number token cannot begin with a period.
@@ -1383,16 +1427,18 @@ void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool c
 	}
 }
 
-void EntityParser::refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu)
+void EntityParser::refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMenu, FilterCtrl* inheritMenu, FilterCtrl* componentMenu)
 {
 	std::set<std::string_view> newLayers;
 	std::set<std::string_view> newClasses;
 	std::set<std::string_view> newInherits;
+	std::set<std::string_view> newComponents;
 
 	EntNode** children = root.children;
 	int childCount = root.childCount;
 
 	newLayers.insert(std::string_view(FILTER_NOLAYERS.data() + 1, FILTER_NOLAYERS.length() - 2));
+	newComponents.insert(std::string_view(FILTER_NOCOMPONENTS.data() + 1, FILTER_NOCOMPONENTS.length() - 2));
 	for (int i = 0; i < childCount; i++)
 	{
 		EntNode* current = children[i];
@@ -1417,36 +1463,30 @@ void EntityParser::refreshFilterMenus(wxCheckListBox* layerMenu, wxCheckListBox*
 					newLayers.insert(layerBuffer[currentLayer]->getNameUQ());
 			}
 		}
+		{
+			EntNode& compNode = defNode["edit"]["components"];
+			for (int i = 0; i < compNode.childCount; i++) {
+				EntNode& className = (*compNode.children[i])["className"];
+				if(className.ValueLength() > 0)
+					newComponents.insert(className.getValueUQ());
+			}
+		}
 	}
 
-	for (std::string_view view : newLayers)
-	{
-		wxString s(view.data(), view.length());
-		if(layerMenu->FindString(s, true) < 0)
-			layerMenu->Append(s);
-	}
-
-	for (std::string_view view : newClasses)
-	{
-		wxString s(view.data(), view.length());
-		if (classMenu->FindString(s, true) < 0)
-			classMenu->Append(s);
-	}
-
-	for (std::string_view view : newInherits)
-	{
-		wxString s(view.data(), view.length());
-		if (inheritMenu->FindString(s, true) < 0)
-			inheritMenu->Append(s);
-	}
+	layerMenu->setItems(newLayers);
+	classMenu->setItems(newClasses);
+	inheritMenu->setItems(newInherits);
+	componentMenu->setItems(newComponents);
+	
 }
 
-void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu,
+void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu, wxCheckListBox* componentMenu,
 	bool filterSpawnPosition, Sphere spawnSphere, wxCheckListBox* textMenu, bool caseSensitiveText)
 {
 	std::set<std::string> layerFilters;
 	std::set<std::string> classFilters;
 	std::set<std::string> inheritFilters;
+	std::set<std::string> componentFilters;
 	std::vector<std::string> textFilters;
 
 	for (int i = 0, max = layerMenu->GetCount(); i < max; i++)
@@ -1461,6 +1501,10 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 		if (inheritMenu->IsChecked(i))
 			inheritFilters.insert('"' + std::string(inheritMenu->GetString(i)) + '"');
 
+	for (int i = 0, max = componentMenu->GetCount(); i < max; i++)
+		if (componentMenu->IsChecked(i))
+			componentFilters.insert('"' + std::string(componentMenu->GetString(i)) + '"');
+
 	for(int i = 0, max = textMenu->GetCount(); i < max; i++)
 		if(textMenu->IsChecked(i))
 			textFilters.push_back(std::string(textMenu->GetString(i)));
@@ -1472,6 +1516,8 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 	bool filterByInherit = inheritFilters.size() > 0;
 	bool filterByLayer = layerFilters.size() > 0;
 	bool noLayerFilter = layerFilters.count(FILTER_NOLAYERS) > 0;
+	bool filterByComponent = componentFilters.size() > 0;
+	bool noComponentFilter = componentFilters.count(FILTER_NOCOMPONENTS) > 0;
 					
 	size_t numTextFilters = textFilters.size();
 	bool filterByText = numTextFilters > 0;
@@ -1527,6 +1573,31 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 			}
 			if (!hasLayer)
 			{
+				entity->filtered = false;
+				continue;
+			}
+		}
+
+		// More todo: spawn position filter is broken with cursed values
+		if (filterByComponent)
+		{
+			bool hasComponent = false;
+			EntNode& componentNode = entityDef["edit"]["components"];
+			if(componentNode.getChildCount() == 0 && noComponentFilter)
+				hasComponent = true;
+
+			EntNode** comps = componentNode.getChildBuffer();
+			int compCount = componentNode.getChildCount();
+			for (int currentComp = 0; currentComp < compCount; currentComp++) {
+				 
+				std::string_view c = (*(comps[currentComp]))["className"].getValue();
+				if (componentFilters.count(std::string(c)) > 0) {
+					hasComponent = true;
+					break;
+				}
+			}
+
+			if (!hasComponent) {
 				entity->filtered = false;
 				continue;
 			}

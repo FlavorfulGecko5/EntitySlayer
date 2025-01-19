@@ -184,11 +184,15 @@ class EntNode
 	* @param key - the name to search for
 	* @return The first child with the given name, or 404 Node if not found
 	*/
-	EntNode& operator[](const std::string& key)
+	EntNode& operator[](const std::string_view key) const
 	{
 		for (int i = 0; i < childCount; i++)
-			if (children[i]->getName() == key)
+		{
+			if(children[i]->nameLength != key.length())
+				continue;
+			if(memcmp(key.data(), children[i]->textPtr, children[i]->nameLength) == 0)
 				return *children[i];
+		}
 		return *SEARCH_404;
 	}
 

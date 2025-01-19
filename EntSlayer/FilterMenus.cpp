@@ -27,6 +27,55 @@ void FilterCtrl::refreshAutocomplete()
 	quickInput->AutoComplete(list->GetStrings());
 }
 
+void FilterCtrl::setItems(const std::set<std::string_view>& newItems)
+{
+	wxArrayString newStrings;
+	newStrings.reserve(newItems.size() + 5);
+	for (std::string_view view : newItems)
+		newStrings.push_back(wxString(view.data(), view.length()));
+
+	// Need to ensure filters are carried over properly
+	// When we use Set all items will be unchecked
+	wxArrayInt oldChecked;
+	wxArrayString oldCheckedStrings;
+	list->GetCheckedItems(oldChecked);
+	oldCheckedStrings.reserve(oldChecked.size());
+	for (int i = 0, max = oldChecked.size(); i < max; i++) {
+		oldCheckedStrings.push_back(list->GetString(oldChecked[i]));
+	}
+
+	// Setting the list comes with a huge runtime cost
+	// Freezing it during the set further reduces this function's runtime by ~75%
+	list->Freeze();
+	list->Set(newStrings);
+
+	for (wxString& old : oldCheckedStrings) {
+		int location = list->FindString(old, true);
+
+		// We don't want to change the filters when refreshing, so we ensure any checked items
+		// remain in the array
+		if (location < 0) {
+			location = list->Append(old);
+		}
+		list->Check(location, true);
+	}
+	list->Thaw();
+
+	// Seems to have it's own performance penalty on initial file opening 
+	// - as high as 20 milliseconds across all filters
+	refreshAutocomplete();
+
+	// Original implementation - new implementation has 90% reduction in runtime in release builds, 
+	// several hundred % reduction in debug
+	//for (std::string_view view : newItems)
+	//{
+	//	wxString s(view.data(), view.length());
+	//	if (list->FindString(s, true) < 0)
+	//		list->Append(s);
+	//}
+	//refreshAutocomplete();
+}
+
 void FilterCtrl::deleteUnchecked()
 {
 	size_t i = 0;
@@ -59,8 +108,7 @@ void FilterCtrl::onListLeftDown(wxMouseEvent& event)
 void FilterCtrl::onQuickInputEnter(wxCommandEvent& event)
 {
 	wxString query = quickInput->GetValue();
-	wxArrayString matches = list->GetStrings();
-	int index = matches.Index(query);
+	int index = list->FindString(query, quickInputCreatesEntries); // Only do case-sensitive matching for the text filter
 
 	if (index == -1) {
 		if (!quickInputCreatesEntries)

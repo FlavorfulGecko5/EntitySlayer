@@ -705,7 +705,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 5.0 Release Build");
+	info.SetVersion("Beta 6.0 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

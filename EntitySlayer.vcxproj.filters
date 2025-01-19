@@ -105,5 +105,6 @@
     <ClInclude Include="EntSlayer\Config.h">
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
+    <ClInclude Include="EntSlayer\EntityProfiler.h" />
   </ItemGroup>
 </Project>

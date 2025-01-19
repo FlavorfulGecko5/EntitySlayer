@@ -21,6 +21,7 @@ class EntityTab : public wxPanel
 	FilterCtrl* layerMenu;
 	FilterCtrl* classMenu;
 	FilterCtrl* inheritMenu;
+	FilterCtrl* componentMenu;
 	FilterCtrl* keyMenu;
 	wxCheckBox* caseSensCheck;
 	SpawnFilter* spawnMenu;
@@ -54,6 +55,7 @@ class EntityTab : public wxPanel
 	void onDataviewChar(wxKeyEvent &event);
 	bool dataviewMouseAction(wxDataViewItem item);
 	void onNodeSelection(wxDataViewEvent& event);
+	void onNodeDoubleClick(wxDataViewEvent& event);
 	void onViewRightMouseDown(wxMouseEvent& event);
 
 	/*
@@ -70,8 +72,10 @@ class EntityTab : public wxPanel
 	void onNodeContextAccelerator(wxCommandEvent& event);
 	void onUndo(wxCommandEvent &event);
 	void onRedo(wxCommandEvent &event);
+	void onCutSelectedNodes(wxCommandEvent &event);
 	void onCopySelectedNodes(wxCommandEvent &event);
 	void onPaste(wxCommandEvent& event);
+	void onExpandEntity(wxCommandEvent &event); // Double click action - just here for documentation purposes
 	void onSelectAllEntities(wxCommandEvent &event);
 	void onDeleteSelectedNodes(wxCommandEvent &event);
 	void onSetSpawnPosition(wxCommandEvent &event);
