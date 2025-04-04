@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "EntityFrame.h"
 #include "EntityTab.h"
+#include "EntityFolderDialog.h"
 
 
 #define TIMESTART auto timeStart = std::chrono::high_resolution_clock::now();
@@ -428,63 +429,6 @@ void EntityFrame::onFileOpen(wxCommandEvent& event)
 
 void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
 {
-	class SelectionDialog : public wxDialog 
-	{
-		public:
-		wxCheckListBox* checklist = nullptr;
-
-		SelectionDialog(const wxString& directory, const wxArrayString& files) : wxDialog(nullptr, wxID_ANY, directory) 
-		{
-			wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
-			wxButton* checkAll = new wxButton(this, wxID_ANY, "Toggle All");
-			checkAll->Bind(wxEVT_BUTTON, &SelectionDialog::onToggleAll, this);
-
-			buttons->Add(new wxButton(this, wxID_OK, "Confirm"));
-			buttons->Add(checkAll, 0, wxLEFT, 5);
-			buttons->Add(new wxButton(this, wxID_CANCEL, "Cancel"), 0, wxLEFT, 5);
-
-			checklist = new wxCheckListBox(this, wxID_ANY, wxDefaultPosition, wxDefaultSize,
-				0, NULL, wxLB_HSCROLL | wxLB_NEEDED_SB);
-			checklist->Append(files);
-			checklist->Bind(wxEVT_LEFT_DOWN, &SelectionDialog::onLeftDown, this);
-
-			wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-			mainSizer->Add(checklist, 0, wxEXPAND);
-			mainSizer->Add(buttons, 0, wxCENTER | wxTOP | wxBOTTOM, 5);
-			SetSizerAndFit(mainSizer);
-			CenterOnScreen();
-
-			ShowModal();
-			Destroy();
-		}
-
-		void onToggleAll(wxCommandEvent& event) {
-			// If no items are checked, check them all
-			// Otherwise, uncheck them all
-
-			bool noneChecked = true;
-			int max = checklist->GetCount();
-			for (int i = 0; i < max; i++)
-				if (checklist->IsChecked(i)) {
-					noneChecked = false;
-					break;
-				}
-
-			for(int i = 0; i < max; i++)
-				checklist->Check(i, noneChecked);
-		}
-
-		void onLeftDown(wxMouseEvent& event) {
-			// Normally, left clicking on the text just highlights it.
-			// For convenience, we want that to check/uncheck the item
-			// Like clicking on the checkbox does
-
-			int index = checklist->HitTest(event.GetPosition());
-			if (index > -1)
-				checklist->Check(index, !checklist->IsChecked(index));
-		}
-	};
-
 	// Safeguards against users opening stupidly large directories
 	class EarlyOutTraverser : public wxDirTraverser
 	{
@@ -505,7 +449,7 @@ void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
 			if(++itemCount > ITEM_LIMIT)
 				return wxDIR_STOP;
 
-			if(filename.EndsWith(".entities") || filename.EndsWith(".txt") || filename.EndsWith(".json"))
+			//if(filename.EndsWith(".entities") || filename.EndsWith(".txt") || filename.EndsWith(".json"))
 				files.push_back(filename);
 			return wxDIR_CONTINUE;
 		}
@@ -530,7 +474,7 @@ void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
 	wxString dirString(openDialog.GetPath());
 	size_t dirLength = dirString.length();
 	wxDir dir(dirString);
-	wxArrayString files, displayedFiles;
+	wxArrayString files;
 	EarlyOutTraverser traverser(files);
 
 	// Cannot use filespec - filtered out files won't get passed to the traverser, meaning they won't get counted
@@ -549,25 +493,24 @@ void EntityFrame::onFileOpenFolder(wxCommandEvent& event)
 		return;
 	}
 
-	displayedFiles.reserve(files.size());
 	for (wxString& f : files)
-		displayedFiles.push_back(f.substr(dirLength + 1));
-		
+		f.Remove(0, dirLength + 1); // dirString does not come with a separator at the end
 
-	SelectionDialog selector(dirString, displayedFiles);
-	wxCheckListBox* checklist = selector.checklist;
-	wxArrayInt selections;
-
-	checklist->GetCheckedItems(selections);
-	if(selector.GetReturnCode() == wxID_CANCEL || selections.IsEmpty())
+	EntityFolderDialog selector(dirString, files);
+	if(selector.GetReturnCode() == wxID_CANCEL)
 		return;
 
-	wxArrayString selectedFiles;
-	selectedFiles.reserve(files.size());
+	wxArrayString selections;
+	selector.GetCheckedPaths(selections);
+	if(selections.IsEmpty())
+		return;
 
-	for (int i : selections)
-		selectedFiles.push_back(files[i]);
-	openFiles(selectedFiles);
+	for (wxString& s : selections) {
+		s.Prepend(wxFileName::GetPathSeparator());
+		s.Prepend(dirString);
+	}
+		
+	openFiles(selections);
 }
 
 void EntityFrame::detectExternalEdits()
@@ -705,7 +648,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 6.0 Release Build");
+	info.SetVersion("Beta 6.1 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

@@ -61,6 +61,7 @@
       <Filter>Source Files\EntSlayer</Filter>
     </ClCompile>
     <ClCompile Include="Parser\GenericBlockAllocator.cpp" />
+    <ClCompile Include="EntSlayer\EntityFolderDialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser\EntityLogger.h">
@@ -106,5 +107,6 @@
       <Filter>Source Files\EntSlayer</Filter>
     </ClInclude>
     <ClInclude Include="EntSlayer\EntityProfiler.h" />
+    <ClInclude Include="EntSlayer\EntityFolderDialog.h" />
   </ItemGroup>
 </Project>

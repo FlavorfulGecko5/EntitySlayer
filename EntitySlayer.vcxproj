@@ -157,6 +157,7 @@
     <ClCompile Include="EntSlayer\Config.cpp" />
     <ClCompile Include="EntSlayer\Application.cpp" />
     <ClCompile Include="EntSlayer\EntityEditor.cpp" />
+    <ClCompile Include="EntSlayer\EntityFolderDialog.cpp" />
     <ClCompile Include="EntSlayer\EntityFrame.cpp" />
     <ClCompile Include="EntSlayer\EntityTab.cpp" />
     <ClCompile Include="EntSlayer\FilterMenus.cpp" />
@@ -172,6 +173,7 @@
     <ClInclude Include="EntHero\RPCInterface\meathook_interface.h" />
     <ClInclude Include="EntHero\RPCInterface\mhclient.h" />
     <ClInclude Include="EntSlayer\Config.h" />
+    <ClInclude Include="EntSlayer\EntityFolderDialog.h" />
     <ClInclude Include="EntSlayer\EntityProfiler.h" />
     <ClInclude Include="EntSlayer\EntityTab.h" />
     <ClInclude Include="EntSlayer\EntityEditor.h" />

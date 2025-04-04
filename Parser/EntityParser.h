@@ -383,8 +383,25 @@ class EntityParser : public wxDataViewModel {
 		}
 		else {
 
-			if(node->nodeFlags == EntNode::NFC_ObjCommon)
+			if(node->nodeFlags == EntNode::NFC_ObjCommon) {
+				// Devinvloadout decls
+				// This demonstrates the importance of understanding
+				// C++ reference reassignment rules
+				EntNode& itemNode = (*node)["item"];
+				if(&itemNode != EntNode::SEARCH_404) {
+					variant = itemNode.getValueWXUQ();
+					return;
+				}
+
+				EntNode& perkNode = (*node)["perk"];
+				if (&perkNode != EntNode::SEARCH_404) {
+					variant = perkNode.getValueWXUQ();
+					return;
+				}
+
+				// Encounter managers
 				variant = (*node)["eventCall"]["eventDef"].getValueWX();
+			}
 			else variant = node->getValueWX();
 		}
 	}
