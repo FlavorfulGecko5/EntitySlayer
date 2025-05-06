@@ -10,6 +10,22 @@ wxBEGIN_EVENT_TABLE(EntityEditor, wxStyledTextCtrl)
     EVT_KEY_DOWN(EntityEditor::OnKeyDown)
 wxEND_EVENT_TABLE()
 
+struct EditorConfig_t {
+    // editor functionality prefs
+    bool syntaxEnable = true;
+    bool foldEnable = true;
+    bool indentEnable = true;
+    // display defaults prefs
+    bool readOnlyInitial = false;
+    bool overTypeInitial = false;
+    bool wrapModeInitial = false;
+    bool displayEOLEnable = false;
+    bool indentGuideEnable = true;
+    bool lineNumberEnable = true;
+    bool longLineOnEnable = false;
+    bool whiteSpaceEnable = false;
+} editorConfig;
+
 bool EntityEditor::InitializePrefs(const wxString& name)
 {
     // initialize styles
@@ -32,18 +48,16 @@ bool EntityEditor::InitializePrefs(const wxString& name)
     SetLexer(curInfo->lexer);
     m_language = curInfo;
 
-    // set margin for line numbers
-    SetMarginType(m_LineNrID, wxSTC_MARGIN_NUMBER);
-    StyleSetForeground(wxSTC_STYLE_LINENUMBER, wxColour("DARK GREY"));
-    StyleSetBackground(wxSTC_STYLE_LINENUMBER, *wxWHITE);
-    SetMarginWidth(m_LineNrID, 0); // start out not visible
 
     // annotations style
+    // Annotations don't word wrap so we should keep it small
     StyleSetBackground(ANNOTATION_STYLE, wxColour(244, 220, 220));
     StyleSetForeground(ANNOTATION_STYLE, *wxBLACK);
-    StyleSetSizeFractional(ANNOTATION_STYLE,
-        (StyleGetSizeFractional(wxSTC_STYLE_DEFAULT) * 4) / 5);
+    StyleSetFont(ANNOTATION_STYLE, wxFont(wxFontInfo(8).Family(wxFONTFAMILY_MODERN)));
 
+    // With this new setup, the annotation font needs to be manually set. 
+    // Previously it was set implicitly by StyleClearAll making the default font set in the
+    // constructor the new default for every font
     // default fonts for all styles!
     int Nr;
     for (Nr = 0; Nr < wxSTC_STYLE_LASTPREDEFINED; Nr++) {
@@ -51,12 +65,8 @@ bool EntityEditor::InitializePrefs(const wxString& name)
         StyleSetFont(Nr, font);
     }
 
-    // set common styles
-    StyleSetForeground(wxSTC_STYLE_DEFAULT, wxColour("DARK GREY"));
-    StyleSetForeground(wxSTC_STYLE_INDENTGUIDE, wxColour("DARK GREY"));
-
     // initialize settings
-    if (g_CommonPrefs.syntaxEnable) {
+    if (editorConfig.syntaxEnable) {
         int keywordnr = 0;
         for (Nr = 0; Nr < STYLE_TYPES_COUNT; Nr++) {
             if (curInfo->styles[Nr].type == -1) continue;
@@ -89,7 +99,7 @@ bool EntityEditor::InitializePrefs(const wxString& name)
     SetMarginMask(m_FoldingID, wxSTC_MASK_FOLDERS);
     SetMarginWidth(m_FoldingID, 0);
     SetMarginSensitive(m_FoldingID, false);
-    if (g_CommonPrefs.foldEnable) {
+    if (editorConfig.foldEnable) {
         // Margin width was not set before this executed - inlined FromDIP to fix it
         SetMarginWidth(m_FoldingID, curInfo->folds != 0 ? FromDIP(16) : 0);
         SetMarginSensitive(m_FoldingID, curInfo->folds != 0);
@@ -112,29 +122,84 @@ bool EntityEditor::InitializePrefs(const wxString& name)
     SetFoldFlags(wxSTC_FOLDFLAG_LINEBEFORE_CONTRACTED |
         wxSTC_FOLDFLAG_LINEAFTER_CONTRACTED);
 
-    // set spaces and indentation
-    SetTabWidth(4);
-    SetUseTabs(true);
-    SetTabIndents(true);
-    SetBackSpaceUnIndents(true);
-    SetIndent(g_CommonPrefs.indentEnable ? 4 : 0);
-
-    // others
-    SetViewEOL(g_CommonPrefs.displayEOLEnable);
-    SetIndentationGuides(g_CommonPrefs.indentGuideEnable);
-    SetEdgeColumn(80);
-    SetEdgeMode(g_CommonPrefs.longLineOnEnable ? wxSTC_EDGE_LINE : wxSTC_EDGE_NONE);
-    SetViewWhiteSpace(g_CommonPrefs.whiteSpaceEnable ?
-        wxSTC_WS_VISIBLEALWAYS : wxSTC_WS_INVISIBLE);
-    SetOvertype(g_CommonPrefs.overTypeInitial);
-    SetReadOnly(g_CommonPrefs.readOnlyInitial);
-    SetWrapMode(g_CommonPrefs.wrapModeInitial ?
-        wxSTC_WRAP_WORD : wxSTC_WRAP_NONE);
-
     return true;
 }
 
-void InitConstantPerfs(wxStyledTextCtrl* e) {
+
+
+void InitConstantPrefs(wxStyledTextCtrl* e, int lineNumId) {
+    // Line Numbers
+    e->SetMarginType(lineNumId, wxSTC_MARGIN_NUMBER); // enables line numbers
+    e->SetMarginMask(lineNumId, 0);
+    e->SetMarginWidth(lineNumId, 40); // Wide enough for 4 characters
+
+
+    // Indentation Rules
+    e->SetIndent(4);
+    e->SetTabWidth(4);
+    e->SetUseTabs(true); // If false convert tabs to spaces
+    e->SetTabIndents(true);
+    e->SetBackSpaceUnIndents(true);
+
+
+    // Annotations (Used to display parsing errors)
+    e->AnnotationSetVisible(wxSTC_ANNOTATION_STANDARD);
+    
+
+    // Whitespace Visibility
+    e->SetIndentationGuides(wxSTC_IV_REAL);       // Vertical Dots Going down brace groups. Replacing tab arrows
+    e->SetViewEOL(false);                         // View CRLF characters
+    e->SetViewWhiteSpace(wxSTC_WS_INVISIBLE);     // Tab and Space Visibility
+    e->SetTabDrawMode(wxSTC_TD_LONGARROW);        // How Tab is drawn
+
+
+    // Line Wrap - May be toggled on/off elsewhere in the file
+    e->SetWrapMode(wxSTC_WRAP_WORD);
+    e->SetWrapIndentMode(wxSTC_WRAPINDENT_SAME);
+    e->SetUseHorizontalScrollBar(false);
+
+
+    // Unimportant Options
+    e->SetOvertype(false); // Insertion Mode
+    e->SetEdgeMode(editorConfig.longLineOnEnable ? wxSTC_EDGE_LINE : wxSTC_EDGE_NONE);
+    e->SetEdgeColumn(80); // This + Above toggle = vertical line at column
+
+
+    // Visibility Policies - Haven't touched these, probably best not to
+    e->SetVisiblePolicy(wxSTC_VISIBLE_STRICT | wxSTC_VISIBLE_SLOP, 1);
+    e->SetXCaretPolicy(wxSTC_CARET_EVEN | wxSTC_VISIBLE_STRICT | wxSTC_CARET_SLOP, 1);
+    e->SetYCaretPolicy(wxSTC_CARET_EVEN | wxSTC_VISIBLE_STRICT | wxSTC_CARET_SLOP, 1);
+
+    // More policies that it's probably best not to touch
+    e->CmdKeyClear(wxSTC_KEY_TAB, 0); // This is done by the menu accelerator key
+    e->SetLayoutCache(wxSTC_CACHE_PAGE);
+    e->UsePopUp(wxSTC_POPUP_ALL); // Disables the context menu if disabled
+
+    // Controlled Elsewhere in the Editor
+    //e->SetReadOnly(editorConfig.readOnlyInitial);
+    
+}
+
+void InitColorPrefs(wxStyledTextCtrl* e) {
+    wxColor test = *wxBLACK;
+    wxLogMessage("%u %u %u %u", test.Red(), test.Blue(), test.Green(), test.Alpha());
+
+    const wxColour Black = wxColour(0, 0, 0);
+    const wxColour DarkGrey = wxColour(47, 47, 47);
+    const wxColour Red = wxColour(255, 0, 0);
+    const wxColour White = wxColour(255, 255, 255);
+
+    // Line Number Margin
+    e->StyleSetForeground(wxSTC_STYLE_LINENUMBER, DarkGrey);
+    e->StyleSetBackground(wxSTC_STYLE_LINENUMBER, White);
+
+    // Vertical indentation dots
+    e->StyleSetForeground(wxSTC_STYLE_INDENTGUIDE, DarkGrey);
+    e->StyleSetBackground(wxSTC_STYLE_INDENTGUIDE, White);
+
+    // Default Style - Probably not used anywhere?
+    e->StyleSetForeground(wxSTC_STYLE_DEFAULT, Black);
+    e->StyleSetBackground(wxSTC_STYLE_DEFAULT, White);
 }
 
 EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
@@ -144,21 +209,10 @@ EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
     m_LineNrID = 0;
     m_FoldingID = 1;
     m_language = NULL;
-
-    // default font for all styles
-    wxFont font(wxFontInfo(10).Family(wxFONTFAMILY_MODERN));
-    StyleSetFont(wxSTC_STYLE_DEFAULT, font);
-    StyleSetForeground(wxSTC_STYLE_DEFAULT, *wxBLACK);
-    StyleSetBackground(wxSTC_STYLE_DEFAULT, *wxWHITE);
-    StyleSetForeground(wxSTC_STYLE_LINENUMBER, wxColour("DARK GREY"));
-    StyleSetBackground(wxSTC_STYLE_LINENUMBER, *wxWHITE);
-    StyleSetForeground(wxSTC_STYLE_INDENTGUIDE, wxColour("DARK GREY"));
-    InitializePrefs("C++");
     
-    // set visibility
-    SetVisiblePolicy(wxSTC_VISIBLE_STRICT | wxSTC_VISIBLE_SLOP, 1);
-    SetXCaretPolicy(wxSTC_CARET_EVEN | wxSTC_VISIBLE_STRICT | wxSTC_CARET_SLOP, 1);
-    SetYCaretPolicy(wxSTC_CARET_EVEN | wxSTC_VISIBLE_STRICT | wxSTC_CARET_SLOP, 1);
+    InitConstantPrefs(this, m_LineNrID);
+    InitializePrefs("C++");
+    InitColorPrefs(this); // Must call this here until clear all styles in above function is moved
 
     // markers
     MarkerDefine(wxSTC_MARKNUM_FOLDER, wxSTC_MARK_DOTDOTDOT, "BLACK", "BLACK");
@@ -168,35 +222,6 @@ EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
     MarkerDefine(wxSTC_MARKNUM_FOLDEROPENMID, wxSTC_MARK_ARROWDOWN, "BLACK", "WHITE");
     MarkerDefine(wxSTC_MARKNUM_FOLDERMIDTAIL, wxSTC_MARK_EMPTY, "BLACK", "BLACK");
     MarkerDefine(wxSTC_MARKNUM_FOLDERTAIL, wxSTC_MARK_EMPTY, "BLACK", "BLACK");
-
-    // annotations
-    AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
-
-    // miscellaneous
-    CmdKeyClear(wxSTC_KEY_TAB, 0); // this is done by the menu accelerator key
-    SetLayoutCache(wxSTC_CACHE_PAGE);
-    UsePopUp(wxSTC_POPUP_ALL);
-
-    /* 
-    * EntitySlayer Constant Preferences 
-    */
-
-    // Whitespace Configuration
-    //SetUseTabs(false);
-    //SetBackSpaceUnIndents(true);
-
-    // Annotation Config
-    AnnotationSetVisible(wxSTC_ANNOTATION_STANDARD);
-
-    // Line Wrap Settings
-    SetWrapMode(wxSTC_WRAP_WORD); 
-    SetWrapIndentMode(wxSTC_WRAPINDENT_SAME);
-    SetUseHorizontalScrollBar(false);
-
-    // Line Number Settings
-    SetMarginType(m_LineNrID, wxSTC_MARGIN_NUMBER); // enables line numbers
-    SetMarginMask(m_LineNrID, 0);
-    SetMarginWidth(m_LineNrID, 40);
 
     // Set Initial Node
     SetActiveNode(nullptr);
@@ -220,7 +245,7 @@ void EntityEditor::OnKeyDown(wxKeyEvent& event)
         else Tab();
         return;
     }
-
+    
     event.Skip();
 }
 
