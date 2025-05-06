@@ -18,10 +18,7 @@ class EntityEditor: public wxStyledTextCtrl
 
     // margin variables
     int m_LineNrID;
-    int m_LineNrMargin;
     int m_FoldingID;
-    int m_FoldingMargin;
-    int m_DividerID;
 
     public:
     /* Construction and Preference Setting */

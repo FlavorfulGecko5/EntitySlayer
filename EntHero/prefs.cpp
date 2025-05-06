@@ -44,11 +44,11 @@ const CommonInfo g_CommonPrefs = {
     true,  // foldEnable
     true,  // indentEnable
     // display defaults prefs
-    false, // overTypeInitial
     false, // readOnlyInitial
+    false, // overTypeInitial
     false,  // wrapModeInitial
     false, // displayEOLEnable
-    false, // IndentGuideEnable
+    true, // IndentGuideEnable
     true,  // lineNumberEnable
     false, // longLineOnEnable
     false, // whiteSpaceEnable

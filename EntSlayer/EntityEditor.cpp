@@ -84,19 +84,14 @@ bool EntityEditor::InitializePrefs(const wxString& name)
         }
     }
 
-    // set margin as unused
-    SetMarginType(m_DividerID, wxSTC_MARGIN_SYMBOL);
-    SetMarginWidth(m_DividerID, 0);
-    SetMarginSensitive(m_DividerID, false);
-
     // folding
     SetMarginType(m_FoldingID, wxSTC_MARGIN_SYMBOL);
     SetMarginMask(m_FoldingID, wxSTC_MASK_FOLDERS);
-    StyleSetBackground(m_FoldingID, *wxWHITE);
     SetMarginWidth(m_FoldingID, 0);
     SetMarginSensitive(m_FoldingID, false);
     if (g_CommonPrefs.foldEnable) {
-        SetMarginWidth(m_FoldingID, curInfo->folds != 0 ? m_FoldingMargin : 0);
+        // Margin width was not set before this executed - inlined FromDIP to fix it
+        SetMarginWidth(m_FoldingID, curInfo->folds != 0 ? FromDIP(16) : 0);
         SetMarginSensitive(m_FoldingID, curInfo->folds != 0);
         SetProperty("fold", curInfo->folds != 0 ? "1" : "0");
         SetProperty("fold.comment",
@@ -139,28 +134,18 @@ bool EntityEditor::InitializePrefs(const wxString& name)
     return true;
 }
 
+void InitConstantPerfs(wxStyledTextCtrl* e) {
+}
+
 EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
     const wxSize& size, long style)
     : wxStyledTextCtrl(parent, id, pos, size, style)
 {
     m_LineNrID = 0;
-    m_DividerID = 1;
-    m_FoldingID = 2;
-
-    // initialize language
+    m_FoldingID = 1;
     m_language = NULL;
 
     // default font for all styles
-    SetViewEOL(g_CommonPrefs.displayEOLEnable);
-    SetIndentationGuides(g_CommonPrefs.indentGuideEnable);
-    SetEdgeMode(g_CommonPrefs.longLineOnEnable ?
-        wxSTC_EDGE_LINE : wxSTC_EDGE_NONE);
-    SetViewWhiteSpace(g_CommonPrefs.whiteSpaceEnable ?
-        wxSTC_WS_VISIBLEALWAYS : wxSTC_WS_INVISIBLE);
-    SetOvertype(g_CommonPrefs.overTypeInitial);
-    SetReadOnly(g_CommonPrefs.readOnlyInitial);
-    SetWrapMode(g_CommonPrefs.wrapModeInitial ?
-        wxSTC_WRAP_WORD : wxSTC_WRAP_NONE);
     wxFont font(wxFontInfo(10).Family(wxFONTFAMILY_MODERN));
     StyleSetFont(wxSTC_STYLE_DEFAULT, font);
     StyleSetForeground(wxSTC_STYLE_DEFAULT, *wxBLACK);
@@ -168,8 +153,8 @@ EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
     StyleSetForeground(wxSTC_STYLE_LINENUMBER, wxColour("DARK GREY"));
     StyleSetBackground(wxSTC_STYLE_LINENUMBER, *wxWHITE);
     StyleSetForeground(wxSTC_STYLE_INDENTGUIDE, wxColour("DARK GREY"));
-    InitializePrefs(DEFAULT_LANGUAGE);
-
+    InitializePrefs("C++");
+    
     // set visibility
     SetVisiblePolicy(wxSTC_VISIBLE_STRICT | wxSTC_VISIBLE_SLOP, 1);
     SetXCaretPolicy(wxSTC_CARET_EVEN | wxSTC_VISIBLE_STRICT | wxSTC_CARET_SLOP, 1);
@@ -188,8 +173,6 @@ EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
     AnnotationSetVisible(wxSTC_ANNOTATION_BOXED);
 
     // miscellaneous
-    m_LineNrMargin = TextWidth(wxSTC_STYLE_LINENUMBER, "_999999");
-    m_FoldingMargin = FromDIP(16);
     CmdKeyClear(wxSTC_KEY_TAB, 0); // this is done by the menu accelerator key
     SetLayoutCache(wxSTC_CACHE_PAGE);
     UsePopUp(wxSTC_POPUP_ALL);
@@ -197,10 +180,8 @@ EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
     /* 
     * EntitySlayer Constant Preferences 
     */
-    InitializePrefs("C++"); // Keep default Initialize or collapsible braces won't work
 
     // Whitespace Configuration
-    SetViewWhiteSpace(wxSTC_WS_VISIBLEALWAYS);
     //SetUseTabs(false);
     //SetBackSpaceUnIndents(true);
 
@@ -223,7 +204,7 @@ EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
 
 void EntityEditor::OnMarginClick(wxStyledTextEvent& event)
 {
-    if (event.GetMargin() == 2) {
+    if (event.GetMargin() == m_FoldingID) {
         int lineClick = LineFromPosition(event.GetPosition());
         int levelClick = GetFoldLevel(lineClick);
         if ((levelClick & wxSTC_FOLDLEVELHEADERFLAG) > 0) {
