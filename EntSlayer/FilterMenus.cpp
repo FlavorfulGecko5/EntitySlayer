@@ -8,7 +8,7 @@ FilterCtrl::FilterCtrl(EntityTab* tab, wxWindow* parent, const wxString& labelTe
 	SetPopupControl(list);
 	list->Bind(wxEVT_LEFT_DOWN, &FilterCtrl::onListLeftDown, this);
 
-	wxStaticText* label = new wxStaticText(parent, wxID_ANY, labelText);
+	label = new wxStaticText(parent, wxID_ANY, labelText);
 	quickInput = new wxTextCtrl(parent, wxID_ANY, wxEmptyString, wxDefaultPosition,
 		wxDefaultSize, wxTE_PROCESS_ENTER);
 	quickInput->Bind(wxEVT_TEXT_ENTER, &FilterCtrl::onQuickInputEnter, this);
@@ -142,11 +142,11 @@ SpawnFilter::SpawnFilter(EntityTab* tab, wxWindow* parent)
 	for (int i = 0; i < 4; i++)
 	{
 		wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
-		wxStaticText* label = new wxStaticText(parent, wxID_ANY, names[i], wxDefaultPosition, wxSize(8, -1));
+		labels[i] = new wxStaticText(parent, wxID_ANY, names[i], wxDefaultPosition, wxSize(8, -1));
 		inputs[i] = new wxTextCtrl(parent, wxID_ANY);
 		inputs[i]->Bind(wxEVT_TEXT, &SpawnFilter::onInputText, this);
 
-		row->Add(label, 0, wxLEFT | wxRIGHT, 5);
+		row->Add(labels[i], 0, wxLEFT | wxRIGHT, 5);
 		row->Add(inputs[i], 0, wxLEFT | wxRIGHT, 5);
 		Add(row);
 	}
@@ -206,7 +206,7 @@ void SpawnFilter::onInputText(wxCommandEvent& event) {
 SearchBar::SearchBar(EntityTab* tab, wxWindow* parent) 
 	: wxBoxSizer(wxVERTICAL), owner(tab)
 {
-	wxStaticText* label = new wxStaticText(parent, wxID_ANY, "Search");
+	label = new wxStaticText(parent, wxID_ANY, "Search");
 	input = new wxTextCtrl(parent, wxID_ANY, wxEmptyString, wxDefaultPosition,
 		wxDefaultSize, wxTE_PROCESS_ENTER);
 	wxButton* btnNext = new wxButton(parent, wxID_ANY, ">", wxDefaultPosition, wxSize(23, 23));

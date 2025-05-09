@@ -41,6 +41,7 @@ struct Sphere;
 class FilterCtrl : public wxComboCtrl
 {
 	public:
+	wxStaticText* label;
 	EntityTab* owner;
 	FilterListCombo* list;
 	wxBoxSizer* container;
@@ -58,10 +59,11 @@ class FilterCtrl : public wxComboCtrl
 
 class SpawnFilter : public wxBoxSizer 
 {
-	private:
+	public:
 	EntityTab* owner;
 	wxCheckBox* toggle;
 	wxTextCtrl* inputs[4];
+	wxStaticText* labels[4];
 	
 	public:
 	SpawnFilter(EntityTab* tab, wxWindow* parent);
@@ -76,7 +78,8 @@ class SpawnFilter : public wxBoxSizer
 
 class SearchBar : public wxBoxSizer
 {
-	private:
+	public:
+	wxStaticText* label;
 	EntityTab* owner;
 	wxTextCtrl* input;
 	wxCheckBox* caseSensitiveCheck;

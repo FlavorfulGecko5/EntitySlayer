@@ -26,6 +26,7 @@ class EntityTab : public wxPanel
 	wxCheckBox* caseSensCheck;
 	SpawnFilter* spawnMenu;
 	SearchBar* searchBar;
+	wxGenericCollapsiblePane* topWrapper; // Filter pane
 
 	wxMenu viewMenu;
 	wxMenu* appendMenu = nullptr;
@@ -35,7 +36,8 @@ class EntityTab : public wxPanel
 	wxDataViewCtrl* view;
 	EntityEditor* editor;
 
-	EntityTab(wxWindow* parent, const wxString name, const wxString& path = "");
+	EntityTab(wxWindow* parent, bool nightMode, const wxString name, const wxString& path = "");
+	void NightMode(bool nightMode, bool recursive);
 	bool IsNewAndUntouched();
 	bool UnsavedChanges();
 	void setAppendMenu();

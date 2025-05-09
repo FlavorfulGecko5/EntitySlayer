@@ -9,12 +9,7 @@
 #include "EntityFrame.h"
 #include "EntityTab.h"
 #include "EntityFolderDialog.h"
-
-
-#define TIMESTART auto timeStart = std::chrono::high_resolution_clock::now();
-#define TIMESTOP(msg) auto timeStop = std::chrono::high_resolution_clock::now(); \
-	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(timeStop - timeStart); \
-	wxLogMessage("%s %zu", msg, duration.count());
+#include "EntityProfiler.h"
 
 enum FrameID
 {
@@ -36,6 +31,7 @@ enum FrameID
 	TAB_NUMBERLISTS,
 
 	HELP_ABOUT,
+	HELP_NIGHTMODE,
 
 	MEATHOOK_CHECKSTATUS,
 	MEATHOOK_MAKEACTIVETAB,
@@ -79,6 +75,7 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(TAB_COMPRESS, EntityFrame::onCompressCheck)
 	EVT_MENU(TAB_NUMBERLISTS, EntityFrame::onNumberListCheck)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
+	EVT_MENU(HELP_NIGHTMODE, EntityFrame::onNightModeCheck)
 
 	EVT_TIMER(MEATHOOK_CHECKSTATUS, EntityFrame::onMHStatusCheck)
 	EVT_MENU(MEATHOOK_MAKEACTIVETAB, EntityFrame::onSetMHTab)
@@ -161,6 +158,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 
 		wxMenu* helpMenu = new wxMenu;
 		helpMenu->Append(HELP_ABOUT, "About");
+		NightModeItem = helpMenu->AppendCheckItem(HELP_NIGHTMODE, "Night Mode");
 
 		//wxMenu* debugMenu = new wxMenu;
 		//debugMenu->Append(DEBUG_MENUONE, "One");
@@ -238,6 +236,8 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		SetMinSize(wxSize(1000, 600)); // Minimum width for filter menus to not get offset or cut off
 		CenterOnScreen(); // Todo: Is there a better way to enforce this without setting the entire application's minimum size?
 	}
+
+	NightModeToggle(false);
 }
 
 EntityFrame::~EntityFrame()
@@ -247,7 +247,7 @@ EntityFrame::~EntityFrame()
 
 void EntityFrame::AddUntitledTab()
 {
-	EntityTab* newTab = new EntityTab(book, "Untitled");
+	EntityTab* newTab = new EntityTab(book, NightModeItem->IsChecked(), "Untitled");
 	book->AddPage(newTab, "Untitled", true);
 }
 
@@ -391,7 +391,7 @@ void EntityFrame::openFiles(const wxArrayString& filepaths)
 			// Questionable whether this would even be worthwhile
 			// Tab creation takes ~150 MS excluding the Parser anyways, meaning
 			// Parser operations only take ~40% of the total tab build time for average entity files
-			EntityTab* newTab = new EntityTab(book, name, path);
+			EntityTab* newTab = new EntityTab(book, NightModeItem->IsChecked(), name, path);
 			AddOpenedTab(newTab);
 		}
 		catch (std::runtime_error e) {
@@ -561,7 +561,7 @@ void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 
 	std::string tabName = filePath.substr(delimiter, filePath.length() - delimiter);
 
-	EntityTab* newTab = new EntityTab(book, "[TEMPORARY FILE] " + tabName, filePath);
+	EntityTab* newTab = new EntityTab(book, NightModeItem->IsChecked(), "[TEMPORARY FILE] " + tabName, filePath);
 	AddOpenedTab(newTab);
 }
 
@@ -662,6 +662,38 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 
 	info.SetDescription(description);
 	wxAboutBox(info, this);
+}
+
+void EntityFrame::onNightModeCheck(wxCommandEvent& event)
+{
+	NightModeToggle(true);
+}
+
+void EntityFrame::NightModeToggle(bool recursive) {
+	// Text Box: Background: 255/255/255  - Foreground: 0/0/0
+	// Status bar: Background: 240/240/240 - Foreground: 0/0/0 - Changing text color seems impossible
+	// Frame: Background: 171/171/171 - Foreground: 0/0/0 - Not used anywhere, propagates to children when modified
+
+	bool nightMode = NightModeItem->IsChecked();
+
+	log->SetBackgroundColour(nightMode ? wxColour(32, 32, 32) : wxColour(255, 255, 255));
+	log->SetForegroundColour(nightMode ? wxColour(216, 216, 216) : wxColour(0, 0, 0));
+	log->Refresh();
+
+
+	statusbar->SetBackgroundColour(nightMode ? wxColour(64, 64, 64) : wxColour(240, 240, 240));
+	statusbar->Refresh();
+
+	// FIX FOR NIGHTMARE GETTING RAN TWICE FOR THE INITIAL TAB ON BOOT UP: ONCE ON CONSTRUCTION,
+	// AND ONCE WHEN ENTITYFRAME'S CONSTRUCTOR CALLS NIGHT MODE
+	if(!recursive)
+		return;
+
+	for (int i = 0; i < book->GetPageCount(); i++) {
+		EntityTab* t = (EntityTab*)book->GetPage(i);
+		t->NightMode(nightMode, true);
+	}
+
 }
 
 void EntityFrame::onMHStatusCheck(wxTimerEvent& event)

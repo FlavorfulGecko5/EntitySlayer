@@ -12,20 +12,10 @@ class EntityEditor: public wxStyledTextCtrl
 
     bool recursiveGuard = false; // Prevent recursive loops when adding characters programatically
 
-    // language properties
-    const int ANNOTATION_STYLE = wxSTC_STYLE_LASTPREDEFINED + 1;
-    LanguageInfo const* m_language;
-
-    // margin variables
-    int m_LineNrID;
-    int m_FoldingID;
-
     public:
     /* Construction and Preference Setting */
 
-    bool InitializePrefs(const wxString& name);
-
-    EntityEditor(wxWindow* parent, wxWindowID id = wxID_ANY,
+    EntityEditor(wxWindow* parent, bool nightMode, wxWindowID id = wxID_ANY,
         const wxPoint& pos = wxDefaultPosition,
         const wxSize& size = wxDefaultSize,
         long style =
@@ -34,6 +24,8 @@ class EntityEditor: public wxStyledTextCtrl
         #endif
         wxVSCROLL
     );
+
+    void NightMode(bool nightMode);
 
     /* Events */
 

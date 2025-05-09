@@ -72,7 +72,7 @@ wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
 	EVT_MENU_RANGE(TABID_MAXIMUM, MAXSHORT, onNodeContextAccelerator)
 wxEND_EVENT_TABLE()
 
-EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path)
+EntityTab::EntityTab(wxWindow* parent, bool nightMode, const wxString name, const wxString& path)
 	: wxPanel(parent, wxID_ANY), tabName(name), filePath(path)
 {
 	/* Initialize parser */
@@ -105,7 +105,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	root = Parser->getRoot();
 
 	/* Filter Menu (should be initialized before model is associated with view) */
-	wxGenericCollapsiblePane* topWrapper = new wxGenericCollapsiblePane(this, wxID_ANY, "Filter Menu",
+	topWrapper = new wxGenericCollapsiblePane(this, wxID_ANY, "Filter Menu",
 		wxDefaultPosition, wxDefaultSize, wxCP_NO_TLW_RESIZE);
 	{
 		wxWindow* topWindow = topWrapper->GetPane();
@@ -186,7 +186,7 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 
 	/* Initialize controls */
 	wxSplitterWindow* splitter = new wxSplitterWindow(this);
-	editor = new EntityEditor(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
+	editor = new EntityEditor(splitter, nightMode, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
 	view = new wxDataViewCtrl(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300), wxDV_MULTIPLE);
 	Parser->view = view;
 	view->GetMainWindow()->Bind(wxEVT_CHAR, &EntityTab::onDataviewChar, this);
@@ -240,6 +240,68 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 	sizer->Add(topWrapper, 0, wxEXPAND | wxALL, 5);
 	sizer->Add(splitter, 1, wxEXPAND | wxALL, 5);
 	SetSizerAndFit(sizer);
+	NightMode(nightMode, false);
+}
+
+void EntityTab::NightMode(bool nightMode, bool recursive) {
+	// Tab: Background: 240/240/240 - Foreground: 0/0/0 - Can propagate to children
+	// Text Box: Background: 255/255/255  - Foreground: 0/0/0
+	// Dataview: Background: 255/255/255 - Foreground: 0/0/0
+
+	wxColour LabelColor = nightMode ? wxColour(255, 255, 255) : wxColour(0, 0, 0);
+
+	//wxColour test = searchBar->label->GetForegroundColour();
+	//wxColour test2 = splitter->GetForegroundColour();
+	//wxLogMessage("%d %d %d", test.Red(), test.Green(), test.Blue());
+	//wxLogMessage("%d %d %d", test2.Red(), test2.Green(), test2.Blue());
+
+	SetOwnBackgroundColour(nightMode ? wxColour(32, 32, 32) : wxColour(240, 240, 240));
+	Refresh();
+
+	// TODO: Decide on final color for dataview, sync it with editor
+	// Seems font color reverts to black while node is selected - not sure how to change this
+	view->SetBackgroundColour(nightMode ? wxColour(64, 64, 64) : wxColour(255, 255, 255));
+	//view->SetBackgroundColour(nightMode ? wxColour(42, 42, 42) : wxColour(255, 255, 255));
+	view->SetForegroundColour(nightMode ? wxColour(216, 216, 216) : wxColour(0, 0, 0));
+	view->Refresh();
+
+	// Filter Menu
+	topWrapper->SetBackgroundColour(nightMode ? wxColour(64, 64, 64) : wxColour(255, 255, 255));
+	view->Refresh();
+
+	// Search Bar
+	//searchBar->input->SetBackgroundColour(nightMode ? wxColour(32, 32, 32) : wxColour(255, 255, 255));
+	//searchBar->input->SetForegroundColour(nightMode ? wxColour(255, 255, 255) : wxColour(0, 0, 0));
+	//searchBar->input->Refresh();
+	searchBar->label->SetForegroundColour(LabelColor);
+	searchBar->caseSensitiveCheck->SetForegroundColour(LabelColor);
+
+	FilterCtrl* filters[] = {layerMenu, classMenu, inheritMenu, componentMenu, keyMenu};
+	for (int i = 0; i < sizeof(filters) / sizeof(filters[0]); i++) {
+		FilterCtrl* f = filters[i];
+
+		f->label->SetForegroundColour(LabelColor);
+
+		// This requires using SetItems to refresh the list (or the Refresh Filters button)
+		// Plus foreground color doesn't seem to work on it
+		//f->list->SetBackgroundColour(wxColor(83, 83, 83));
+
+		// I change the background color on quickInputEnter - so I'd need to modify that behavior more for this to work
+		//f->quickInput->SetBackgroundColour(nightMode ? wxColour(32, 32, 32) : wxColour(255, 255, 255));
+		//f->quickInput->SetForegroundColour(nightMode ? wxColour(255, 255, 255) : wxColour(0, 0, 0));
+		//f->quickInput->Refresh();
+	}
+	
+	caseSensCheck->SetForegroundColour(LabelColor);
+	spawnMenu->toggle->SetForegroundColour(LabelColor);
+	for (int i = 0; i < sizeof(spawnMenu->labels) / sizeof(spawnMenu->labels[0]); i++) {
+		spawnMenu->labels[i]->SetForegroundColour(LabelColor);
+	}
+
+	if(!recursive)
+		return;
+
+	editor->NightMode(nightMode);
 }
 
 bool EntityTab::IsNewAndUntouched()

@@ -11,6 +11,7 @@ class EntityFrame : public wxFrame
 	private:
 	wxMenu* fileMenu = new wxMenu;
 	wxMenu* tabMenu = new wxMenu;
+	wxMenuItem* NightModeItem = nullptr;
 	wxAuiNotebook* book;
 	EntityTab* activeTab = nullptr;
 	wxTextCtrl* log = nullptr;
@@ -51,6 +52,8 @@ class EntityFrame : public wxFrame
 	void onSearchForward(wxCommandEvent &event);
 	void onSearchBackward(wxCommandEvent &event);
 	void onAbout(wxCommandEvent& event);
+	void onNightModeCheck(wxCommandEvent& event);
+	void NightModeToggle(bool recursive);
 	void onMHStatusCheck(wxTimerEvent& event);
 	void onSetMHTab(wxCommandEvent& event);
 	void onReloadMH(wxCommandEvent& event);

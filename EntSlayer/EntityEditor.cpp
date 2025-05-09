@@ -1,4 +1,4 @@
-#include "prefs.h"
+#pragma warning(disable : 4996) // Deprecation errors
 #include "EntityNode.h"
 #include "EntityEditor.h"
 
@@ -10,128 +10,139 @@ wxBEGIN_EVENT_TABLE(EntityEditor, wxStyledTextCtrl)
     EVT_KEY_DOWN(EntityEditor::OnKeyDown)
 wxEND_EVENT_TABLE()
 
-struct EditorConfig_t {
-    // editor functionality prefs
-    bool syntaxEnable = true;
-    bool foldEnable = true;
-    bool indentEnable = true;
-    // display defaults prefs
-    bool readOnlyInitial = false;
-    bool overTypeInitial = false;
-    bool wrapModeInitial = false;
-    bool displayEOLEnable = false;
-    bool indentGuideEnable = true;
-    bool lineNumberEnable = true;
-    bool longLineOnEnable = false;
-    bool whiteSpaceEnable = false;
-} editorConfig;
+#define MarginLines 0
+#define MarginFolds 1
+#define AnnotationStyle wxSTC_STYLE_LASTPREDEFINED + 1
 
-bool EntityEditor::InitializePrefs(const wxString& name)
-{
-    // initialize styles
-    StyleClearAll();
-    LanguageInfo const* curInfo = NULL;
+void InitColorPrefs(wxStyledTextCtrl* e, bool nightMode) {
+    //wxColor test = wxColour(e->GetMarginHi);
+    //wxLogMessage("%u %u %u %u", test.Red(), test.Green(), test.Blue(), test.Alpha());
 
-    // determine language
-    bool found = false;
-    int languageNr;
-    for (languageNr = 0; languageNr < g_LanguagePrefsSize; languageNr++) {
-        curInfo = &g_LanguagePrefs[languageNr];
-        if (curInfo->name == name) {
-            found = true;
-            break;
+    /*
+    * Light Mode Colors
+    */
+    const wxColour AnnotationRed = wxColour(244, 220, 220);
+    const wxColour Black = wxColour(0, 0, 0);
+    const wxColour Blue = wxColour(0, 0, 255);
+    const wxColour Brown = wxColour(165, 42, 42);
+    const wxColour DarkGrey = wxColour(47, 47, 47);
+    const wxColour ForestGreen = wxColour(35, 142, 35);
+    const wxColour Grey = wxColour(128, 128, 128);
+    const wxColour Khaki = wxColour(159, 159, 95);
+    const wxColour Orchid = wxColour(219, 112, 219);
+    const wxColour Red = wxColour(255, 0, 0);
+    const wxColour Sienna = wxColour(142, 107, 35);
+    const wxColour White = wxColour(255, 255, 255);
+    const wxColour MarginWhite = wxColour(240, 240, 240);
+
+    /*
+    * Dark Mode Colors
+    */
+    const wxColour NightBlack = wxColour(42, 42, 42);
+    const wxColour NightWhite = wxColour(219, 219, 219);
+    const wxColour NightString = wxColour(172, 76, 31);
+    const wxColour NightOrange = wxColour(255, 106, 0);
+    const wxColour NightForest = wxColour(90, 150, 85);
+
+    struct StyleDef_t {
+        wxColour foreground;
+        wxColour nightForeground;
+        bool bold = false;
+    };
+
+    std::unordered_map<int, StyleDef_t> StyleMap = {
+        {wxSTC_C_DEFAULT           , {Black, NightWhite}},
+        {wxSTC_C_COMMENT           , {ForestGreen, NightForest}},
+        {wxSTC_C_COMMENTLINE       , {ForestGreen, NightForest}},
+        {wxSTC_C_COMMENTDOC        , {ForestGreen, NightForest}},
+        {wxSTC_C_NUMBER            , {Sienna, NightOrange}},
+        {wxSTC_C_WORD              , {Blue, NightOrange, true}},
+        {wxSTC_C_STRING            , {Brown, NightOrange}},
+      //{wxSTC_C_CHARACTER         , {Khaki}},
+      //{wxSTC_C_UUID              , {Orchid}},
+      //{wxSTC_C_PREPROCESSOR      , {Grey}},
+        {wxSTC_C_OPERATOR          , {Black, NightWhite, true}},
+        {wxSTC_C_IDENTIFIER        , {Black, NightWhite}},
+        {wxSTC_C_STRINGEOL         , {Brown, NightOrange}}, // String with no end-quote
+        {wxSTC_C_VERBATIM          , {Black, NightWhite}},
+      //{wxSTC_C_REGEX             , {Orchid}},
+        {wxSTC_C_COMMENTLINEDOC    , {ForestGreen, NightForest}},
+      //{wxSTC_C_WORD2             , {}},
+        {wxSTC_C_COMMENTDOCKEYWORD , {ForestGreen, NightForest}},
+        {wxSTC_C_COMMENTDOCKEYWORDERROR, {ForestGreen, NightForest}}
+    };
+
+
+    for (int i = 0; i < wxSTC_STYLE_DEFAULT; i++) {
+        auto iterator = StyleMap.find(i);
+
+        if (iterator != StyleMap.end()) {
+            const StyleDef_t& style = iterator->second;
+            e->StyleSetForeground(i, nightMode ? style.nightForeground : style.foreground);
+            e->StyleSetBold(i, style.bold);
         }
-    }
-    if (!found) return false;
-
-    // set lexer and language
-    SetLexer(curInfo->lexer);
-    m_language = curInfo;
-
-
-    // annotations style
-    // Annotations don't word wrap so we should keep it small
-    StyleSetBackground(ANNOTATION_STYLE, wxColour(244, 220, 220));
-    StyleSetForeground(ANNOTATION_STYLE, *wxBLACK);
-    StyleSetFont(ANNOTATION_STYLE, wxFont(wxFontInfo(8).Family(wxFONTFAMILY_MODERN)));
-
-    // With this new setup, the annotation font needs to be manually set. 
-    // Previously it was set implicitly by StyleClearAll making the default font set in the
-    // constructor the new default for every font
-    // default fonts for all styles!
-    int Nr;
-    for (Nr = 0; Nr < wxSTC_STYLE_LASTPREDEFINED; Nr++) {
-        wxFont font(wxFontInfo(10).Family(wxFONTFAMILY_MODERN));
-        StyleSetFont(Nr, font);
-    }
-
-    // initialize settings
-    if (editorConfig.syntaxEnable) {
-        int keywordnr = 0;
-        for (Nr = 0; Nr < STYLE_TYPES_COUNT; Nr++) {
-            if (curInfo->styles[Nr].type == -1) continue;
-            const StyleInfo& curType = g_StylePrefs[curInfo->styles[Nr].type];
-            wxFont font(wxFontInfo(curType.fontsize)
-                .Family(wxFONTFAMILY_MODERN)
-                .FaceName(curType.fontname));
-            StyleSetFont(Nr, font);
-            if (curType.foreground.length()) {
-                StyleSetForeground(Nr, wxColour(curType.foreground));
-            }
-            if (curType.background.length()) {
-                StyleSetBackground(Nr, wxColour(curType.background));
-            }
-            StyleSetBold(Nr, (curType.fontstyle & mySTC_STYLE_BOLD) > 0);
-            StyleSetItalic(Nr, (curType.fontstyle & mySTC_STYLE_ITALIC) > 0);
-            StyleSetUnderline(Nr, (curType.fontstyle & mySTC_STYLE_UNDERL) > 0);
-            StyleSetVisible(Nr, (curType.fontstyle & mySTC_STYLE_HIDDEN) == 0);
-            StyleSetCase(Nr, curType.lettercase);
-            const char* pwords = curInfo->styles[Nr].words;
-            if (pwords) {
-                SetKeyWords(keywordnr, pwords);
-                keywordnr += 1;
-            }
+        else {
+            e->StyleSetForeground(i, nightMode ? NightWhite : Black);
         }
+        e->StyleSetBackground(i, nightMode ? NightBlack : White);
     }
 
-    // folding
-    SetMarginType(m_FoldingID, wxSTC_MARGIN_SYMBOL);
-    SetMarginMask(m_FoldingID, wxSTC_MASK_FOLDERS);
-    SetMarginWidth(m_FoldingID, 0);
-    SetMarginSensitive(m_FoldingID, false);
-    if (editorConfig.foldEnable) {
-        // Margin width was not set before this executed - inlined FromDIP to fix it
-        SetMarginWidth(m_FoldingID, curInfo->folds != 0 ? FromDIP(16) : 0);
-        SetMarginSensitive(m_FoldingID, curInfo->folds != 0);
-        SetProperty("fold", curInfo->folds != 0 ? "1" : "0");
-        SetProperty("fold.comment",
-            (curInfo->folds & mySTC_FOLD_COMMENT) > 0 ? "1" : "0");
-        SetProperty("fold.compact",
-            (curInfo->folds & mySTC_FOLD_COMPACT) > 0 ? "1" : "0");
-        SetProperty("fold.preprocessor",
-            (curInfo->folds & mySTC_FOLD_PREPROC) > 0 ? "1" : "0");
-        SetProperty("fold.html",
-            (curInfo->folds & mySTC_FOLD_HTML) > 0 ? "1" : "0");
-        SetProperty("fold.html.preprocessor",
-            (curInfo->folds & mySTC_FOLD_HTMLPREP) > 0 ? "1" : "0");
-        SetProperty("fold.comment.python",
-            (curInfo->folds & mySTC_FOLD_COMMENTPY) > 0 ? "1" : "0");
-        SetProperty("fold.quotes.python",
-            (curInfo->folds & mySTC_FOLD_QUOTESPY) > 0 ? "1" : "0");
-    }
-    SetFoldFlags(wxSTC_FOLDFLAG_LINEBEFORE_CONTRACTED |
-        wxSTC_FOLDFLAG_LINEAFTER_CONTRACTED);
 
-    return true;
+    // Symbols used in the folding margin
+    wxColour markerBlack = nightMode ? NightWhite : Black;
+    wxColour markerWhite = nightMode ? NightWhite : White;
+    e->MarkerDefine(wxSTC_MARKNUM_FOLDER, wxSTC_MARK_DOTDOTDOT, markerBlack, markerBlack);
+    e->MarkerDefine(wxSTC_MARKNUM_FOLDEROPEN, wxSTC_MARK_ARROWDOWN, markerBlack, markerWhite); // Top-level Folders
+    e->MarkerDefine(wxSTC_MARKNUM_FOLDERSUB, wxSTC_MARK_EMPTY, markerBlack, markerBlack);
+    e->MarkerDefine(wxSTC_MARKNUM_FOLDEREND, wxSTC_MARK_DOTDOTDOT, markerBlack, markerWhite);
+    e->MarkerDefine(wxSTC_MARKNUM_FOLDEROPENMID, wxSTC_MARK_ARROWDOWN, markerBlack, markerWhite);
+    e->MarkerDefine(wxSTC_MARKNUM_FOLDERMIDTAIL, wxSTC_MARK_EMPTY, markerBlack, markerBlack);
+    e->MarkerDefine(wxSTC_MARKNUM_FOLDERTAIL, wxSTC_MARK_EMPTY, markerBlack, markerBlack);
+
+    // Line Number Margin
+    e->StyleSetForeground(wxSTC_STYLE_LINENUMBER, nightMode ? NightWhite : DarkGrey);
+    e->StyleSetBackground(wxSTC_STYLE_LINENUMBER, nightMode ? NightBlack : White);
+
+    // Margin Color
+    e->SetFoldMarginColour(true, nightMode ? NightBlack : White);
+    e->SetFoldMarginHiColour(true, nightMode ? NightBlack : MarginWhite);
+
+    // Vertical indentation dots
+    e->StyleSetForeground(wxSTC_STYLE_INDENTGUIDE, nightMode ? NightWhite : DarkGrey);
+    e->StyleSetBackground(wxSTC_STYLE_INDENTGUIDE, nightMode ? NightBlack : White);
+
+    // Annotations
+    e->StyleSetBackground(AnnotationStyle, AnnotationRed);
+    e->StyleSetForeground(AnnotationStyle, Black);
+
+    // Default Style - Probably not used anywhere?
+    e->StyleSetForeground(wxSTC_STYLE_DEFAULT, nightMode ? NightWhite : Black);
+    e->StyleSetBackground(wxSTC_STYLE_DEFAULT, nightMode ? NightBlack : White);
 }
 
+void InitPrefs(wxStyledTextCtrl* e, bool nightMode) {
+    // Set Lexer (Must set this before Folding properties are set)
+    e->StyleClearAll();
+    e->SetLexer(wxSTC_LEX_CPP);
 
+    // Set Fonts (Must do this before applying bold/italic/etc. properties)
+    // Annotations don't word wrap so we should keep it small
+    e->StyleSetFont(AnnotationStyle, wxFont(wxFontInfo(8).Family(wxFONTFAMILY_MODERN)));
+    for (int i = 0; i < wxSTC_STYLE_LASTPREDEFINED; i++) {
+        wxFont font(wxFontInfo(10).Family(wxFONTFAMILY_MODERN));
+        e->StyleSetFont(i, font);
+    }
 
-void InitConstantPrefs(wxStyledTextCtrl* e, int lineNumId) {
-    // Line Numbers
-    e->SetMarginType(lineNumId, wxSTC_MARGIN_NUMBER); // enables line numbers
-    e->SetMarginMask(lineNumId, 0);
-    e->SetMarginWidth(lineNumId, 40); // Wide enough for 4 characters
+    // Set Keywords the lexers use with specific styles
+    e->SetKeyWords(0, "bool char class double enum false float int long new short signed struct true unsigned ");
+
+    // Color Preferences
+    InitColorPrefs(e, nightMode);
+
+    // Line Number Margin
+    e->SetMarginType(MarginLines, wxSTC_MARGIN_NUMBER); // enables line numbers
+    e->SetMarginMask(MarginLines, 0);
+    e->SetMarginWidth(MarginLines, 40); // Wide enough for 4 characters
 
 
     // Indentation Rules
@@ -140,6 +151,17 @@ void InitConstantPrefs(wxStyledTextCtrl* e, int lineNumId) {
     e->SetUseTabs(true); // If false convert tabs to spaces
     e->SetTabIndents(true);
     e->SetBackSpaceUnIndents(true);
+
+    // Folding Margin
+    e->SetMarginType(MarginFolds, wxSTC_MARGIN_SYMBOL);
+    e->SetMarginMask(MarginFolds, wxSTC_MASK_FOLDERS);
+    e->SetMarginWidth(MarginFolds, e->FromDIP(16));
+    e->SetMarginSensitive(MarginFolds, true);
+    e->SetProperty("fold", "1");
+    e->SetProperty("fold.comment", "1");
+    e->SetProperty("fold.compact", "1");
+    e->SetProperty("fold.preprocessor", "1");
+    e->SetFoldFlags(wxSTC_FOLDFLAG_LINEBEFORE_CONTRACTED | wxSTC_FOLDFLAG_LINEAFTER_CONTRACTED);
 
 
     // Annotations (Used to display parsing errors)
@@ -161,7 +183,7 @@ void InitConstantPrefs(wxStyledTextCtrl* e, int lineNumId) {
 
     // Unimportant Options
     e->SetOvertype(false); // Insertion Mode
-    e->SetEdgeMode(editorConfig.longLineOnEnable ? wxSTC_EDGE_LINE : wxSTC_EDGE_NONE);
+    e->SetEdgeMode(wxSTC_EDGE_NONE);
     e->SetEdgeColumn(80); // This + Above toggle = vertical line at column
 
 
@@ -180,56 +202,24 @@ void InitConstantPrefs(wxStyledTextCtrl* e, int lineNumId) {
     
 }
 
-void InitColorPrefs(wxStyledTextCtrl* e) {
-    wxColor test = *wxBLACK;
-    wxLogMessage("%u %u %u %u", test.Red(), test.Blue(), test.Green(), test.Alpha());
-
-    const wxColour Black = wxColour(0, 0, 0);
-    const wxColour DarkGrey = wxColour(47, 47, 47);
-    const wxColour Red = wxColour(255, 0, 0);
-    const wxColour White = wxColour(255, 255, 255);
-
-    // Line Number Margin
-    e->StyleSetForeground(wxSTC_STYLE_LINENUMBER, DarkGrey);
-    e->StyleSetBackground(wxSTC_STYLE_LINENUMBER, White);
-
-    // Vertical indentation dots
-    e->StyleSetForeground(wxSTC_STYLE_INDENTGUIDE, DarkGrey);
-    e->StyleSetBackground(wxSTC_STYLE_INDENTGUIDE, White);
-
-    // Default Style - Probably not used anywhere?
-    e->StyleSetForeground(wxSTC_STYLE_DEFAULT, Black);
-    e->StyleSetBackground(wxSTC_STYLE_DEFAULT, White);
-}
-
-EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
+EntityEditor::EntityEditor(wxWindow* parent, bool nightMode, wxWindowID id, const wxPoint& pos,
     const wxSize& size, long style)
     : wxStyledTextCtrl(parent, id, pos, size, style)
 {
-    m_LineNrID = 0;
-    m_FoldingID = 1;
-    m_language = NULL;
     
-    InitConstantPrefs(this, m_LineNrID);
-    InitializePrefs("C++");
-    InitColorPrefs(this); // Must call this here until clear all styles in above function is moved
-
-    // markers
-    MarkerDefine(wxSTC_MARKNUM_FOLDER, wxSTC_MARK_DOTDOTDOT, "BLACK", "BLACK");
-    MarkerDefine(wxSTC_MARKNUM_FOLDEROPEN, wxSTC_MARK_ARROWDOWN, "BLACK", "BLACK");
-    MarkerDefine(wxSTC_MARKNUM_FOLDERSUB, wxSTC_MARK_EMPTY, "BLACK", "BLACK");
-    MarkerDefine(wxSTC_MARKNUM_FOLDEREND, wxSTC_MARK_DOTDOTDOT, "BLACK", "WHITE");
-    MarkerDefine(wxSTC_MARKNUM_FOLDEROPENMID, wxSTC_MARK_ARROWDOWN, "BLACK", "WHITE");
-    MarkerDefine(wxSTC_MARKNUM_FOLDERMIDTAIL, wxSTC_MARK_EMPTY, "BLACK", "BLACK");
-    MarkerDefine(wxSTC_MARKNUM_FOLDERTAIL, wxSTC_MARK_EMPTY, "BLACK", "BLACK");
+    InitPrefs(this, nightMode);
 
     // Set Initial Node
     SetActiveNode(nullptr);
 }
 
+void EntityEditor::NightMode(bool nightMode) {
+    InitColorPrefs(this, nightMode);
+}
+
 void EntityEditor::OnMarginClick(wxStyledTextEvent& event)
 {
-    if (event.GetMargin() == m_FoldingID) {
+    if (event.GetMargin() == MarginFolds) {
         int lineClick = LineFromPosition(event.GetPosition());
         int levelClick = GetFoldLevel(lineClick);
         if ((levelClick & wxSTC_FOLDLEVELHEADERFLAG) > 0) {
@@ -356,7 +346,7 @@ void EntityEditor::RevertEdits()
 void EntityEditor::setAnnotationError(const size_t lineNumber, const std::string& errorMessage)
 {
     AnnotationClearAll();
-    AnnotationSetStyle(lineNumber - 1, ANNOTATION_STYLE);
+    AnnotationSetStyle(lineNumber - 1, AnnotationStyle);
     AnnotationSetText(lineNumber - 1, errorMessage);
     GotoLine(lineNumber - 1);
 }

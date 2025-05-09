@@ -80,8 +80,6 @@
 //! style bits types
 #define mySTC_STYLE_BOLD 1
 #define mySTC_STYLE_ITALIC 2
-#define mySTC_STYLE_UNDERL 4
-#define mySTC_STYLE_HIDDEN 8
 
 //----------------------------------------------------------------------------
 //! general folding types
@@ -99,42 +97,15 @@
 //! flags
 #define mySTC_FLAG_WRAPMODE 16
 
-//----------------------------------------------------------------------------
-// CommonInfo
-
-struct CommonInfo {
-    // editor functionality prefs
-    bool syntaxEnable;
-    bool foldEnable;
-    bool indentEnable;
-    // display defaults prefs
-    bool readOnlyInitial;
-    bool overTypeInitial;
-    bool wrapModeInitial;
-    bool displayEOLEnable;
-    bool indentGuideEnable;
-    bool lineNumberEnable;
-    bool longLineOnEnable;
-    bool whiteSpaceEnable;
-};
-//extern const CommonInfo g_CommonPrefs;
 
 //----------------------------------------------------------------------------
 // LanguageInfo
 
 struct LanguageInfo {
-    const char *name;
-    const char *filepattern;
-    int lexer;
-    struct {
-        int type;
-        const char *words;
-    } styles [STYLE_TYPES_COUNT];
-    int folds;
+    int styleMap [STYLE_TYPES_COUNT];
 };
 
-extern const LanguageInfo g_LanguagePrefs[];
-extern const int g_LanguagePrefsSize;
+extern const LanguageInfo g_LanguagePrefs;
 
 //----------------------------------------------------------------------------
 // StyleInfo
@@ -142,13 +113,15 @@ struct StyleInfo {
     const wxString name;
     const wxString foreground;
     const wxString background;
-    const wxString fontname;
-    int fontsize;
-    int fontstyle;
-    int lettercase;
+    bool bold = false;
+    bool italic = false;
 };
 
 extern const StyleInfo g_StylePrefs[];
 extern const int g_StylePrefsSize;
+
+extern const char* CppWordlist1;
+extern const char* CppWordlist2;
+extern const char* CppWordlist3;
 
 #endif // _PREFS_H_
