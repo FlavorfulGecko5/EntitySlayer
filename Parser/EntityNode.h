@@ -197,6 +197,21 @@ class EntNode
 	}
 
 	/*
+	* Attempts to convert this node's value to an integer
+	* 
+	* @writeTo If the value can be read as an integer, write it here
+	* @return True if the value was set
+	*/
+	bool ValueInt(int& writeTo, int clampMin, int clampMax) const;
+
+	/*
+	* Attempts to convert this node's value to a boolean
+	* 
+	* @writeTo if the value can be interpreted as a boolean, write it here
+	*/
+	bool ValueBool(bool& writeTo) const;
+
+	/*
 	* DEBUGGING FUNCTIONS
 	*/
 

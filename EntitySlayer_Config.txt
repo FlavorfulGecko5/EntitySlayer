@@ -2,7 +2,7 @@
 
 This is EntitySlayer's config file. Use EntitySlayer to open and edit this file!
 
-Right now, it's sole purpose is customizing the append menu - letting you craft and organize your own templates to suit your needs.
+It's primary purpose is customizing the append menu - letting you craft and organize your own templates to suit your needs.
 
 I recommend keeping Automatic idList Renumbering turned off for this file. Enabling it may cause unwanted edits to templates.
 
@@ -78,6 +78,12 @@ args {
    }
 }
 */
+preferences {
+	launchWithNightMode = false;
+	textEditor {
+		fontSize = 10;
+	}
+}
 enums {
 	/* Omitted SpawnTypes:
 	ENCOUNTER_SPAWN_INVALID

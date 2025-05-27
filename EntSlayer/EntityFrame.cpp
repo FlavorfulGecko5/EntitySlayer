@@ -237,6 +237,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		CenterOnScreen(); // Todo: Is there a better way to enforce this without setting the entire application's minimum size?
 	}
 
+	NightModeItem->Check(ConfigInterface::NightMode());
 	NightModeToggle(false);
 }
 
@@ -247,7 +248,7 @@ EntityFrame::~EntityFrame()
 
 void EntityFrame::AddUntitledTab()
 {
-	EntityTab* newTab = new EntityTab(book, NightModeItem->IsChecked(), "Untitled");
+	EntityTab* newTab = new EntityTab(book, "Untitled");
 	book->AddPage(newTab, "Untitled", true);
 }
 
@@ -391,7 +392,7 @@ void EntityFrame::openFiles(const wxArrayString& filepaths)
 			// Questionable whether this would even be worthwhile
 			// Tab creation takes ~150 MS excluding the Parser anyways, meaning
 			// Parser operations only take ~40% of the total tab build time for average entity files
-			EntityTab* newTab = new EntityTab(book, NightModeItem->IsChecked(), name, path);
+			EntityTab* newTab = new EntityTab(book, name, path);
 			AddOpenedTab(newTab);
 		}
 		catch (std::runtime_error e) {
@@ -561,7 +562,7 @@ void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 
 	std::string tabName = filePath.substr(delimiter, filePath.length() - delimiter);
 
-	EntityTab* newTab = new EntityTab(book, NightModeItem->IsChecked(), "[TEMPORARY FILE] " + tabName, filePath);
+	EntityTab* newTab = new EntityTab(book, "[TEMPORARY FILE] " + tabName, filePath);
 	AddOpenedTab(newTab);
 }
 
@@ -614,11 +615,13 @@ void EntityFrame::onFileSaveAs(wxCommandEvent& event)
 void EntityFrame::onReloadConfigFile(wxCommandEvent& event)
 {
 	if(ConfigInterface::loadData()) {
+		TIMESTART(ReloadTime)
 		for (size_t i = 0, max = book->GetPageCount(); i < max; i++) {
 			EntityTab* t = (EntityTab*)book->GetPage(i);
 			t->setAppendMenu();
 		}
-		wxLogMessage("Successfully reloaded and refreshed append menu");
+		NightModeToggle(true);
+		TIMESTOP(ReloadTime, "Config File Reload Time: ")
 	}
 }
 
@@ -648,7 +651,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 6.1 Release Build");
+	info.SetVersion("Beta 7 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -674,7 +677,9 @@ void EntityFrame::NightModeToggle(bool recursive) {
 	// Status bar: Background: 240/240/240 - Foreground: 0/0/0 - Changing text color seems impossible
 	// Frame: Background: 171/171/171 - Foreground: 0/0/0 - Not used anywhere, propagates to children when modified
 
+	// Very important we do this here, and in this order. Keeps night mode from flip flopping upon config reload
 	bool nightMode = NightModeItem->IsChecked();
+	ConfigInterface::SetNightMode(nightMode);
 
 	log->SetBackgroundColour(nightMode ? wxColour(32, 32, 32) : wxColour(255, 255, 255));
 	log->SetForegroundColour(nightMode ? wxColour(216, 216, 216) : wxColour(0, 0, 0));
@@ -691,7 +696,7 @@ void EntityFrame::NightModeToggle(bool recursive) {
 
 	for (int i = 0; i < book->GetPageCount(); i++) {
 		EntityTab* t = (EntityTab*)book->GetPage(i);
-		t->NightMode(nightMode, true);
+		t->NightMode(true);
 	}
 
 }

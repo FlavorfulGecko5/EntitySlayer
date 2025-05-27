@@ -1,6 +1,8 @@
 #pragma warning(disable : 4996) // Deprecation errors
 #include "EntityNode.h"
 #include "EntityEditor.h"
+#include "Config.h"
+#include "EntityProfiler.h"
 
 wxBEGIN_EVENT_TABLE(EntityEditor, wxStyledTextCtrl)
     // stc
@@ -14,9 +16,11 @@ wxEND_EVENT_TABLE()
 #define MarginFolds 1
 #define AnnotationStyle wxSTC_STYLE_LASTPREDEFINED + 1
 
-void InitColorPrefs(wxStyledTextCtrl* e, bool nightMode) {
+void InitColorPrefs(wxStyledTextCtrl* e) {
     //wxColor test = wxColour(e->GetMarginHi);
     //wxLogMessage("%u %u %u %u", test.Red(), test.Green(), test.Blue(), test.Alpha());
+
+    bool nightMode = ConfigInterface::NightMode();
 
     /*
     * Light Mode Colors
@@ -120,24 +124,27 @@ void InitColorPrefs(wxStyledTextCtrl* e, bool nightMode) {
     e->StyleSetBackground(wxSTC_STYLE_DEFAULT, nightMode ? NightBlack : White);
 }
 
-void InitPrefs(wxStyledTextCtrl* e, bool nightMode) {
+void InitPrefs(wxStyledTextCtrl* e) {
+    EditorConfig_t cfg = ConfigInterface::GetEditorConfig();
+
     // Set Lexer (Must set this before Folding properties are set)
     e->StyleClearAll();
     e->SetLexer(wxSTC_LEX_CPP);
 
     // Set Fonts (Must do this before applying bold/italic/etc. properties)
     // Annotations don't word wrap so we should keep it small
-    e->StyleSetFont(AnnotationStyle, wxFont(wxFontInfo(8).Family(wxFONTFAMILY_MODERN)));
+    e->StyleSetFont(AnnotationStyle, wxFont(wxFontInfo(cfg.fontSize - 2).Family(wxFONTFAMILY_MODERN)));
     for (int i = 0; i < wxSTC_STYLE_LASTPREDEFINED; i++) {
-        wxFont font(wxFontInfo(10).Family(wxFONTFAMILY_MODERN));
+        wxFont font(wxFontInfo(cfg.fontSize).Family(wxFONTFAMILY_MODERN));
         e->StyleSetFont(i, font);
     }
+    e->StyleSetFont(wxSTC_STYLE_LINENUMBER, wxFont(wxFontInfo(10).Family(wxFONTFAMILY_MODERN)));
 
     // Set Keywords the lexers use with specific styles
     e->SetKeyWords(0, "bool char class double enum false float int long new short signed struct true unsigned ");
 
     // Color Preferences
-    InitColorPrefs(e, nightMode);
+    InitColorPrefs(e);
 
     // Line Number Margin
     e->SetMarginType(MarginLines, wxSTC_MARGIN_NUMBER); // enables line numbers
@@ -202,19 +209,19 @@ void InitPrefs(wxStyledTextCtrl* e, bool nightMode) {
     
 }
 
-EntityEditor::EntityEditor(wxWindow* parent, bool nightMode, wxWindowID id, const wxPoint& pos,
+EntityEditor::EntityEditor(wxWindow* parent, wxWindowID id, const wxPoint& pos,
     const wxSize& size, long style)
     : wxStyledTextCtrl(parent, id, pos, size, style)
 {
     
-    InitPrefs(this, nightMode);
+    InitPrefs(this);
 
     // Set Initial Node
     SetActiveNode(nullptr);
 }
 
-void EntityEditor::NightMode(bool nightMode) {
-    InitColorPrefs(this, nightMode);
+void EntityEditor::ReloadPreferences() {
+    InitPrefs(this);
 }
 
 void EntityEditor::OnMarginClick(wxStyledTextEvent& event)

@@ -36,8 +36,8 @@ class EntityTab : public wxPanel
 	wxDataViewCtrl* view;
 	EntityEditor* editor;
 
-	EntityTab(wxWindow* parent, bool nightMode, const wxString name, const wxString& path = "");
-	void NightMode(bool nightMode, bool recursive);
+	EntityTab(wxWindow* parent, const wxString name, const wxString& path = "");
+	void NightMode(bool recursive);
 	bool IsNewAndUntouched();
 	bool UnsavedChanges();
 	void setAppendMenu();

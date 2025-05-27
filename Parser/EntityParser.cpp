@@ -724,7 +724,7 @@ void EntityParser::parseContentsPermissive()
 			pushNodeBoth(EntNode::NFC_ValueFile);
 			Tokenize();
 			if (lastTokenType == TT_BraceOpen) {
-				tempChildren.back()->nodeFlags = EntNode::NFC_ObjEntitydef;
+				tempChildren.back()->nodeFlags = EntNode::NFC_ObjSimple; // Changed from ObjEntityDef to fix indentation
 				parseContentsPermissive();
 				assertLastType(TT_BraceClose);
 				goto LABEL_LOOP;

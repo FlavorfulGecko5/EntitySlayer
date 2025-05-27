@@ -15,7 +15,7 @@ class EntityEditor: public wxStyledTextCtrl
     public:
     /* Construction and Preference Setting */
 
-    EntityEditor(wxWindow* parent, bool nightMode, wxWindowID id = wxID_ANY,
+    EntityEditor(wxWindow* parent, wxWindowID id = wxID_ANY,
         const wxPoint& pos = wxDefaultPosition,
         const wxSize& size = wxDefaultSize,
         long style =
@@ -25,7 +25,7 @@ class EntityEditor: public wxStyledTextCtrl
         wxVSCROLL
     );
 
-    void NightMode(bool nightMode);
+    void ReloadPreferences();
 
     /* Events */
 

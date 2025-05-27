@@ -72,7 +72,7 @@ wxBEGIN_EVENT_TABLE(EntityTab, wxPanel)
 	EVT_MENU_RANGE(TABID_MAXIMUM, MAXSHORT, onNodeContextAccelerator)
 wxEND_EVENT_TABLE()
 
-EntityTab::EntityTab(wxWindow* parent, bool nightMode, const wxString name, const wxString& path)
+EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path)
 	: wxPanel(parent, wxID_ANY), tabName(name), filePath(path)
 {
 	/* Initialize parser */
@@ -186,7 +186,7 @@ EntityTab::EntityTab(wxWindow* parent, bool nightMode, const wxString name, cons
 
 	/* Initialize controls */
 	wxSplitterWindow* splitter = new wxSplitterWindow(this);
-	editor = new EntityEditor(splitter, nightMode, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
+	editor = new EntityEditor(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300));
 	view = new wxDataViewCtrl(splitter, wxID_ANY, wxDefaultPosition, wxSize(300, 300), wxDV_MULTIPLE);
 	Parser->view = view;
 	view->GetMainWindow()->Bind(wxEVT_CHAR, &EntityTab::onDataviewChar, this);
@@ -240,14 +240,17 @@ EntityTab::EntityTab(wxWindow* parent, bool nightMode, const wxString name, cons
 	sizer->Add(topWrapper, 0, wxEXPAND | wxALL, 5);
 	sizer->Add(splitter, 1, wxEXPAND | wxALL, 5);
 	SetSizerAndFit(sizer);
-	NightMode(nightMode, false);
+	NightMode(false);
 }
 
-void EntityTab::NightMode(bool nightMode, bool recursive) {
+// You can think of this more as a "reload all preferences" function rather than just
+// a Night Mode function
+void EntityTab::NightMode(bool recursive) {
 	// Tab: Background: 240/240/240 - Foreground: 0/0/0 - Can propagate to children
 	// Text Box: Background: 255/255/255  - Foreground: 0/0/0
 	// Dataview: Background: 255/255/255 - Foreground: 0/0/0
 
+	bool nightMode = ConfigInterface::NightMode();
 	wxColour LabelColor = nightMode ? wxColour(255, 255, 255) : wxColour(0, 0, 0);
 
 	//wxColour test = searchBar->label->GetForegroundColour();
@@ -301,7 +304,9 @@ void EntityTab::NightMode(bool nightMode, bool recursive) {
 	if(!recursive)
 		return;
 
-	editor->NightMode(nightMode);
+	// Call everything instead of only setting the colors, as a way of ensuring
+	// everything is properly set on config reload
+	editor->ReloadPreferences(); 
 }
 
 bool EntityTab::IsNewAndUntouched()

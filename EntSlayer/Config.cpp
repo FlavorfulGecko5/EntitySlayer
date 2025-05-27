@@ -17,6 +17,11 @@ const char* ConfigInterface::ConfigPath()
 EntityParser* data = nullptr;
 
 /*
+* Editor Config Data
+*/
+EditorConfig_t EditorConfig;
+
+/*
  Menu to deep-copy every time a menu is requested
 
  (Building a menu by performing parse tree navigation each time would be horribly inefficient)
@@ -75,6 +80,29 @@ void recursiveBuildMenu(wxMenu* parentMenu, EntNode* node)
 	}
 }
 
+EditorConfig_t ConfigInterface::GetEditorConfig() {
+	return EditorConfig;
+}
+
+bool ConfigInterface::NightMode() {
+	return EditorConfig.nightMode;
+}
+
+void ConfigInterface::SetNightMode(bool newVal) {
+	EditorConfig.nightMode = newVal;
+}
+
+void ReadPreferences() {
+	EditorConfig = EditorConfig_t();
+
+	EntNode& root = *data->getRoot();
+	EntNode& prefs = root["preferences"];
+	EntNode& textprefs = prefs["textEditor"];
+
+	prefs["launchWithNightMode"].ValueBool(EditorConfig.nightMode);
+	textprefs["fontSize"].ValueInt(EditorConfig.fontSize, 8, 72);
+}
+
 bool ConfigInterface::loadData()
 {
 	const std::string filepath = ConfigPath();
@@ -94,6 +122,9 @@ bool ConfigInterface::loadData()
 	idMap.clear();
 	delete templateMenu;
 	templateMenu = new wxMenu;
+
+	/* Read Hardcoded Preferences */
+	ReadPreferences();
 
 	/* Build append menu */
 	EntNode& root = *data->getRoot();
