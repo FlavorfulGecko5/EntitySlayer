@@ -112,26 +112,41 @@ bool EntNode::ValueBool(bool& writeTo) const {
 	return false;
 }
 
-
-bool EntNode::findPositionalID(EntNode* n, int& id)
+std::shared_ptr<int> EntNode::TracePosition(int& nodeDepth) const
 {
-	if (this == n) return true;
-	id++;
+	// Get the depth so we know how much space to allocat
+	int depth = 0;
+	const EntNode* currentParent = parent;
+	while (currentParent) {
+		depth++;
+		currentParent = currentParent->parent;
+	}
 
-	for (int i = 0; i < childCount; i++)
-		if (children[i]->findPositionalID(n, id)) return true;
-	return false;
+	if (depth == 0) {
+		nodeDepth = 0;
+		return nullptr;
+	}
+
+	int* indices = new int[depth];
+	currentParent = parent;
+	const EntNode* lastParent = this;
+	for (int i = depth - 1; i > -1; i--) {
+		indices[i] = currentParent->getChildIndex(lastParent);
+		lastParent = currentParent;
+		currentParent = currentParent->parent;
+	}
+
+	nodeDepth = depth;
+	std::shared_ptr<int> sptr(indices, [](int* p) {delete p;});
+	return sptr;
 }
 
-EntNode* EntNode::nodeFromPositionalID(int& decrementor)
+EntNode* EntNode::FromPositionTrace(EntNode* root, const int* nodeIndices, const int nodeDepth) 
 {
-	if (decrementor == 0) return this;
-	for (int i = 0; i < childCount; i++)
-	{
-		EntNode* result = children[i]->nodeFromPositionalID(--decrementor);
-		if (result != nullptr) return result;
+	for (int i = 0; i < nodeDepth; i++) {
+		root = root->children[nodeIndices[i]];
 	}
-	return nullptr;
+	return root;
 }
 
 bool EntNode::searchText(const std::string& key, const bool caseSensitive, const bool exactLength)

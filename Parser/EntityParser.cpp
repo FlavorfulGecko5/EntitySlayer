@@ -208,7 +208,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	reverseGroup.emplace_back();
 	ParseCommand& reverse = reverseGroup.back();
 	reverse.type = CommandType::EDIT_TREE;
-	root.findPositionalID(parent, reverse.parentID);
+	reverse.parentPositionTrace = parent->TracePosition(reverse.parentDepth);
 	reverse.insertionIndex = insertionIndex;
 	reverse.removalCount = tempRoot.childCount;
 	for (int i = 0; i < removeCount; i++) {
@@ -314,7 +314,7 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 	reverse.type = CommandType::EDIT_TEXT;
 	reverse.text = std::string(node->textPtr, node->nameLength + node->valLength);
 	reverse.insertionIndex = node->nameLength;
-	root.findPositionalID(node, reverse.parentID);
+	reverse.parentPositionTrace = node->TracePosition(reverse.parentDepth);
 
 	// Create new buffer
 	char* newBuffer = textAlloc.reserveBlock(text.length());
@@ -354,7 +354,7 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 	reverse.type = CommandType::EDIT_POSITION;
 	reverse.insertionIndex = childIndex; // Removal count is interpreted as the child index, and 
 	reverse.removalCount = insertionIndex;
-	root.findPositionalID(parent, reverse.parentID);
+	reverse.parentPositionTrace = parent->TracePosition(reverse.parentDepth);
 
 	// Assemble data
 	EntNode** buffer = parent->children;
@@ -458,8 +458,10 @@ void EntityParser::PushGroupCommand() {
 	}
 
 	reverseGroup[0].lastInGroup = true;
-	for (ParseCommand& p : reverseGroup)
-		history.push_back(p);
+	for (ParseCommand& p : reverseGroup) {
+		history.emplace_back(p);
+	}
+		
 	redoIndex = (int)history.size();
 	reverseGroup.clear();
 	commandCount++;
@@ -481,8 +483,7 @@ void EntityParser::ClearHistory()
 
 void EntityParser::ExecuteCommand(ParseCommand& cmd)
 {
-	int id = cmd.parentID;
-	EntNode* node = root.nodeFromPositionalID(id);
+	EntNode* node = EntNode::FromPositionTrace(&root, cmd.parentPositionTrace.get(), cmd.parentDepth);
 	switch (cmd.type)
 	{
 		case CommandType::EDIT_TREE:
@@ -505,6 +506,11 @@ bool EntityParser::Undo()
 	// Nothing to undo
 	if (redoIndex == 0) return false;
 
+	if (reverseGroup.size() > 0) {
+		EntityLogger::log("WARNING: Cannot Undo while an unpushed group command exists");
+		return false;
+	}
+
 	int index = redoIndex - 1;
 	do ExecuteCommand(history[index]);
 	while (!history[index--].lastInGroup);
@@ -522,6 +528,11 @@ bool EntityParser::Redo()
 {
 	// Nothing to redo
 	if (redoIndex == history.size()) return false;
+
+	if (reverseGroup.size() > 0) {
+		EntityLogger::log("WARNING: Cannot Redo while an unpushed group command exists");
+		return false;
+	}
 
 	int index = redoIndex;
 	do ExecuteCommand(history[index]);
@@ -1673,4 +1684,65 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 		entity->filtered = true;
 	}
 	EntityLogger::logTimeStamps("Time to Filter: ", start);
+}
+
+void EntityParser::GetValue(wxVariant& variant, const wxDataViewItem& item, unsigned int col) const
+{
+	wxASSERT(item.IsOk());
+	EntNode* node = (EntNode*)item.GetID();
+
+	if (col == 0) {
+		// Use value in entityDef node instead of "entity"
+
+		if (PARSEMODE == ParsingMode::JSON) {
+			if (node->nameLength == 0) {
+				if (node->nodeFlags & EntNode::NF_Braces)
+					variant = "{}";
+				else if (node->nodeFlags & EntNode::NF_Brackets)
+					variant = "[]";
+			}
+			else variant = node->getNameWX();
+			return;
+		}
+
+		if (node->parent == &root)
+		{
+			EntNode& entityDef = (*node)["entityDef"];
+			if (&entityDef != EntNode::SEARCH_404)
+			{
+				variant = entityDef.getValueWX();
+				return;
+			}
+		}
+		if (node->nodeFlags == EntNode::NFC_ObjCommon) { // Indiana Jones Entity Component System
+			if (node->HasParent() && node->parent->getName() == "components") {
+				variant = (*node)["className"].getValueWX();
+				return;
+			}
+		}
+		variant = node->getNameWX();
+	}
+	else {
+
+		if (node->nodeFlags == EntNode::NFC_ObjCommon) {
+			// Devinvloadout decls
+			// This demonstrates the importance of understanding
+			// C++ reference reassignment rules
+			EntNode& itemNode = (*node)["item"];
+			if (&itemNode != EntNode::SEARCH_404) {
+				variant = itemNode.getValueWXUQ();
+				return;
+			}
+
+			EntNode& perkNode = (*node)["perk"];
+			if (&perkNode != EntNode::SEARCH_404) {
+				variant = perkNode.getValueWXUQ();
+				return;
+			}
+
+			// Encounter managers
+			variant = (*node)["eventCall"]["eventDef"].getValueWX();
+		}
+		else variant = node->getValueWX();
+	}
 }

@@ -185,6 +185,7 @@
     <ClInclude Include="Parser\EntityParser.h" />
     <ClInclude Include="Parser\GenericBlockAllocator.h" />
     <ClInclude Include="Parser\Oodle.h" />
+    <ClInclude Include="Parser\ParserConfig.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

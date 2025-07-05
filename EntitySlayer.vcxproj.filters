@@ -108,5 +108,6 @@
     </ClInclude>
     <ClInclude Include="EntSlayer\EntityProfiler.h" />
     <ClInclude Include="EntSlayer\EntityFolderDialog.h" />
+    <ClInclude Include="Parser\ParserConfig.h" />
   </ItemGroup>
 </Project>

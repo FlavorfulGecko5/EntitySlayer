@@ -202,7 +202,8 @@ class EntityParser : public wxDataViewModel {
 	struct ParseCommand
 	{
 		std::string text = "";                      // Text we must parse for this command
-		int parentID = 0;                           // Positional id of the parent node
+		std::shared_ptr<int> parentPositionTrace = nullptr; // Positional trace of parent node. Requires a shared ptr since vectors don't zero-out old buffers
+		int parentDepth = 0;                        // Depth of the parent node
 		int insertionIndex = 0;                     // Purpose varies depending on command type
 		int removalCount = 0;                       // Purpose varies depending on command type
 		bool lastInGroup = false;                   // If true, this is the last command of this group command
@@ -345,66 +346,7 @@ class EntityParser : public wxDataViewModel {
 	public:
 
 	// wxWidgets calls this function very frequently, on every visible node, if you so much as breathe on the dataview
-	void GetValue(wxVariant& variant, const wxDataViewItem& item, unsigned int col) const override
-	{
-		wxASSERT(item.IsOk());
-		EntNode* node = (EntNode*)item.GetID();
-
-		if (col == 0) {
-			// Use value in entityDef node instead of "entity"
-
-			if (PARSEMODE == ParsingMode::JSON) {
-				if (node->nameLength == 0) {
-					if(node->nodeFlags & EntNode::NF_Braces)
-						variant = "{}";
-					else if(node->nodeFlags & EntNode::NF_Brackets)
-						variant = "[]";
-				}
-				else variant = node->getNameWX();
-				return;
-			}
-
-			if (node->parent == &root)
-			{
-				EntNode& entityDef = (*node)["entityDef"];
-				if (&entityDef != EntNode::SEARCH_404)
-				{
-					variant = entityDef.getValueWX();
-					return;
-				}
-			}
-			if (node->nodeFlags == EntNode::NFC_ObjCommon) { // Indiana Jones Entity Component System
-				if (node->HasParent() && node->parent->getName() == "components") {
-					variant = (*node)["className"].getValueWX();
-					return;
-				}
-			}
-			variant = node->getNameWX();
-		}
-		else {
-
-			if(node->nodeFlags == EntNode::NFC_ObjCommon) {
-				// Devinvloadout decls
-				// This demonstrates the importance of understanding
-				// C++ reference reassignment rules
-				EntNode& itemNode = (*node)["item"];
-				if(&itemNode != EntNode::SEARCH_404) {
-					variant = itemNode.getValueWXUQ();
-					return;
-				}
-
-				EntNode& perkNode = (*node)["perk"];
-				if (&perkNode != EntNode::SEARCH_404) {
-					variant = perkNode.getValueWXUQ();
-					return;
-				}
-
-				// Encounter managers
-				variant = (*node)["eventCall"]["eventDef"].getValueWX();
-			}
-			else variant = node->getValueWX();
-		}
-	}
+	void GetValue(wxVariant& variant, const wxDataViewItem& item, unsigned int col) const override;
 
 	unsigned int GetChildren(const wxDataViewItem& parent, wxDataViewItemArray& array) const override
 	{

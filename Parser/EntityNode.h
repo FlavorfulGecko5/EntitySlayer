@@ -1,4 +1,5 @@
 #include <string_view>
+#include <memory>
 
 class wxString;
 class EntNode 
@@ -110,7 +111,7 @@ class EntNode
 	* Gets the index of a node in this node's child buffer
 	* @returns Index of the child, or -1 if the node could not be found.
 	*/
-	int getChildIndex(EntNode* child) {
+	int getChildIndex(const EntNode* child) const {
 		for(int i = 0; i < childCount; i++)
 			if(children[i] == child)
 				return i;
@@ -169,12 +170,12 @@ class EntNode
 	}
 
 	/*
-	* Calling node is assumed to be the root
-	* id should be initialized to 0
+	* Returns a dynamically allocated list of indices. Provides a list
+	* of node child indices you can trace through to find the node this was called on
 	*/
-	bool findPositionalID(EntNode* n, int& id);
+	std::shared_ptr<int> TracePosition(int& nodeDepth) const;
 
-	EntNode* nodeFromPositionalID(int& decrementor);
+	static EntNode* FromPositionTrace(EntNode* root, const int* indices, const int nodeDepth);
 
 
 	/*
