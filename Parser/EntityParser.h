@@ -113,6 +113,9 @@ class EntityParser : public wxDataViewModel {
 	/* Constructs an EntityParser with minimal data */
 	EntityParser();
 
+	/* Constructs an EntityParser of the desired mode*/
+	EntityParser(ParsingMode mode);
+
 	/*
 	* Constructs an EntityParser containing fully parsed data from the given file
 	* @param filepath .entites file to parse

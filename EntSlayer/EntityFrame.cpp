@@ -418,7 +418,7 @@ void EntityFrame::onOpenConfig(wxCommandEvent& event)
 void EntityFrame::onFileOpen(wxCommandEvent& event)
 {
 	wxFileDialog openFileDialog(this, "Open File", wxEmptyString, wxEmptyString,
-		"Officially Supported Files (*.entities;*.txt;*.json)|*.entities;*.txt;*.json|All Files (*.*)|*.*",
+		"All Files (*.*)|*.*",
 		wxFD_OPEN | wxFD_FILE_MUST_EXIST | wxFD_MULTIPLE);
 	if (openFileDialog.ShowModal() == wxID_CANCEL)
 		return;
@@ -651,7 +651,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 7 Release Build");
+	info.SetVersion("Beta 7.1 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

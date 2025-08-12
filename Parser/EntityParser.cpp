@@ -46,6 +46,8 @@ EntityParser::EntityParser() : fileWasCompressed(false), PARSEMODE(ParsingMode::
 	initiateParse(rawText, &root, &root, presult);
 }
 
+EntityParser::EntityParser(ParsingMode mode) : fileWasCompressed(false), PARSEMODE(mode) {}
+
 EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, const bool debug_logParseTime)
 	: PARSEMODE(mode)
 {
@@ -708,10 +710,45 @@ void EntityParser::parseContentsPermissive()
 			goto LABEL_LOOP;
 		}
 
+		// Permit braces to run onto new lines
+		else if (lastTokenType == TT_Newline) {
+			do {
+				Tokenize();
+			}
+			while(lastTokenType == TT_Newline);
+
+			if (lastTokenType == TT_BraceOpen) {
+				pushNode(EntNode::NFC_ObjSimple, activeID);
+				parseContentsPermissive();
+				assertLastType(TT_BraceClose);
+				goto LABEL_LOOP;
+			}
+
+			else {
+				pushNode(EntNode::NFC_ValueLayer, activeID);
+				goto LABEL_LOOP_SKIP_TOKENIZE;
+			}
+		}
+
 		else if (lastTokenType == TT_EqualSign) {
 			Tokenize();
 
 			if (lastTokenType == TT_BraceOpen) { // Common Objects
+				pushNode(EntNode::NFC_ObjCommon, activeID);
+				parseContentsPermissive();
+				assertLastType(TT_BraceClose);
+				goto LABEL_LOOP;
+			}
+			
+			else if (lastTokenType == TT_Newline) {
+				do { 
+					Tokenize();
+				}
+				while(lastTokenType == TT_Newline);
+
+				if(lastTokenType != TT_BraceOpen)
+					throw Error("Expected brace after = and newline");
+
 				pushNode(EntNode::NFC_ObjCommon, activeID);
 				parseContentsPermissive();
 				assertLastType(TT_BraceClose);
@@ -734,6 +771,11 @@ void EntityParser::parseContentsPermissive()
 		else if (lastTokenType & TTC_PermissiveKey) { // Consecutive Identifiers or higher
 			pushNodeBoth(EntNode::NFC_ValueFile);
 			Tokenize();
+
+			while (lastTokenType == TT_Newline) {
+				Tokenize();
+			}
+
 			if (lastTokenType == TT_BraceOpen) {
 				tempChildren.back()->nodeFlags = EntNode::NFC_ObjSimple; // Changed from ObjEntityDef to fix indentation
 				parseContentsPermissive();
@@ -742,7 +784,7 @@ void EntityParser::parseContentsPermissive()
 			}
 			else goto LABEL_LOOP_SKIP_TOKENIZE;
 		}
-		else if (lastTokenType != TT_Semicolon) { // EOF, Braceclose, newline, comment
+		else if (lastTokenType != TT_Semicolon) { // EOF, Braceclose, comment
 			pushNode(EntNode::NFC_ValueLayer, activeID);
 			goto LABEL_LOOP_SKIP_TOKENIZE;
 		}
@@ -1272,11 +1314,39 @@ void EntityParser::Tokenize()
 			throw Error("No end-quote to complete string literal");
 
 			case '\\':
-			if(*(ch+1) == '"') ch++;
+			if (PARSEMODE == ParsingMode::JSON) {
+				if (*(ch + 1) == '"') ch++;
+			}
+			
 			goto LABEL_STRING_START;
 
 			default:
 			goto LABEL_STRING_START;
+		}
+
+		case '<':
+		if(PARSEMODE != ParsingMode::PERMISSIVE)
+			throw Error("Verbatim strings are for permissive mode only");
+		first = ch;
+		if(*++ch != '%')
+			throw Error("Bad start to verbatim string");
+		LABEL_VERBATIMSTRING_START:
+		switch (*++ch)
+		{
+			case '%':
+			if(*(ch+1) != '>')
+				goto LABEL_VERBATIMSTRING_START;
+			ch += 2; // Increment past > to set to next char
+			lastTokenType = TT_String;
+			lastUniqueToken = std::string_view(first, (size_t)(ch - first));
+			return;
+
+			case '\0':
+			throw Error("No end to verbatim string");
+
+			default:
+			goto LABEL_VERBATIMSTRING_START;
+
 		}
 
 		case '$':

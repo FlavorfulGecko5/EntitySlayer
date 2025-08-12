@@ -17,15 +17,23 @@ wxString EntNode::getNameWX() { return wxString(textPtr, nameLength); }
 wxString EntNode::getValueWX() { return wxString(textPtr + nameLength, valLength); }
 
 wxString EntNode::getNameWXUQ() {
-	if(nameLength < 2 || *textPtr != '"')
-		return wxString(textPtr, nameLength);
-	return wxString(textPtr + 1, nameLength - 2);
+	if (nameLength == 0)
+		return "";
+	if (*textPtr == '"')
+		return wxString(textPtr + 1, nameLength - 2);
+	if (*textPtr == '<')
+		return wxString(textPtr + 2, nameLength - 4);
+	return wxString(textPtr, nameLength);
 }
 
 wxString EntNode::getValueWXUQ() {
-	if(valLength < 2 || textPtr[nameLength] != '"')
-		return wxString(textPtr + nameLength, valLength);
-	return wxString(textPtr + nameLength + 1, valLength - 2);
+	if (valLength == 0)
+		return "";
+	if (textPtr[nameLength] == '"')
+		return wxString(textPtr + nameLength + 1, valLength - 2);
+	if (textPtr[nameLength] == '<')
+		return wxString(textPtr + nameLength + 2, valLength - 4);
+	return wxString(textPtr + nameLength, valLength);
 }
 
 bool EntNode::IsComment() {
