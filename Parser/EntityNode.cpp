@@ -1,8 +1,12 @@
 #include <fstream>
-#include "wx/string.h"
 #include "Oodle.h"
 #include "EntityLogger.h"
 #include "EntityNode.h"
+
+#if entityparser_wxwidgets
+#include "wx/string.h"
+#endif
+
 /*
 * This file should be used to define any fields or functions
 * that can't be defined in the header files
@@ -12,39 +16,21 @@ EntNode _404;
 
 EntNode* EntNode::SEARCH_404 = &_404;
 
+#if entityparser_wxwidgets
 wxString EntNode::getNameWX() { return wxString(textPtr, nameLength); }
 
 wxString EntNode::getValueWX() { return wxString(textPtr + nameLength, valLength); }
 
 wxString EntNode::getNameWXUQ() {
-	if (nameLength == 0)
-		return "";
-	if (*textPtr == '"')
-		return wxString(textPtr + 1, nameLength - 2);
-	if (*textPtr == '<')
-		return wxString(textPtr + 2, nameLength - 4);
-	return wxString(textPtr, nameLength);
+	std::string_view nameuq = getNameUQ();
+	return wxString(nameuq.data(), nameuq.length());
 }
 
 wxString EntNode::getValueWXUQ() {
-	if (valLength == 0)
-		return "";
-	if (textPtr[nameLength] == '"')
-		return wxString(textPtr + nameLength + 1, valLength - 2);
-	if (textPtr[nameLength] == '<')
-		return wxString(textPtr + nameLength + 2, valLength - 4);
-	return wxString(textPtr + nameLength, valLength);
+	std::string_view valueuq = getValueUQ();
+	return wxString(valueuq.data(), valueuq.length());
 }
-
-bool EntNode::IsComment() {
-	if (childCount == 0 && nameLength > 1) {
-		if (textPtr[0] == '/' && textPtr[1] == '/')
-			return true;
-		if (textPtr[0] == '/' && textPtr[1] == '*')
-			return true;
-	}
-	return false;
-}
+#endif
 
 bool EntNode::IsRoot() {
 	return parent == nullptr && nodeFlags == NFC_RootNode;
@@ -85,39 +71,6 @@ bool EntNode::ValueInt(int& writeTo, int clampMin, int clampMax) const {
 
 	writeTo = value;
 	return true;
-}
-
-bool EntNode::ValueBool(bool& writeTo) const {
-	if(valLength == 0) return false;
-
-	const char* ptr = textPtr + nameLength;
-
-	if (valLength == 1) {
-		if (*ptr == '0') {
-			writeTo = false;
-			return true;
-		}
-		if (*ptr == '1') {
-			writeTo = true;
-			return true;
-		}
-	}
-
-	if (valLength == 4) {
-		if (memcmp(ptr, "true", 4) == 0) {
-			writeTo = true;
-			return true;
-		}
-	}
-
-	if (valLength == 5) {
-		if (memcmp(ptr, "false", 5) == 0) {
-			writeTo = false;
-			return true;
-		}
-	}
-
-	return false;
 }
 
 std::shared_ptr<int> EntNode::TracePosition(int& nodeDepth) const
@@ -317,7 +270,7 @@ void EntNode::generateText(std::string& buffer, int wsIndex)
 		buffer.push_back(',');
 }
 
-size_t EntNode::writeToFile(const std::string filepath, const size_t sizeHint, const bool oodleCompress, const bool debug_logTime)
+size_t EntNode::writeToFile(const std::string filepath, const size_t sizeHint, const bool oodleCompress, const char* eofblob, size_t eofbloblength, const bool debug_logTime)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
 	// 25% of time spent writing to output buffer, 75% on generateText
@@ -330,6 +283,12 @@ size_t EntNode::writeToFile(const std::string filepath, const size_t sizeHint, c
 		EntityLogger::logTimeStamps("Generate Text Duration: ", timeStart);
 
 	timeStart = std::chrono::high_resolution_clock::now();
+
+	if (eofbloblength > 0) {
+		raw.push_back('\0');
+		raw.append(eofblob, eofbloblength);
+	}
+		
 
 	std::ofstream output(filepath, std::ios_base::binary);
 

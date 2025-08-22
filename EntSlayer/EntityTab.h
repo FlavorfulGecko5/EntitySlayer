@@ -1,9 +1,9 @@
-#include "wx/wx.h"
-#include "wx/collpane.h"
-#include "wx/splitter.h"
+#include "wx/panel.h"
 #include "EntityParser.h"
-//#include <filesystem>
 
+class EntityParser;
+class wxGenericCollapsiblePane;
+class wxCollapsiblePaneEvent;
 class EntityEditor;
 class FilterCtrl;
 class SpawnFilter;
@@ -22,6 +22,7 @@ class EntityTab : public wxPanel
 	FilterCtrl* classMenu;
 	FilterCtrl* inheritMenu;
 	FilterCtrl* componentMenu;
+	FilterCtrl* instanceidMenu;
 	FilterCtrl* keyMenu;
 	wxCheckBox* caseSensCheck;
 	SpawnFilter* spawnMenu;

@@ -1,7 +1,11 @@
 #include <string_view>
 #include <memory>
+#include "ParserConfig.h"
 
+#if entityparser_wxwidgets
 class wxString;
+#endif
+
 class EntNode 
 {
 	friend class EntityParser;
@@ -62,16 +66,16 @@ class EntNode
 	* ACCESSOR METHODS
 	*/
 
-	uint16_t getFlags() {return nodeFlags;}
+	uint16_t getFlags() const {return nodeFlags;}
 
-	std::string_view getName() {return std::string_view(textPtr, nameLength); }
+	std::string_view getName() const  {return std::string_view(textPtr, nameLength); }
 
-	std::string_view getValue() {return std::string_view(textPtr + nameLength, valLength); }
+	std::string_view getValue() const {return std::string_view(textPtr + nameLength, valLength); }
 
-	bool hasValue() {return valLength > 0;};
+	bool hasValue() const {return valLength > 0;};
 
 	// If the name is a string literal, return it unquoted. Otherwise return the name as normal
-	std::string_view getNameUQ() {
+	std::string_view getNameUQ() const {
 		if(nameLength == 0)
 			return "";
 		if(*textPtr == '"')
@@ -82,7 +86,7 @@ class EntNode
 	}
 
 	// If the value is a string literal, get it with the quotes removed. Else return the value as normal
-	std::string_view getValueUQ() {
+	std::string_view getValueUQ() const {
 		if(valLength == 0)
 			return "";
 		if(textPtr[nameLength] == '"')
@@ -92,28 +96,44 @@ class EntNode
 		return std::string_view(textPtr + nameLength, valLength);
 	}
 
+	#if entityparser_wxwidgets
 	wxString getNameWX();
 	wxString getValueWX();
 	wxString getNameWXUQ();
 	wxString getValueWXUQ();
+	#endif
 
-	bool IsComment();
+	bool IsComment() const {
+		return nameLength > 0 && *textPtr == '/';
+	}
 
 	bool IsRoot();
 
 	bool IsContainer();
 
-	int NameLength() { return nameLength; }
+	const char* NamePtr() const {return textPtr;}
 
-	int ValueLength() { return valLength; }
+	const char* ValuePtr() const {return textPtr + nameLength;}
 
-	EntNode* getParent() { return parent; }
+	int NameLength() const { return nameLength; }
 
-	bool HasParent() {return parent != nullptr;}
+	int ValueLength() const { return valLength; }
 
-	EntNode** getChildBuffer() { return children; }
+	EntNode* getParent() const { return parent; }
 
-	int getChildCount() {return childCount;}
+	bool HasParent() const {return parent != nullptr;}
+
+	EntNode** getChildBuffer() const { return children; }
+
+	int getChildCount() const {return childCount;}
+
+	const EntNode ListMapHack() const {
+		EntNode copy;
+		copy.textPtr = textPtr;
+		copy.nameLength = 0;
+		copy.valLength = nameLength;
+		return copy;
+	}
 
 	/*
 	* Gets the index of a node in this node's child buffer
@@ -126,8 +146,12 @@ class EntNode
 		return -1;
 	}
 
-	EntNode* ChildAt(int index) {
+	EntNode* ChildAt(int index) const {
 		return children[index];
+	}
+
+	EntNode& operator[](const int index) const {
+		return *children[index];
 	}
 
 	// Checks whether node is filtered out, either by itself or one of it's ancestors
@@ -218,7 +242,38 @@ class EntNode
 	* 
 	* @writeTo if the value can be interpreted as a boolean, write it here
 	*/
-	bool ValueBool(bool& writeTo) const;
+	bool ValueBool(bool& writeTo) const {
+		if(valLength == 0) return false;
+
+		const char* ptr = textPtr + nameLength;
+
+		if (valLength == 1) {
+			if (*ptr == '0') {
+				writeTo = false;
+				return true;
+			}
+			if (*ptr == '1') {
+				writeTo = true;
+				return true;
+			}
+		}
+
+		if (valLength == 4) {
+			if (memcmp(ptr, "true", 4) == 0) {
+				writeTo = true;
+				return true;
+			}
+		}
+
+		if (valLength == 5) {
+			if (memcmp(ptr, "false", 5) == 0) {
+				writeTo = false;
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 	/*
 	* DEBUGGING FUNCTIONS
@@ -283,5 +338,5 @@ class EntNode
 	* @param debug_logTime If true, output execution time data.
 	* @return The uncompressed file size
 	*/
-	size_t writeToFile(const std::string filepath, const size_t sizeHint, const bool oodleCompress, const bool debug_logTime = false);
+	size_t writeToFile(const std::string filepath, const size_t sizeHint, const bool oodleCompress, const char* eofblob, size_t eofbloblength, const bool debug_logTime = false);
 };

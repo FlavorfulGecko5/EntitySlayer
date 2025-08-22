@@ -1,4 +1,6 @@
 #include "wx/clipbrd.h"
+#include "wx/collpane.h"
+#include "wx/splitter.h"
 #include "EntityTab.h"
 #include "EntityEditor.h"
 #include "FilterMenus.h"
@@ -88,11 +90,11 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		else if (lowercase.EndsWith(".json")) {
 			mode = ParsingMode::JSON;
 		}
-		else if (!lowercase.EndsWith(".txt")) {
+		else if (!lowercase.EndsWith(".txt") && !lowercase.EndsWith(".mapentities")) {
 			wxLogMessage("WARNING: Unsupported filetype detected. Permissive parsing mode enabled. Please verify data integrity when done editing.");
 		}
 
-		if (mode != ParsingMode::ENTITIES) {
+		if (mode != ParsingMode::ENTITIES && !lowercase.EndsWith(".mapentities")) {
 			wxLogMessage("WARNING: Non-entities file detected. Automatic list renumbering has been disabled (re-enable it in the 'Tab' menu)");
 			autoNumberLists = false;
 		}
@@ -109,24 +111,16 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		wxDefaultPosition, wxDefaultSize, wxCP_NO_TLW_RESIZE);
 	{
 		wxWindow* topWindow = topWrapper->GetPane();
+		//wxWindow* verytopWindow = topWrapper->GetPane();
+		//wxScrolledWindow* topWindow = new wxScrolledWindow(verytopWindow, wxID_ANY,
+		//	wxDefaultPosition, wxDefaultSize, wxVSCROLL);
 
 		/* Layer, Class and Inherit filter lists */
-		wxBoxSizer* checklistSizer = new wxBoxSizer(wxHORIZONTAL);
 		layerMenu = new FilterCtrl(this, topWindow, "Layers", false);
 		classMenu = new FilterCtrl(this, topWindow, "Classes", false);
 		inheritMenu = new FilterCtrl(this, topWindow, "Inherits", false);
 		componentMenu = new FilterCtrl(this, topWindow, "Components", false);
-		checklistSizer->Add(componentMenu->container, 1, wxLEFT | wxRIGHT, 10);
-		checklistSizer->Add(layerMenu->container, 1, wxLEFT | wxRIGHT, 10);
-		checklistSizer->Add(classMenu->container, 1, wxLEFT | wxRIGHT, 10);
-		checklistSizer->Add(inheritMenu->container, 1, wxLEFT | wxRIGHT, 10);
-		refreshFilters();
-		if (componentMenu->list->GetCount() > 1) { // No Components option gives a minimum value of 1
-			checklistSizer->Hide(layerMenu->container);
-		}
-		else {
-			checklistSizer->Hide(componentMenu->container);
-		}
+		instanceidMenu = new FilterCtrl(this, topWindow, "Instance Id", false);
 			
 
 		/* Spawn Position Filter */
@@ -172,16 +166,40 @@ EntityTab::EntityTab(wxWindow* parent, const wxString name, const wxString& path
 		/* Search Bar */
 		searchBar = new SearchBar(this, topWindow);
 
+		/* Assemble everything into sizers */
+		wxBoxSizer* firstRowSizer = new wxBoxSizer(wxHORIZONTAL);
+		firstRowSizer->Add(componentMenu->container, 33, wxLEFT | wxRIGHT, 10);
+		firstRowSizer->Add(layerMenu->container, 33, wxLEFT | wxRIGHT, 10);
+		firstRowSizer->Add(classMenu->container, 33, wxLEFT | wxRIGHT, 10);
+		firstRowSizer->Add(inheritMenu->container, 33, wxLEFT | wxRIGHT, 10);
+		refreshFilters();
+		if (componentMenu->list->GetCount() > 1) { // No Components option gives a minimum value of 1
+			firstRowSizer->Hide(layerMenu->container);
+		}
+		else {
+			firstRowSizer->Hide(componentMenu->container);
+		}
+
 		wxBoxSizer* secondRowSizer = new wxBoxSizer(wxHORIZONTAL);
-		secondRowSizer->Add(textFilterSizer, 1, wxALL, 10);
-		secondRowSizer->Add(compact, 1, wxALL, 10);
-		secondRowSizer->Add(searchBar, 1, wxALL, 10);
+		secondRowSizer->Add(instanceidMenu->container, 33, wxALL, 10);
+		secondRowSizer->Add(textFilterSizer, 22, wxALL, 10);
+		secondRowSizer->Add(compact, 22, wxTOP | wxBOTTOM | wxLEFT, 10);
+		secondRowSizer->Add(searchBar, 22, wxTOP | wxBOTTOM | wxRIGHT, 10);
 
 		/* Put everything together */
 		wxBoxSizer* topSizer = new wxBoxSizer(wxVERTICAL);
-		topSizer->Add(checklistSizer, 0, wxEXPAND);
+		topSizer->Add(firstRowSizer, 0, wxEXPAND);
 		topSizer->Add(secondRowSizer, 0, wxEXPAND);
 		topWindow->SetSizerAndFit(topSizer);
+
+		//topSizer->Add(new wxButton(topWindow, wxID_ANY, "testing"));
+		//topWindow->SetScrollRate(0, 10);
+		//topWindow->SetMaxSize(wxSize(-1, 180));
+		//topWindow->SetSizerAndFit(topSizer);
+
+		//wxBoxSizer* verytopsizer = new wxBoxSizer(wxVERTICAL);
+		//verytopsizer->Add(topWindow, 0, wxEXPAND);
+		//verytopWindow->SetSizerAndFit(verytopsizer);
 	}
 
 	/* Initialize controls */
@@ -279,7 +297,7 @@ void EntityTab::NightMode(bool recursive) {
 	searchBar->label->SetForegroundColour(LabelColor);
 	searchBar->caseSensitiveCheck->SetForegroundColour(LabelColor);
 
-	FilterCtrl* filters[] = {layerMenu, classMenu, inheritMenu, componentMenu, keyMenu};
+	FilterCtrl* filters[] = {layerMenu, classMenu, inheritMenu, componentMenu, keyMenu, instanceidMenu};
 	for (int i = 0; i < sizeof(filters) / sizeof(filters[0]); i++) {
 		FilterCtrl* f = filters[i];
 
@@ -360,7 +378,7 @@ void EntityTab::onFilterRefresh(wxCommandEvent& event)
 
 void EntityTab::refreshFilters() {
 	//TIMESTART
-	Parser->refreshFilterMenus(layerMenu, classMenu, inheritMenu, componentMenu);
+	Parser->refreshFilterMenus(layerMenu, classMenu, inheritMenu, componentMenu, instanceidMenu);
 	//TIMESTOP("Refresh Filters")
 }
 
@@ -418,6 +436,7 @@ void EntityTab::applyFilters(bool clearAll)
 		componentMenu->uncheckAll();
 		classMenu->uncheckAll();
 		layerMenu->uncheckAll();
+		instanceidMenu->uncheckAll();
 		keyMenu->uncheckAll();
 		spawnMenu->deactivate();
 	}
@@ -425,7 +444,7 @@ void EntityTab::applyFilters(bool clearAll)
 	Sphere newSphere;
 	bool filterSpawns = spawnMenu->activated() && spawnMenu->getData(newSphere);
 
-	Parser->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list, componentMenu->list,
+	Parser->SetFilters(layerMenu->list, classMenu->list, inheritMenu->list, componentMenu->list, instanceidMenu->list,
 		filterSpawns, newSphere, keyMenu->list, caseSensCheck->IsChecked());
 	wxDataViewItem p(nullptr); // Todo: should try to improve this so we don't destroy entire root
 	wxDataViewItem r(root);

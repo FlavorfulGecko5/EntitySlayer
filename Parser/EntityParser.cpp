@@ -3,8 +3,14 @@
 #include "Oodle.h"
 #include "EntityLogger.h"
 #include "EntityParser.h"
+
+#if entityparser_wxwidgets
 #include "EntityEditor.h"
 #include "FilterMenus.h"
+
+const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
+const std::string EntityParser::FILTER_NOCOMPONENTS = "\"No Components\"";
+#endif
 
 enum TokenType : uint32_t
 {
@@ -35,15 +41,11 @@ enum TokenType : uint32_t
 	TTC_Perm2UniqueTokens = TT_Comment | TT_Identifier | TT_Number | TT_Tuple | TT_String | TT_Keyword
 };
 
-const std::string EntityParser::FILTER_NOLAYERS = "\"No Layers\"";
-const std::string EntityParser::FILTER_NOCOMPONENTS = "\"No Components\"";
-
 EntityParser::EntityParser() : fileWasCompressed(false), PARSEMODE(ParsingMode::ENTITIES)
 {
 	// Cannot append a null character to a string? Hence const char* instead
-	const char* rawText = "Version 7\nHierarchyVersion 1\0";
-	ParseResult presult;
-	initiateParse(rawText, &root, &root, presult);
+	const char* rawText = "Version 7\nHierarchyVersion 1";
+	firstparse(rawText, false);
 }
 
 EntityParser::EntityParser(ParsingMode mode) : fileWasCompressed(false), PARSEMODE(mode) {}
@@ -52,9 +54,18 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	: PARSEMODE(mode)
 {
 	auto timeStart = std::chrono::high_resolution_clock::now();
-	size_t rawLength = 0;
-	char* rawBytes = nullptr;
-	char* decompressedText = nullptr;
+
+	struct filebuffer_t {
+		char* data = nullptr;
+		size_t len = 0;
+
+		~filebuffer_t() {
+			delete[] data;
+		}
+	};
+
+	filebuffer_t raw;
+	filebuffer_t decomp;
 	std::string_view textView;
 
 	{
@@ -64,30 +75,28 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 
 		// Tellg() does not guarantee the length of the file but this works in practice for binary mode
 		file.seekg(0, std::ios_base::end);
-		rawLength = static_cast<size_t>(file.tellg());
-		rawBytes = new char[rawLength + 1]; // Leave room for the null char
+		raw.len = static_cast<size_t>(file.tellg());
+		raw.data = new char[raw.len];
 		file.seekg(0, std::ios_base::beg);
-		file.read(rawBytes, rawLength);
+		file.read(raw.data, raw.len);
 		file.close();
 	}
 
-	if (rawLength > 16 && (unsigned char)rawBytes[16] == 0x8C) // Oodle compression signature
+	if (raw.len > 16 && (unsigned char)raw.data[16] == 0x8C) // Oodle compression signature
 	{
 		fileWasCompressed = true;
-		size_t decompressedSize = ((size_t*)rawBytes)[0];
-		size_t compressedSize = ((size_t*)rawBytes)[1];
-		decompressedText = new char[decompressedSize + 1]; // +1 for the null char
+		decomp.len = ((size_t*)raw.data)[0];
+		decomp.data = new char[decomp.len];
+		size_t compressedSize = ((size_t*)raw.data)[1];
 
-		if (!Oodle::DecompressBuffer(rawBytes + 16, compressedSize, decompressedText, decompressedSize))
+		if (!Oodle::DecompressBuffer(raw.data + 16, compressedSize, decomp.data, decomp.len))
 			throw std::runtime_error("Could not decompress .entities file");
-		decompressedText[decompressedSize] = '\0';
-		textView = std::string_view(decompressedText, decompressedSize + 1);
+		textView = std::string_view(decomp.data, decomp.len);
 	}
 	else
 	{
 		fileWasCompressed = false;
-		rawBytes[rawLength] = '\0';
-		textView = std::string_view(rawBytes, rawLength + 1);
+		textView = std::string_view(raw.data, raw.len);
 	}
 
 	lastUncompressedSize = textView.length();
@@ -95,13 +104,66 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 	if (debug_logParseTime)
 	{
 		EntityLogger::logTimeStamps("File Read/Decompress Duration: ", timeStart);
-		timeStart = std::chrono::high_resolution_clock::now();
 	}
 
+	try {
+		firstparse(textView, debug_logParseTime);
+
+	}
+	catch (std::runtime_error err) {
+		if (fileWasCompressed) {
+			std::string msg = "Decompressing ";
+			msg.append(filepath);
+			msg.append(" so you can find and fix errors.");
+			EntityLogger::log(msg);
+
+			std::ofstream decompressor(filepath, std::ios_base::binary);
+			decompressor.write(textView.data(), textView.length());
+			decompressor.close();
+		}
+
+		throw err;
+	}
+}
+
+EntityParser::EntityParser(const ParsingMode mode, const std::string_view data, const bool debug_logParseTime) : PARSEMODE(mode), fileWasCompressed(false)
+{
+	lastUncompressedSize = data.length();
+	firstparse(data, debug_logParseTime);
+}
+
+void EntityParser::firstparse(std::string_view textView, const bool debuglog)
+{
+	auto timeStart = std::chrono::high_resolution_clock::now();
+
 	// Simpler char analysis algorithm that runs ~10 MS faster compared to old doubled runtime
+	// Ensure it's unsigned if you don't want cursed stack corruption
 	size_t counts[256] = { 0 };
-	for (uint8_t c : textView) // Ensure it's unsigned if you don't want cursed stack corruption
-		counts[c]++;
+	{
+		const uint8_t* iter = reinterpret_cast<const uint8_t*>(textView.data());
+		const uint8_t* itermax = iter + textView.length();
+
+		while (iter < itermax) {
+			if (*iter == '\0')
+				break;
+
+			counts[*iter]++;
+			iter++;
+		}
+
+		// If we broke early, then the file has a binary blob at the end of it
+		if (iter < itermax) {
+
+			textView = std::string_view(textView.data(), (char*)iter - textView.data());
+			iter++; // Increment past the null byte
+
+			eofbloblength = itermax - iter; // Minus one since textView contains a final null terminator
+			eofblob = new char[eofbloblength];
+			memcpy(eofblob, iter, eofbloblength);
+
+			//EntityLogger::log("Found blob");
+		}
+	}
 
 	// Distinguishes between the number of chars comprising actual identifiers/values versus syntax chars
 	if (PARSEMODE == ParsingMode::JSON) {
@@ -109,12 +171,12 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 			- counts['\t'] - counts['\n'] - counts['\r'] - counts['}'] - counts['{']
 			- counts[':'] - counts[','] - counts['['] - counts[']'] - counts[' ']
 			+ 100000;
-		textAlloc.setActiveBuffer(charBufferSize);
+		allocs.text.setActiveBuffer(charBufferSize);
 
 		// This should give us an exact count of how many nodes exist in the file
 		size_t nodeCount = counts[','] + counts['{'] + counts['['] + 1000;
-		nodeAlloc.setActiveBuffer(nodeCount);
-		childAlloc.setActiveBuffer(nodeCount);
+		allocs.nodes.setActiveBuffer(nodeCount);
+		allocs.children.setActiveBuffer(nodeCount);
 	}
 	else {
 		size_t charBufferSize = textView.length()
@@ -122,45 +184,26 @@ EntityParser::EntityParser(const std::string& filepath, const ParsingMode mode, 
 			- counts['=']
 			- counts[' '] // This is an overestimate - string values will uncommonly contain spaces
 			+ 100000;
-		textAlloc.setActiveBuffer(charBufferSize);
+		allocs.text.setActiveBuffer(charBufferSize);
 
 		// For a well-formatted .entities file, we can get an exact count of how many nodes we must
 		// allocate by subtracting the number of closing braces from the number of lines
 		size_t numCloseBraces = counts['}'] > counts['\n'] ? counts['\n'] : counts['}']; // Prevents disastrous overflow
 		size_t initialBufferSize = counts['\n'] - numCloseBraces + 1000;
-		nodeAlloc.setActiveBuffer(initialBufferSize);
-		childAlloc.setActiveBuffer(initialBufferSize);
+		allocs.nodes.setActiveBuffer(initialBufferSize);
+		allocs.children.setActiveBuffer(initialBufferSize);
 	}
 
-	if (debug_logParseTime)
+	if (debuglog)
 	{
 		EntityLogger::logTimeStamps("Node Buffer Init Duration: ", timeStart);
 		timeStart = std::chrono::high_resolution_clock::now();
 	}
 
-	try {
-		ParseResult presult;
-		initiateParse(textView.data(), &root, &root, presult);
-	} // How did I never notice this memory leak until now...?
-	catch (std::runtime_error err) {
-		if (fileWasCompressed) {
-			wxLogMessage("Decompressing %s so you can find and fix errors", filepath);
+	ParseResult presult;
+	initiateParse(textView, &root, &root, presult);
 
-			std::ofstream decompressor(filepath, std::ios_base::binary);
-			decompressor.write(textView.data(), textView.length() - 1);
-			decompressor.close();
-		}
-
-		if(fileWasCompressed)
-			delete[] decompressedText;
-		delete[] rawBytes;
-		throw err;
-	}
-
-	if (fileWasCompressed)
-		delete[] decompressedText;
-	delete[] rawBytes;
-	if (debug_logParseTime)
+	if (debuglog)
 		EntityLogger::logTimeStamps("Parsing Duration: ", timeStart);
 }
 
@@ -182,14 +225,13 @@ int OptimalMaxChildCount(int childCount) {
 	else return childCount;
 }
 
-ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew)
+ParseResult EntityParser::EditTree(const std::string_view text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew)
 {
 	ParseResult outcome;
 
 	// We must ensure the parse is successful before modifying the existing tree
 	EntNode tempRoot(EntNode::NFC_RootNode);
-	text.push_back('\0');
-	initiateParse(text.data(), &tempRoot, parent, outcome);
+	initiateParse(text, &tempRoot, parent, outcome);
 	if(!outcome.success) return outcome;
 
 	// Give every node a comma - we'll ensure the (possibly new) last child has no
@@ -203,24 +245,34 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	}
 
 	// Populate these with nodes we might need to remove/add to the dataview
+	#if entityparser_wxwidgets == 0
+	typedef std::vector<EntNode*> wxDataViewItemArray;
+	typedef EntNode* wxDataViewItem;
+	#endif
+
 	wxDataViewItemArray removedNodes;
 	wxDataViewItemArray addedNodes;
 
 	// Build the reverse command
+	#if entityparser_history
 	reverseGroup.emplace_back();
 	ParseCommand& reverse = reverseGroup.back();
 	reverse.type = CommandType::EDIT_TREE;
 	reverse.parentPositionTrace = parent->TracePosition(reverse.parentDepth);
 	reverse.insertionIndex = insertionIndex;
 	reverse.removalCount = tempRoot.childCount;
+	#endif
 	for (int i = 0; i < removeCount; i++) {
 		EntNode* n = parent->children[insertionIndex + i];
+
+		#if entityparser_history
 		n->generateText(reverse.text);
 		reverse.text.push_back('\n');
+		#endif
 
 		// Deallocate deleted nodes
 		if(n->filtered) // Not all nodes we're removing may be filtered in
-			removedNodes.Add(wxDataViewItem(n));
+			removedNodes.push_back(wxDataViewItem(n));
 		freeNode(n);
 	}
 
@@ -230,9 +282,9 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 		EntNode* n = tempRoot.children[i];
 		n->parent = parent;
 		if(n->filtered) // Future-proofing
-			addedNodes.Add(wxDataViewItem(n));
+			addedNodes.push_back(wxDataViewItem(n));
 	}
-	
+
 	/* 
 	* Common Steps for Each Branch:
 	* 1. Move everything into the new child buffer
@@ -243,7 +295,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 
 	if (newNumChildren > parent->maxChildren) {
 		int newMaxChildren = OptimalMaxChildCount(newNumChildren);
-		EntNode** newChildBuffer = childAlloc.reserveBlock(newMaxChildren);
+		EntNode** newChildBuffer = allocs.children.reserveBlock(newMaxChildren);
 
 		// Copy everything into the new child buffer
 		int inc = 0;
@@ -255,7 +307,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 			newChildBuffer[inc++] = parent->children[i];
 
 		// Deallocate old child buffer
-		childAlloc.freeBlock(parent->children, parent->maxChildren);
+		allocs.children.freeBlock(parent->children, parent->maxChildren);
 		
 		// Finally, attach new data to the parent
 		parent->maxChildren = newMaxChildren;
@@ -278,7 +330,7 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	}
 
 	// Common to both branches
-	childAlloc.freeBlock(tempRoot.children, tempRoot.maxChildren);
+	allocs.children.freeBlock(tempRoot.children, tempRoot.maxChildren);
 	parent->childCount = newNumChildren;
 
 	if (PARSEMODE == ParsingMode::JSON) {
@@ -289,18 +341,26 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 	// Must update model AFTER node is given it's new child data
 	if (parent->isFiltered()) // Filtering checks are optimized so we only check parent + ancestor filter status once, right here
 	{
+		#if entityparser_wxwidgets
 		wxDataViewItem parentItem(parent);
 		ItemsDeleted(parentItem, removedNodes);
 		ItemsAdded(parentItem, addedNodes);
 		if (highlightNew)
 			for (wxDataViewItem& i : addedNodes) // Must use Select() instead of SetSelections()
 				view->Select(i);                // because the latter deselects everything else
+		#endif
 	}
 
 	if (renumberLists)
 	{
-		for (wxDataViewItem& n : addedNodes)
+		for (wxDataViewItem& n : addedNodes) {
+			#if entityparser_wxwidgets
 			fixListNumberings((EntNode*)n.GetID(), true, false);
+			#else
+			fixListNumberings(n, true, false);
+			#endif
+		}
+			
 		if(parent != &root) // Don't waste time reordering the root children, there shouldn't be a list there
 			fixListNumberings(parent, false, false);
 	}
@@ -311,21 +371,23 @@ ParseResult EntityParser::EditTree(std::string text, EntNode* parent, int insert
 void EntityParser::EditText(const std::string& text, EntNode* node, int nameLength, bool highlight)
 {
 	// Construct reverse command
+	#if entityparser_history
 	reverseGroup.emplace_back();
 	ParseCommand& reverse = reverseGroup.back();
 	reverse.type = CommandType::EDIT_TEXT;
 	reverse.text = std::string(node->textPtr, node->nameLength + node->valLength);
 	reverse.insertionIndex = node->nameLength;
 	reverse.parentPositionTrace = node->TracePosition(reverse.parentDepth);
+	#endif
 
 	// Create new buffer
-	char* newBuffer = textAlloc.reserveBlock(text.length());
+	char* newBuffer = allocs.text.reserveBlock(text.length());
 	int i = 0;
 	for (char c : text)
 		newBuffer[i++] = c;
 
 	// Free old data
-	textAlloc.freeBlock(node->textPtr, node->nameLength + node->valLength);
+	allocs.text.freeBlock(node->textPtr, node->nameLength + node->valLength);
 
 	// Assign new data to node
 	node->textPtr = newBuffer;
@@ -335,10 +397,12 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 	// Alert model
 	if (node->isFiltered()) // Todo: add safeguards so node can't be the root
 	{
+		#if entityparser_wxwidgets
 		wxDataViewItem item(node);
 		ItemChanged(item);
 		if (highlight)
 			view->Select(item);
+		#endif
 	}
 
 	fileUpToDate = false;
@@ -351,12 +415,14 @@ void EntityParser::EditText(const std::string& text, EntNode* node, int nameLeng
 void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIndex, bool highlight)
 {
 	// Construct reverse command
+	#if entityparser_history
 	reverseGroup.emplace_back();
 	ParseCommand& reverse = reverseGroup.back();
 	reverse.type = CommandType::EDIT_POSITION;
 	reverse.insertionIndex = childIndex; // Removal count is interpreted as the child index, and 
 	reverse.removalCount = insertionIndex;
 	reverse.parentPositionTrace = parent->TracePosition(reverse.parentDepth);
+	#endif
 
 	// Assemble data
 	EntNode** buffer = parent->children;
@@ -376,12 +442,14 @@ void EntityParser::EditPosition(EntNode* parent, int childIndex, int insertionIn
 	// We assume Root will never be the node we're moving (todo: add safeguards to ensure this)
 	if (child->isFiltered())
 	{
+		#if entityparser_wxwidgets
 		wxDataViewItem parentItem(parent);
 		wxDataViewItem childItem(child);
 		ItemDeleted(parentItem, childItem);
 		ItemAdded(parentItem, childItem);
 		if(highlight)
 			view->Select(childItem);
+		#endif
 	}
 	fileUpToDate = false;
 }
@@ -433,6 +501,8 @@ void EntityParser::fixListNumberings(EntNode* parent, bool recursive, bool highl
 		EditText("num" + newVal, &numNode, 3, highlight);
 	}
 }
+
+#if entityparser_history
 
 void EntityParser::PushGroupCommand() {
 	if (reverseGroup.size() == 0) return;
@@ -548,6 +618,8 @@ bool EntityParser::Redo()
 	return true;
 }
 
+#endif
+
 EntNode* EntityParser::getRoot() { return &root; }
 
 bool EntityParser::wasFileCompressed() { return fileWasCompressed; }
@@ -555,11 +627,11 @@ bool EntityParser::wasFileCompressed() { return fileWasCompressed; }
 void EntityParser::logAllocatorInfo(bool includeBlockList, bool logToLogger, bool logToFile, const std::string filepath)
 {
 	std::string msg = "EntNode Allocator\n=====\n";
-	msg.append(nodeAlloc.toString(includeBlockList));
+	msg.append(allocs.nodes.toString(includeBlockList));
 	msg.append("\nText Buffer Allocator\n=====\n");
-	msg.append(textAlloc.toString(includeBlockList));
+	msg.append(allocs.text.toString(includeBlockList));
 	msg.append("\nChild Buffer Allocator\n=====\n");
-	msg.append(childAlloc.toString(includeBlockList));
+	msg.append(allocs.children.toString(includeBlockList));
 	msg.append("\nRoot Child Buffer: ");
 	msg.append(std::to_string(root.childCount));
 	msg.append(" / ");
@@ -586,13 +658,14 @@ std::runtime_error EntityParser::Error(std::string msg)
 }
 
 
-void EntityParser::initiateParse(const char* cstring, EntNode* tempRoot, EntNode* parent,
+void EntityParser::initiateParse(std::string_view dataview, EntNode* tempRoot, EntNode* parent,
 	ParseResult& results)
 {
 	// Setup variables
-	firstChar = cstring;
+	firstChar = dataview.data();
+	endchar = firstChar + dataview.length();
+	ch = firstChar;
 	errorLine = 1;
-	ch = cstring;
 	tempChildren.push_back(tempRoot);
 
 	try 
@@ -644,7 +717,7 @@ void EntityParser::initiateParse(const char* cstring, EntNode* tempRoot, EntNode
 		// then deallocate it's child buffer
 		for (int i = 0; i < tempRoot->childCount; i++)
 			freeNode(tempRoot->children[i]);
-		childAlloc.freeBlock(tempRoot->children, tempRoot->maxChildren);
+		allocs.children.freeBlock(tempRoot->children, tempRoot->maxChildren);
 
 		results.errorLineNum = errorLine;
 		results.errorMessage = err.what();
@@ -1053,14 +1126,14 @@ void EntityParser::parseJsonArray()
 void EntityParser::freeNode(EntNode* node)
 {
 	// Free the allocated text block
-	textAlloc.freeBlock(node->textPtr, node->nameLength + node->valLength);
+	allocs.text.freeBlock(node->textPtr, node->nameLength + node->valLength);
 
 	// Free the node's children and the pointer block listing them
 	if (node->childCount > 0)
 	{
 		for (int i = 0; i < node->childCount; i++)
 			freeNode(node->children[i]);
-		childAlloc.freeBlock(node->children, node->maxChildren);
+		allocs.children.freeBlock(node->children, node->maxChildren);
 	}
 
 	/*
@@ -1069,13 +1142,13 @@ void EntityParser::freeNode(EntNode* node)
 	* when working with EntityNode instance methods.
 	*/
 	new (node) EntNode;
-	nodeAlloc.freeBlock(node, 1);
+	allocs.nodes.freeBlock(node, 1);
 }
 
 void EntityParser::pushNode(const uint16_t p_flags, const std::string_view p_name)
 {
-	EntNode* n = nodeAlloc.reserveBlock(1);
-	n->textPtr = textAlloc.reserveBlock(p_name.length());
+	EntNode* n = allocs.nodes.reserveBlock(1);
+	n->textPtr = allocs.text.reserveBlock(p_name.length());
 	n->nameLength = p_name.length();
 	n->nodeFlags = p_flags;
 
@@ -1086,8 +1159,8 @@ void EntityParser::pushNode(const uint16_t p_flags, const std::string_view p_nam
 
 void EntityParser::pushNodeBoth(const uint16_t p_flags)
 {
-	EntNode* n = nodeAlloc.reserveBlock(1);
-	n->textPtr = textAlloc.reserveBlock(activeID.length() + lastUniqueToken.length());
+	EntNode* n = allocs.nodes.reserveBlock(1);
+	n->textPtr = allocs.text.reserveBlock(activeID.length() + lastUniqueToken.length());
 	n->nameLength = activeID.length();
 	n->valLength = lastUniqueToken.length();
 	n->nodeFlags = p_flags;
@@ -1105,7 +1178,7 @@ void EntityParser::setNodeChildren(const size_t startIndex)
 	EntNode* parent = tempChildren[startIndex - 1];
 	parent->childCount = (int)childCount;
 	parent->maxChildren = OptimalMaxChildCount(parent->childCount);
-	parent->children = childAlloc.reserveBlock(parent->maxChildren);
+	parent->children = allocs.children.reserveBlock(parent->maxChildren);
 
 	// Fill child buffer, assign parent values to children
 	EntNode **childrenPtr = parent->children, 
@@ -1173,10 +1246,22 @@ void EntityParser::Tokenize()
 	const char* first; // Ptr to start of current identifier/value token
 
 	LABEL_TOKENIZE_START:
+
+	#ifdef _DEBUG
+	if(ch > endchar)
+		throw Error("Tokenization buffer exceeded!");
+	#endif
+
+	if (ch == endchar) {
+		lastTokenType = TT_End;
+		return;
+	}
+
 	switch (*ch) // Not auto-incrementing should eliminate unnecessary arithmetic operations
 	{                     // at the cost of needing to manually it++ in additional areas
 		case '\r':
-		if(*++ch != '\n')
+		ch++;
+		if(ch == endchar || *ch != '\n')
 			throw Error("Expected line feed after carriage return");
 		case '\n':
 		if (PARSEMODE == ParsingMode::PERMISSIVE) {
@@ -1187,10 +1272,6 @@ void EntityParser::Tokenize()
 		case ' ': case '\t':
 		ch++;
 		goto LABEL_TOKENIZE_START;
-
-		case '\0': // Appending null character to end of string simplifies this function's bounds-checking
-		lastTokenType = TT_End; // Do not it++ here to prevent out of bounds error
-		return;
 
 		case ';':
 		lastTokenType = TT_Semicolon;
@@ -1264,104 +1345,80 @@ void EntityParser::Tokenize()
 		}
 
 		case '/':
-		first = ch;
-		if (*++ch == '/') {
-			LABEL_COMMENT_START:
-			switch (*++ch)
-			{
-				case '\n': case '\r': case '\0':
-				lastTokenType = TT_Comment;
-				lastUniqueToken = std::string_view(first, (size_t)(ch - first));
-				return;
+		first = ch++;
+		if(ch == endchar)
+			throw Error("Bad start to comment");
 
-				default:
-				goto LABEL_COMMENT_START;
+		if (*ch == '/') {
+			while (++ch < endchar) {
+				if(*ch == '\n' || *ch == '\r')
+					break;
 			}
+			lastTokenType = TT_Comment;
+			lastUniqueToken = std::string_view(first, static_cast<size_t>(ch - first));
+			return;
 		}
-		else if (*ch == '*') { // Don't increment here
-			LABEL_COMMENT_MULTILINE_START:
-			switch (*++ch) 
-			{
-				case '\0':
-				throw Error("No end to multiline comment");
-
-				case '*':
-				if (*(ch + 1) != '/')
-					goto LABEL_COMMENT_MULTILINE_START;
-				ch += 2;
-				lastTokenType = TT_Comment;
-				lastUniqueToken = std::string_view(first, (size_t)(ch - first));
-				return;
-
-				default:
-				goto LABEL_COMMENT_MULTILINE_START;
+		else if (*ch == '*') { 
+			while (++ch < endchar) { // This way ensures multiple asteriks preceding the slash don't throw an error
+				if (*ch == '*' && ch < endchar - 1 && *(ch + 1) == '/') {
+					ch += 2; // Increment past the comment
+					lastTokenType = TT_Comment;
+					lastUniqueToken = std::string_view(first, static_cast<size_t>(ch - first));
+					return;
+				}
 			}
+			throw Error("No end to multiline comment");
 		}
 		else throw Error("Invalid Comment Syntax");
 
 
 		case '"':
 		first = ch;
-		LABEL_STRING_START:
-		switch (*++ch)
-		{
-			case '"':
-			lastTokenType = TT_String;
-			lastUniqueToken = std::string_view(first, (size_t)(++ch - first)); // Increment past quote to set to next char
-			return;
-
-			case '\r': case '\n': case '\0': // Again, relies on string ending in null character
-			throw Error("No end-quote to complete string literal");
-
-			case '\\':
-			if (PARSEMODE == ParsingMode::JSON) {
-				if (*(ch + 1) == '"') ch++;
+		while (++ch < endchar) {
+			if (*ch == '"') {
+				lastTokenType = TT_String;
+				lastUniqueToken = std::string_view(first, (size_t)(++ch - first)); // Increment past quote to set to next char
+				return;
 			}
-			
-			goto LABEL_STRING_START;
-
-			default:
-			goto LABEL_STRING_START;
+			else if (*ch == '\\' && PARSEMODE == ParsingMode::JSON) {
+				if(ch < endchar && *(ch+1) == '"')
+					ch++;
+			}
+			else if(*ch == '\n' || *ch == '\r')
+				break;
 		}
+		throw Error("No end-quote to complete string literal");
 
 		case '<':
-		if(PARSEMODE != ParsingMode::PERMISSIVE)
+		first = ch++;
+		if (PARSEMODE != ParsingMode::PERMISSIVE)
 			throw Error("Verbatim strings are for permissive mode only");
-		first = ch;
-		if(*++ch != '%')
+		if(ch == endchar || *ch != '%')
 			throw Error("Bad start to verbatim string");
-		LABEL_VERBATIMSTRING_START:
-		switch (*++ch)
-		{
-			case '%':
-			if(*(ch+1) != '>')
-				goto LABEL_VERBATIMSTRING_START;
-			ch += 2; // Increment past > to set to next char
-			lastTokenType = TT_String;
-			lastUniqueToken = std::string_view(first, (size_t)(ch - first));
-			return;
-
-			case '\0':
-			throw Error("No end to verbatim string");
-
-			default:
-			goto LABEL_VERBATIMSTRING_START;
-
+		while (++ch < endchar) {
+			if (*ch == '%' && ch < endchar - 1 && *(ch + 1) == '>') {
+				ch += 2; // Increment past the comment
+				lastTokenType = TT_String;
+				lastUniqueToken = std::string_view(first, static_cast<size_t>(ch - first));
+				return;
+			}
 		}
+		throw Error("No end to verbatim string");
 
 		case '$':
 		{
 			first = ch;
 
 			// Multiple prefixes in one conditional creates spooky, undefined behavior
-			if(*(ch + 1) != '0' || *(ch + 2) != 'x')
+			if(ch >= endchar - 2 || *(ch + 1) != '0' || *(ch + 2) != 'x')
 				throw Error("Bad start to dollar sign hexadecimal");
 			ch += 3;
 
-			LABEL_HEX_START:
-			if (isNum || (*ch >= 'A' && *ch <= 'F') || (*ch >= 'a' && *ch <='f')) {
-				ch++;
-				goto LABEL_HEX_START;
+			while (ch < endchar) {
+				if (isNum || (*ch >= 'A' && *ch <= 'F') || (*ch >= 'a' && *ch <= 'f')) {
+					ch++;
+				}
+				else break;
 			}
 
 			Tokenize();
@@ -1388,34 +1445,26 @@ void EntityParser::Tokenize()
 		{
 			bool hasDot = false;
 			first = ch;
-			LABEL_NUMBER_START:
-			switch (*++ch)
-			{
-				case '0': case '1': case '2': case '3': case '4':
-				case '5': case '6': case '7': case '8': case '9':
-				goto LABEL_NUMBER_START;
 
-				case '.':
-				if(hasDot)
-					throw Error("Decimal numbers can't have multiple periods.");
-				hasDot = true;
-				goto LABEL_NUMBER_START;
+			while (++ch < endchar) {
+				if(isNum)
+					continue;
 
-				case 'e': case 'E': case'+': case '-':
-				goto LABEL_NUMBER_START;
+				if (*ch == '.') {
+					if (hasDot)
+						throw Error("Decimal numbers can't have multiple periods.");
+					hasDot = true;
+					continue;
+				}
 
-				default:
-				lastTokenType = TT_Number;
-				lastUniqueToken = std::string_view(first, (size_t)(ch - first));
-				return;
+				if(*ch == 'e' || *ch == 'E' || *ch == '+' || *ch == '-')
+					continue;
+
+				break;
 			}
-			// Unimplemented remnants of previous version
-			//if (hasDot && it - 1 == start)
-			//	throw Error("Decimal numbers need at least one digit");
-			//if (minusToken)
-			//	lastUniqueToken = new string('-' + rawText.substr(start, it - start)); // Possibly optimize?
-			//else
-			//	lastUniqueToken = new string(rawText, start, it - start);
+			lastTokenType = TT_Number;
+			lastUniqueToken = std::string_view(first, (size_t)(ch - first));
+			return;
 		}
 
 		default:
@@ -1427,43 +1476,45 @@ void EntityParser::Tokenize()
 				
 			first = ch;
 
-			LABEL_ID_START:
-			switch (*++ch)
+			while (++ch < endchar)
 			{
-				case '[':
-				LABEL_ID_BRACKET_START:
-				switch(*++ch)
-				{
-					case '0': case '1': case '2': case '3': case '4':
-					case '5': case '6': case '7': case '8': case '9':
-					goto LABEL_ID_BRACKET_START;
-					break;
+				if(isLetter | isNum || *ch == '_')
+					continue;
 
-					case ']':
-					if(*(ch++ - 1) != '[')
-						break;
-					default:
-					throw Error("Improper bracket usage in identifer");
-				}
-				break;
-
-				case '(': // declType(keyword)
-				Tokenize();
-				break;
-
-				default:
-				if (isLetter || isNum || *ch == '_')
-					goto LABEL_ID_START;
 				if(*ch == '%' && PARSEMODE == ParsingMode::PERMISSIVE)
-					goto LABEL_ID_START;
+					continue;
+
 				break;
 			}
+			if (*ch == '(') { // declType(keyword)
+				Tokenize();
+			}
+			else if (*ch == '[') {
+				while (++ch < endchar) {
+					if(isNum)
+						continue;
+
+					if (*ch == ']') {
+						if(*(ch - 1) == '[')
+							break;
+						ch++;
+						goto LABEL_ID_OKAY;
+					}
+
+					break;
+				}
+				throw Error("Improper bracket usage in identifier");
+			}
+
+			LABEL_ID_OKAY:
 			lastUniqueToken = std::string_view(first, (size_t)(ch - first));
 			lastTokenType = TT_Identifier;
 			return;
 		}
 	}
 };
+
+#if entityparser_wxwidgets
 
 void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool caseSensitive, bool exactLength) 
 {
@@ -1508,12 +1559,13 @@ void EntityParser::FilteredSearch(const std::string& key, bool backwards, bool c
 	}
 }
 
-void EntityParser::refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMenu, FilterCtrl* inheritMenu, FilterCtrl* componentMenu)
+void EntityParser::refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMenu, FilterCtrl* inheritMenu, FilterCtrl* componentMenu, FilterCtrl* instanceidMenu)
 {
 	std::set<std::string_view> newLayers;
 	std::set<std::string_view> newClasses;
 	std::set<std::string_view> newInherits;
 	std::set<std::string_view> newComponents;
+	std::set<std::string_view> newIds;
 
 	EntNode** children = root.children;
 	int childCount = root.childCount;
@@ -1528,6 +1580,16 @@ void EntityParser::refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMe
 			EntNode& classNode = defNode["class"];
 			if (classNode.ValueLength() > 0)
 				newClasses.insert(classNode.getValueUQ());
+			else {
+				EntNode& typeNode = defNode["systemVars"]["entityType"];
+				if(typeNode.ValueLength() > 0)
+					newClasses.insert(typeNode.getValueUQ());
+			}
+		}
+		{
+			std::string_view val = (*current)["instanceId"].getValue();
+			if(val.length() > 0)
+				newIds.insert(val);
 		}
 		{
 			EntNode& inheritNode = defNode["inherit"];
@@ -1558,16 +1620,18 @@ void EntityParser::refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMe
 	classMenu->setItems(newClasses);
 	inheritMenu->setItems(newInherits);
 	componentMenu->setItems(newComponents);
+	instanceidMenu->setItems(newIds);
 	
 }
 
-void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu, wxCheckListBox* componentMenu,
+void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu, wxCheckListBox* componentMenu, wxCheckListBox* idMenu,
 	bool filterSpawnPosition, Sphere spawnSphere, wxCheckListBox* textMenu, bool caseSensitiveText)
 {
 	std::set<std::string> layerFilters;
 	std::set<std::string> classFilters;
 	std::set<std::string> inheritFilters;
 	std::set<std::string> componentFilters;
+	std::set<std::string> idFilters;
 	std::vector<std::string> textFilters;
 
 	for (int i = 0, max = layerMenu->GetCount(); i < max; i++)
@@ -1586,6 +1650,10 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 		if (componentMenu->IsChecked(i))
 			componentFilters.insert('"' + std::string(componentMenu->GetString(i)) + '"');
 
+	for (int i = 0, max = idMenu->GetCount(); i < max; i++)
+		if (idMenu->IsChecked(i))
+			idFilters.insert(std::string(idMenu->GetString(i)));
+
 	for(int i = 0, max = textMenu->GetCount(); i < max; i++)
 		if(textMenu->IsChecked(i))
 			textFilters.push_back(std::string(textMenu->GetString(i)));
@@ -1595,6 +1663,7 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 
 	bool filterByClass = classFilters.size() > 0;
 	bool filterByInherit = inheritFilters.size() > 0;
+	bool filterById = idFilters.size() > 0;
 	bool filterByLayer = layerFilters.size() > 0;
 	bool noLayerFilter = layerFilters.count(FILTER_NOLAYERS) > 0;
 	bool filterByComponent = componentFilters.size() > 0;
@@ -1616,6 +1685,9 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 		if (filterByClass)
 		{
 			std::string_view classVal = entityDef["class"].getValue();
+			if(classVal.length() == 0)
+				classVal = entityDef["systemVars"]["entityType"].getValue();
+
 			if (classFilters.count(std::string(classVal)) < 1) // TODO: OPTIMIZE ACCESS CASTING
 			{
 				entity->filtered = false;
@@ -1629,6 +1701,15 @@ void EntityParser::SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMe
 			std::string_view inheritVal = entityDef["inherit"].getValue();
 			if (inheritFilters.count(std::string(inheritVal)) < 1) // TODO: OPTIMIZE CASTING
 			{
+				entity->filtered = false;
+				continue;
+			}
+		}
+
+		if (filterById)
+		{
+			std::string_view idVal = (*entity)["instanceId"].getValue();
+			if (idFilters.count(std::string(idVal)) < 1) {
 				entity->filtered = false;
 				continue;
 			}
@@ -1816,3 +1897,5 @@ void EntityParser::GetValue(wxVariant& variant, const wxDataViewItem& item, unsi
 		else variant = node->getValueWX();
 	}
 }
+
+#endif

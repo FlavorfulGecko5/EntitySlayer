@@ -14,10 +14,15 @@
 #include <string_view>
 #include <vector>
 #include <set>
-#include "wx/wx.h"
-#include "wx/dataview.h"
+#include "ParserConfig.h"
 #include "EntityNode.h"
 #include "GenericBlockAllocator.h"
+
+#if entityparser_wxwidgets
+#include "wx/wx.h"
+#include "wx/dataview.h"
+
+class FilterCtrl;
 
 struct Sphere {
 	float x = 0;
@@ -25,6 +30,7 @@ struct Sphere {
 	float z = 0;
 	float r = 0; // Radius
 };
+#endif
 
 struct ParseResult {
 	bool success = true;
@@ -38,13 +44,16 @@ enum class ParsingMode {
 	JSON
 };
 
-class FilterCtrl;
-class EntityParser : public wxDataViewModel {
+class EntityParser
+#if entityparser_wxwidgets
+: public wxDataViewModel 
+#endif
+{
 
 	public:
 	~EntityParser()
 	{
-		//delete[] rootchild_filter;
+		delete[] eofblob;
 	}
 
 	/*
@@ -56,13 +65,21 @@ class EntityParser : public wxDataViewModel {
 	const ParsingMode PARSEMODE;
 	bool fileWasCompressed;
 	EntNode root = EntNode(EntNode::NFC_RootNode);
-	BlockAllocator<char> textAlloc = BlockAllocator<char>(1000000);         // Allocator for node name/value buffers
-	BlockAllocator<EntNode> nodeAlloc = BlockAllocator<EntNode>(1000);      // Allocator for the nodes
-	BlockAllocator<EntNode*> childAlloc =  BlockAllocator<EntNode*>(30000); // Allocator for node child buffers
+
+	struct
+	{
+		BlockAllocator<char> text = BlockAllocator<char>(1000000);           // Allocator for node name/value buffers
+		BlockAllocator<EntNode> nodes = BlockAllocator<EntNode>(1000);       // Allocator for the nodes
+		BlockAllocator<EntNode*> children = BlockAllocator<EntNode*>(30000); // Allocator for node child buffers
+	} allocs;
 
 	// Internally tracks whether edits have been written to a file
 	bool fileUpToDate = true;
 	size_t lastUncompressedSize = 0;
+
+	// Binary blob that may be present at end of file
+	char* eofblob = nullptr;
+	size_t eofbloblength = 0;
 
 	/* Accessors */
 	public:
@@ -79,7 +96,7 @@ class EntityParser : public wxDataViewModel {
 	}
 
 	void WriteToFile(const std::string& filepath, bool compress) {
-		lastUncompressedSize = root.writeToFile(filepath, lastUncompressedSize + 10000, compress, true);
+		lastUncompressedSize = root.writeToFile(filepath, lastUncompressedSize + 10000, compress, eofblob, eofbloblength, true);
 		fileUpToDate = true;
 	}
 
@@ -96,6 +113,7 @@ class EntityParser : public wxDataViewModel {
 	private:
 	const char* firstChar = nullptr;            // Ptr to the cstring we're parsing
 	const char* ch = nullptr;                   // Ptr to next char to be parsed
+	const char* endchar = nullptr;              // Ptr to end of buffer [firstChar, endchar)
 	uint32_t lastTokenType;                     // Type of the last-parsed token
 	std::string_view lastUniqueToken;			// Stores most recent identifier or value token
 	std::string_view activeID;					// Second-most-recent token (typically an identifier)
@@ -117,6 +135,11 @@ class EntityParser : public wxDataViewModel {
 	EntityParser(ParsingMode mode);
 
 	/*
+	* Constructs an EntityParser containing fully parsed data from the given data view
+	*/
+	EntityParser(const ParsingMode mode, const std::string_view data, const bool debug_logParseTime);
+
+	/*
 	* Constructs an EntityParser containing fully parsed data from the given file
 	* @param filepath .entites file to parse
 	* @param mode Parsing mode that will be followed
@@ -136,6 +159,8 @@ class EntityParser : public wxDataViewModel {
 	* RECURSIVE PARSING FUNCTIONS
 	*/
 
+	void firstparse(std::string_view dataview, const bool debug_log);
+
 	// TODO: Get rid of intiateParse somehow - it's sloppy (or not - we may need it when we have multiple parsing modes)
 	// Consider renaming these other functions?
 
@@ -143,7 +168,7 @@ class EntityParser : public wxDataViewModel {
 	* Begin parsing a text string
 	* @param cstring - The null-terminated string to parse
 	*/
-	void initiateParse(const char* cstring, EntNode* tempRoot, EntNode* parent, ParseResult& results);
+	void initiateParse(std::string_view dataview, EntNode* tempRoot, EntNode* parent, ParseResult& results);
 	void parseContentsFile();
 	void parseContentsEntity();
 	void parseContentsLayer();
@@ -193,6 +218,8 @@ class EntityParser : public wxDataViewModel {
 	* PURPOSE #2: COMMANDING
 	* ===================
 	*/
+
+	#if entityparser_history
 	private:
 	enum class CommandType : unsigned char
 	{
@@ -248,13 +275,15 @@ class EntityParser : public wxDataViewModel {
 
 	bool Undo();
 	bool Redo();
+	#endif
 
 	/*
 	* Tree Editing Operations
 	*/
-	private:
+	public:
 	
 	/*
+	* WARNING: THIS IS A VERY HACKY FUNCTION. Use it carefully
 	* Edits a node's text without validating the contents
 	* Should be called only by undo/redo and other scenarios where we know the new text is valid
 	* @param text Text replacing the node's original text
@@ -275,7 +304,7 @@ class EntityParser : public wxDataViewModel {
 	* @param renumberLists If true, perform automatic list renumbering
 	* @param highlightNew If true, the GUI will highlight newly created nodes
 	*/
-	ParseResult EditTree(std::string text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew);
+	ParseResult EditTree(const std::string_view text, EntNode* parent, int insertionIndex, int removeCount, bool renumberLists, bool highlightNew);
 
 	/*
 	* Moves a node's child to a different index. The other children are shifted up/down to fill the original slot
@@ -303,26 +332,11 @@ class EntityParser : public wxDataViewModel {
 	* ===================
 	*/
 
+	#if entityparser_wxwidgets
+
 	private:
 	static const std::string FILTER_NOLAYERS;
 	static const std::string FILTER_NOCOMPONENTS;
-
-	// To represent filtering we have a buffer of booleans, the same length as the root child buffer
-	// If a node passes all the filters, it's boolean value is true. If a node is filtered out, it's value is false
-	// We refactored the filter system to this, replacing it's integration into the wxDataViewModel's GetChildren function
-	// for a multitude of reasons:
-	// 1. Performance - GetChildren is called a lot, resulting in many wasteful filter evaluations on all root children
-	//	These become very problematic for large operations that add lots of entities at once
-	// 2. Prevents debug errors and (possibly) memory leaks. If a new entity was created that didn't pass the filters, it would
-	// be filtered out on-committ and a debug error throne from trying to add it to the tree.
-	// 3. It's a relatively simple solution that will stay localized to the parser's core command-execution functions.
-	// 
-	// Using this new system we have full control over when we notify the control of changes - allowing us to cancel alerts
-	// for filtered-out nodes. With debug errors gone, we also no longer need to clear the parser's undo/redo history
-	// whenever we change filters
-	// 
-	// DEPRECATED: Filter system has been refactored to local node variables. However, the same logic as above still applies
-	//bool* rootchild_filter = nullptr; // Should be same size as child buffer. true = include, false = exclude
 
 	public:
 	wxDataViewCtrl* view = nullptr; // Must set this immediately after construction
@@ -336,9 +350,9 @@ class EntityParser : public wxDataViewModel {
 	  Checks for newly created layers/classes/inherits and adds them to their respective filter checklists
 	  Previously identified values are NOT removed from the checklists
 	*/
-	void refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMenu, FilterCtrl* inheritMenu, FilterCtrl* componentMenu);
+	void refreshFilterMenus(FilterCtrl* layerMenu, FilterCtrl* classMenu, FilterCtrl* inheritMenu, FilterCtrl* componentMenu, FilterCtrl* instanceidMenu);
 
-	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu, wxCheckListBox* componentMenu,
+	void SetFilters(wxCheckListBox* layerMenu, wxCheckListBox* classMenu, wxCheckListBox* inheritMenu, wxCheckListBox* componentMenu, wxCheckListBox* idMenu,
 		bool filterSpawnPosition, Sphere spawnSphere, wxCheckListBox* textMenu, bool caseSensitiveText);
 
 	void FilteredSearch(const std::string& key, bool backwards, bool caseSensitive, bool exactLength);
@@ -411,4 +425,6 @@ class EntityParser : public wxDataViewModel {
 	{
 		return true;
 	}
+
+	#endif
 };
