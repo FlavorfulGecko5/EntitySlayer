@@ -132,6 +132,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		tabMenu->AppendSeparator();
 		tabMenu->AppendCheckItem(TAB_COMPRESS, "Compress on Save\tF1");
 		tabMenu->AppendCheckItem(TAB_NUMBERLISTS, "Auto-Renumber idLists");
+		tabMenu->AppendSeparator();
 		tabMenu->Append(TAB_EXPORTDIFF, "Export Entity Diff");
 		tabMenu->Append(TAB_IMPORTDIFF, "Import Entity Diff");
 

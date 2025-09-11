@@ -50,6 +50,32 @@ Yes!
 
 Use `Tab` to quickly navigate between the different textboxes, checkboxes and buttons! Use `Spacebar` to check/uncheck a checkbox or activate a button!
 
+### EntityDiff System Explained
+
+idTech game updates frequently modify vanilla entities files. With your average file containing tens of thousands of entities, determining what changed between updates quickly becomes overwhelming. Level modders are also faced with the cumbersome challenge of porting their custom entities over to the updated vanilla file. The EntityDiff tool automates this porting process by analyzing entity files and determining the precise difference between each entity.
+
+First, Export an EntityDiff for your modded file:
+1. Open the *original, vanilla entities file you edited to create your modded entities file.*
+2. Open the `Tab` menu and select `Export Entity Diff`
+3. Find and selected your modded entities file.
+4. Choose where to save the output .diff file.
+
+Result: You have a .diff listing every change made to the vanilla file.
+
+Now, Import this EntityDiff into the latest game update's vanilla entities file:
+1. Open the *latest game update's vanilla entities file.*
+2. Open the `Tab` menu and select `Import Entity Diff`
+3. Find and select the .diff file you exported
+4. Choose where to save your log file. In the event that the process fails to import certain changes, you can use this log to identify what went wrong and manually fix the errors.
+5. When the import process completes, save the file. Go to the `File` menu and use the `Save` or `Save As` options.
+
+The EntityDiff system is also great for comparing vanilla entities files, for those curious about what changed in-between updates!
+1. Open the the vanilla entities file from an *older game update*
+2. Open the `Tab` menu and select `Export Entity Diff`
+3. Select an entities file from a *newer game update*
+4. Choose where to save the output .diff file.
+5. Open the .diff file in EntitySlayer! Browse through it and see what changed!
+
 ### Contributing
 EntitySlayer is written in C++17 using [wxWidgets](https://www.wxwidgets.org/) 3.1.4 as it's GUI library. You will need [Microsoft's Visual Studio](https://visualstudio.microsoft.com/) to work with the project files.
 
