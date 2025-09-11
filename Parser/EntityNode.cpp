@@ -227,7 +227,7 @@ EntNode* EntNode::searchUpwardsLocal(const std::string& key, const bool caseSens
 	return SEARCH_404;
 }
 
-void EntNode::generateText(std::string& buffer, int wsIndex)
+void EntNode::generateText(std::string& buffer, int wsIndex) const
 {
 	buffer.append(wsIndex, '\t');
 	buffer.append(textPtr, nameLength);

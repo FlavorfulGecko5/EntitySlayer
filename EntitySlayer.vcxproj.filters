@@ -62,6 +62,7 @@
     </ClCompile>
     <ClCompile Include="Parser\GenericBlockAllocator.cpp" />
     <ClCompile Include="EntSlayer\EntityFolderDialog.cpp" />
+    <ClCompile Include="Parser\EntityDiff.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Parser\EntityLogger.h">
@@ -109,5 +110,6 @@
     <ClInclude Include="EntSlayer\EntityProfiler.h" />
     <ClInclude Include="EntSlayer\EntityFolderDialog.h" />
     <ClInclude Include="Parser\ParserConfig.h" />
+    <ClInclude Include="Parser\EntityDiff.h" />
   </ItemGroup>
 </Project>

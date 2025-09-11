@@ -90,6 +90,9 @@ class EntityTab : public wxPanel
 	void action_PropMovers();
 	void action_FixTraversals();
 
+	void exportdiff();
+	void importdiff();
+
 	private:
 	wxDECLARE_EVENT_TABLE();
 };

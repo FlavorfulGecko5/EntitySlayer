@@ -49,6 +49,8 @@ class EntityFrame : public wxFrame
 	void onReloadConfigFile(wxCommandEvent &event);
 	void onCompressCheck(wxCommandEvent& event);
 	void onNumberListCheck(wxCommandEvent& event);
+	void onExportDiff(wxCommandEvent& event);
+	void onImportDiff(wxCommandEvent& event);
 	void onSearchForward(wxCommandEvent &event);
 	void onSearchBackward(wxCommandEvent &event);
 	void onAbout(wxCommandEvent& event);

@@ -162,6 +162,7 @@
     <ClCompile Include="EntSlayer\EntityTab.cpp" />
     <ClCompile Include="EntSlayer\FilterMenus.cpp" />
     <ClCompile Include="EntSlayer\Meathook.cpp" />
+    <ClCompile Include="Parser\EntityDiff.cpp" />
     <ClCompile Include="Parser\EntityLogger.cpp" />
     <ClCompile Include="Parser\EntityNode.cpp" />
     <ClCompile Include="Parser\EntityParser.cpp" />
@@ -180,6 +181,7 @@
     <ClInclude Include="EntSlayer\EntityFrame.h" />
     <ClInclude Include="EntSlayer\FilterMenus.h" />
     <ClInclude Include="EntSlayer\Meathook.h" />
+    <ClInclude Include="Parser\EntityDiff.h" />
     <ClInclude Include="Parser\EntityLogger.h" />
     <ClInclude Include="Parser\EntityNode.h" />
     <ClInclude Include="Parser\EntityParser.h" />

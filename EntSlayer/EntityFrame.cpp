@@ -29,6 +29,8 @@ enum FrameID
 	TAB_SEARCHBACKWARD,
 	TAB_COMPRESS,
 	TAB_NUMBERLISTS,
+	TAB_EXPORTDIFF,
+	TAB_IMPORTDIFF,
 
 	HELP_ABOUT,
 	HELP_NIGHTMODE,
@@ -74,6 +76,8 @@ wxBEGIN_EVENT_TABLE(EntityFrame, wxFrame)
 	EVT_MENU(TAB_SEARCHBACKWARD, EntityFrame::onSearchBackward)
 	EVT_MENU(TAB_COMPRESS, EntityFrame::onCompressCheck)
 	EVT_MENU(TAB_NUMBERLISTS, EntityFrame::onNumberListCheck)
+	EVT_MENU(TAB_EXPORTDIFF, EntityFrame::onExportDiff)
+	EVT_MENU(TAB_IMPORTDIFF, EntityFrame::onImportDiff)
 	EVT_MENU(HELP_ABOUT, EntityFrame::onAbout)
 	EVT_MENU(HELP_NIGHTMODE, EntityFrame::onNightModeCheck)
 
@@ -128,6 +132,8 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		tabMenu->AppendSeparator();
 		tabMenu->AppendCheckItem(TAB_COMPRESS, "Compress on Save\tF1");
 		tabMenu->AppendCheckItem(TAB_NUMBERLISTS, "Auto-Renumber idLists");
+		tabMenu->Append(TAB_EXPORTDIFF, "Export Entity Diff");
+		tabMenu->Append(TAB_IMPORTDIFF, "Import Entity Diff");
 
 		mhMenu->AppendCheckItem(MEATHOOK_MAKEACTIVETAB, "Use as Reload Tab\tF4",
 			"Enables level reloads using this tab. YOU MUST USE THIS AFTER LOADING INTO THE LEVEL YOU WANT TO EDIT!");
@@ -636,6 +642,16 @@ void EntityFrame::onNumberListCheck(wxCommandEvent& event)
 	activeTab->autoNumberLists = event.IsChecked();
 }
 
+void EntityFrame::onExportDiff(wxCommandEvent& event)
+{
+	activeTab->exportdiff();
+}
+
+void EntityFrame::onImportDiff(wxCommandEvent& event)
+{
+	activeTab->importdiff();
+}
+
 void EntityFrame::onSearchForward(wxCommandEvent& event)
 {
 	// A little boiler plate so we don't have to introduce the filter menu header into this file
@@ -651,7 +667,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 8 Release Build");
+	info.SetVersion("Beta 9 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"

@@ -326,7 +326,7 @@ class EntNode
 		return buffer;
 	}
 
-	void generateText(std::string& buffer, int wsIndex = 0);
+	void generateText(std::string& buffer, int wsIndex = 0) const;
 
 
 	/*

@@ -6,6 +6,7 @@
 #include "FilterMenus.h"
 #include "Config.h"
 #include "Meathook.h"
+#include "EntityDiff.h"
 
 enum TabID 
 {
@@ -1193,4 +1194,56 @@ void EntityTab::action_FixTraversals()
 
 	Parser->PushGroupCommand();
 	//fileUpToDate = false;
+}
+
+void EntityTab::exportdiff()
+{
+	wxFileDialog moddeddialog(this, "Select Modded File", wxEmptyString, wxEmptyString,
+		"All Files |*.*", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+	if (moddeddialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxString outputname = moddeddialog.GetFilename();
+	outputname.append(".diff");
+
+	wxFileDialog diffdialog(this, "Save Diff File", wxEmptyString, outputname, 
+		wxFileSelectorDefaultWildcardStr, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+	if(diffdialog.ShowModal() == wxID_CANCEL)
+		return;
+	
+	try {
+		EntityParser moddedparser(moddeddialog.GetPath().ToStdString(), Parser->getMode(), false);
+		EntityDiff::Export(*Parser->getRoot(), *moddedparser.getRoot(), diffdialog.GetPath().ToStdString().c_str());
+	}
+	catch (...) {
+		wxLogMessage("EntityDiff: Failed to parse modded file");
+	}
+}
+
+void EntityTab::importdiff()
+{
+	if (CommitEdits() < 0) {
+		wxLogMessage("Fix syntax errors before importing diff");
+		return;
+	}
+
+	wxFileDialog diffdialog(this, "Select Diff To Import", wxEmptyString, wxEmptyString,
+		"Diff Files|*.diff", wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+	if(diffdialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	wxFileDialog logdialog(this, "Save Log File", wxEmptyString, "EntityDiffLog.txt",
+		"Text Files|*.txt", wxFD_SAVE);
+
+	if(logdialog.ShowModal() == wxID_CANCEL)
+		return;
+
+	try {
+		EntityParser diffdata(diffdialog.GetPath().ToStdString(), ParsingMode::PERMISSIVE, false);
+		EntityDiff::Import(*Parser, *diffdata.getRoot(), logdialog.GetPath().ToStdString().c_str(), filePath.ToStdString().c_str());
+	}
+	catch (...) {
+		wxLogMessage("EntityDiff: Failed to parse diff file");
+	}
 }
