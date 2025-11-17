@@ -23,8 +23,6 @@ class EntityFrame : public wxFrame
 	wxMenu* mhMenu = new wxMenu;
 	wxTimer mhStatusTimer;
 	wxString mhText_Preface;
-	wxString mhText_Active = "Connected";
-	wxString mhText_Inactive = "Inactive";
 
 	public:
 	EntityFrame();

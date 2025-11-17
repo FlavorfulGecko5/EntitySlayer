@@ -173,7 +173,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		wxMenuBar* bar = new wxMenuBar;
 		bar->Append(fileMenu, "File");
 		bar->Append(tabMenu, "Tab");
-		bar->Append(mhMenu, "Meathook");
+		bar->Append(mhMenu, "Game Interface");
 		bar->Append(specialMenu, "Advanced");
 		bar->Append(helpMenu, "Help");
 		//bar->Append(debugMenu, "Debug");
@@ -194,7 +194,7 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 		{
 			srand(timeGetTime());
 			struct PickRand_ { static char PickRand(const char* str) { size_t len = strlen(str); return str[rand() % (len - 1)]; } };
-			mhText_Preface = wxString::Format("%c%c%c%c%c%c%c%c Interface: ",
+			mhText_Preface = wxString::Format("%c%c%c%c%c%c%c%c Interface: Connected",
 				PickRand_::PickRand("Mm"),
 				PickRand_::PickRand("eE3é"),
 				PickRand_::PickRand("aA4"),
@@ -239,7 +239,15 @@ EntityFrame::EntityFrame() : wxFrame(nullptr, wxID_ANY, "EntitySlayer")
 	{
 		wxDisplay screen((unsigned)0);
 		wxRect screenSize = screen.GetClientArea();
-		SetSize(screenSize.width * 3 / 5, screenSize.height * 3 / 5);
+
+		int initialx = screenSize.width * 3 / 5;
+		int initialy = screenSize.height * 3 / 5;
+		if(initialx > 2000)
+			initialx = 2000;
+		if(initialy > 1000)
+			initialy = 1000;
+		//wxLogMessage("%d %d", initialx, initialy);
+		SetSize(initialx, initialy);
 		SetMinSize(wxSize(1000, 600)); // Minimum width for filter menus to not get offset or cut off
 		CenterOnScreen(); // Todo: Is there a better way to enforce this without setting the entire application's minimum size?
 	}
@@ -559,7 +567,7 @@ void EntityFrame::onMeathookOpen(wxCommandEvent& event)
 	// so we can skip some safety checks we need for ordinary files
 	std::string filePath;
 	if (!Meathook::GetCurrentMap(filePath, false)) {
-		wxMessageBox("Meathook open failed. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+		wxMessageBox("Meathook open failed. Is Meathook offline? (Dark Ages not supported).", "Meathook Interface", wxICON_WARNING | wxOK);
 		return;
 	}
 
@@ -668,7 +676,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 9 Release Build");
+	info.SetVersion("Beta 10 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -678,6 +686,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 		"Scorp0rX0r - Author of EntityHero, the chief source of inspiration for this project.\n"
 		"Alveraan - Author of Elena, which inspired this program's filtering systems.\n"
 		"Chrispy - Developer of Meathook\n"
+		"Kaibz - Developer of Kaibz Mod\n"
 		"Wyo - Author of wxWidgets/samples/stc/ - the basis for the text editor.";
 
 	info.SetDescription(description);
@@ -787,40 +796,30 @@ void EntityFrame::onReloadMH(wxCommandEvent& event)
 	mhTab->saveFile();
 
 	if(!Meathook::ReloadMap(std::string(mhTab->filePath)))
-		wxMessageBox("Map reload failed. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
+		wxMessageBox("Map reload failed. Is Meathook offline? (Not supported in Dark Ages yet)", "Meathook Interface", wxICON_WARNING | wxOK);
 }
 
 void EntityFrame::onPrintActiveEncounters(wxCommandEvent& event)
 {
 	activeEncounters.clear();
-	std::string encounterString;
-	if (!Meathook::GetActiveEncounters(encounterString)) {
+	if (!Meathook::GetActiveEncounters(activeEncounters)) {
 		wxMessageBox("Couldn't get activeEncounters. Is Meathook offline?", "Meathook Interface", wxICON_WARNING | wxOK);
 		return;
 	}
 		
-	if (encounterString.length() == 0) {
+	if (activeEncounters.empty()) {
 		wxLogMessage("No Active Encounters");
 		return;
 	}
-	wxLogMessage("Active Encounter Names: %s", encounterString);
 
-	size_t index = encounterString.find(';');
-	if (index == std::string::npos) { // Only one encounter, find it immediately
+	// Only 1 encounter: seek to it
+	if (activeEncounters.size() == 1) {
 		wxLogMessage("Found one active encounter, searching for it now...");
-		activeTab->Parser->FilteredSearch("entityDef" + encounterString, false, true, true);
+		activeTab->Parser->FilteredSearch("entityDef" + activeEncounters[0], false, true, true);
 		return;
 	}
 
 	// Multiple active encounters, we must prompt the user to choose one to jump to
-	size_t lastIndex = 0;
-	while (index != std::string::npos) {
-		activeEncounters.emplace_back(encounterString.substr(lastIndex, index - lastIndex));
-		lastIndex = index + 1;
-		index = encounterString.find(';', lastIndex);
-	}
-	activeEncounters.emplace_back(encounterString.substr(lastIndex, encounterString.length() - lastIndex));
-
 	wxMenu encounterMenu;
 	for(int i = 0, max = activeEncounters.size(); i < max; i++)
 		encounterMenu.Append(i, activeEncounters[i]);
@@ -858,8 +857,10 @@ void EntityFrame::onSpawnOffsetCheck(wxCommandEvent& event)
 void EntityFrame::RefreshMHMenu()
 {
 	int DEBUG_SIMULATE_ONLINE = 0;
-	bool online = Meathook::IsOnline() || DEBUG_SIMULATE_ONLINE;
-	statusbar->SetStatusText(mhText_Preface + (online ? mhText_Active : mhText_Inactive));
+	GameInterface game = Meathook::IsOnline();
+	statusbar->SetStatusText( game ? (game == game_darkages ? wxString("Kaibz Interface: Connected") : mhText_Preface) : wxString("Game Interface: Offline"));
+
+	bool online = game || DEBUG_SIMULATE_ONLINE;
 
 	if (!online && ClearMHTab())
 		wxMessageBox("Connection lost with Meathook. Your Meathook tab has been automatically disabled", 
@@ -867,10 +868,10 @@ void EntityFrame::RefreshMHMenu()
 
 	tabMenu->Enable(TAB_COMPRESS, !activeTab->compressOnSave_ForceDisable);
 
-	mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != ""); // Tabs with no file shouldn't be useable with mh
+	mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != "" && game != game_darkages); // Tabs with no file shouldn't be useable with mh
 	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab == mhTab);
-	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab == mhTab); // For simplicity, only enable this option when mhTab is the activeTab
-	mhMenu->Enable(MEATHOOK_OPENFILE, online);
+	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab == mhTab && game != game_darkages); // For simplicity, only enable this option when mhTab is the activeTab
+	mhMenu->Enable(MEATHOOK_OPENFILE, online && game != game_darkages);
 	mhMenu->Enable(MEATHOOK_GET_ENCOUNTER, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION_FILTER, online);

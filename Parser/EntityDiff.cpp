@@ -53,7 +53,8 @@ void entdiff_buildnodemap(const entnode& root, nodemap_t& map, prefixlist_t& pre
 
 		auto iter = map.find(lookupname);
 		if (iter != map.end()) {
-			EntityLogger::log("EntityDiff: Duplicate entity detected");
+			std::string dupemessage = "EntityDiff: Duplicate entity detected ";
+			EntityLogger::log(dupemessage + lookupname);
 		}
 		map.emplace(lookupname, &e);
 	}

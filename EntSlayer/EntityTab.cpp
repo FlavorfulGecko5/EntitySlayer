@@ -989,7 +989,8 @@ void EntityTab::onTeleportToEntity(wxCommandEvent& event)
 	if (selection == nullptr || selection == root) return;
 	EntNode* entity = selection->getEntity();
 
-	std::string command = "teleportposition";
+	//std::string command = "teleportposition";
+	std::string command;
 
 	EntNode& spawnPosition = (*entity)["entityDef"]["edit"]["spawnPosition"];
 	if (&spawnPosition == EntNode::SEARCH_404) {
@@ -1018,8 +1019,14 @@ void EntityTab::onTeleportToEntity(wxCommandEvent& event)
 		}
 		command.append(" 0");
 	}
-	wxLogMessage("%s", command);
-	if(!Meathook::ExecuteCommand(command))
+
+	std::string final_mh = "teleportposition";
+	std::string final_kaibz = "setviewpos";
+	final_mh.append(command);
+	final_kaibz.append(command);
+
+	wxLogMessage("%s", final_mh);
+	if(!Meathook::ExecuteCommand(final_mh, final_kaibz, false))
 		wxLogMessage("Teleport command failed?");
 }
 

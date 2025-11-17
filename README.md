@@ -93,4 +93,5 @@ Instead of downloading pre-built binaries for wxWidgets, you may opt to build th
 * Scorp0rX0r - original author of [EntityHero](https://github.com/nopjne/EntityHero/tree/master)
 * Alveraan - Author of [Elena](https://github.com/alveraan/elena), another GUI application for viewing and editing .entities files. The filtering systems used in EntitySlayer were first included in this editor.
 * Chrispy - Developer of [Meathook](https://github.com/brongo/m3337ho0o0ok/releases/tag/v7.1)
+* Kaibz - Developer of [Kaibz Mod](https://www.nexusmods.com/doomthedarkages/mods/27?tab=description)
 * Wyo - Developer of [wxWidgets/samples/stc](https://github.com/wxWidgets/wxWidgets/tree/master/samples/stc) - this program is used as the basis for the text editor in both EntityHero and EntitySlayer. 
