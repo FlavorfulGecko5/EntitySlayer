@@ -95,7 +95,10 @@ bool Meathook::ReloadMap(const std::string& filepath)
 		return mh.PushEntitiesFile(Path, nullptr, 0);
 	}
 
-	// Hopefully temporary until Kaibz hot reloading is brought online
+	if (kaibzpipe != INVALID_HANDLE_VALUE) {
+		return ExecuteCommand("", "k_hotReload", false);
+	}
+
 	return false;
 }
 

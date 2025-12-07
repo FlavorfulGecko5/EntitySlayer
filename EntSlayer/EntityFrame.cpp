@@ -676,7 +676,7 @@ void EntityFrame::onAbout(wxCommandEvent& event)
 {
 	wxAboutDialogInfo info;
 	info.SetName("EntitySlayer");
-	info.SetVersion("Beta 10 Release Build");
+	info.SetVersion("Beta 10.1 Release Build");
 
 	wxString description =
 		"DOOM Eternal .entities file editor inspired by EntityHero and Elena.\n\n"
@@ -793,10 +793,29 @@ void EntityFrame::onSetMHTab(wxCommandEvent& event)
 void EntityFrame::onReloadMH(wxCommandEvent& event)
 {
 	wxLogMessage("Reload function called");
-	mhTab->saveFile();
+	bool success = false;
 
-	if(!Meathook::ReloadMap(std::string(mhTab->filePath)))
-		wxMessageBox("Map reload failed. Is Meathook offline? (Not supported in Dark Ages yet)", "Meathook Interface", wxICON_WARNING | wxOK);
+	switch (Meathook::IsOnline())
+	{
+		case game_eternal:
+		mhTab->saveFile();
+		success = Meathook::ReloadMap(std::string(mhTab->filePath));
+		break;
+
+		// For Dark Ages, we do not pass a file to Kaibz Mod
+		// So just save the active tab instead
+		case game_darkages:
+		activeTab->saveFile();
+		success = Meathook::ReloadMap("");
+		break;
+
+		default:
+		break;
+	}
+
+	if (!success) {
+		wxMessageBox("Map reload failed. Is Game Interface offline?", "Game Interface", wxICON_WARNING | wxOK);
+	}
 }
 
 void EntityFrame::onPrintActiveEncounters(wxCommandEvent& event)
@@ -870,7 +889,7 @@ void EntityFrame::RefreshMHMenu()
 
 	mhMenu->Enable(MEATHOOK_MAKEACTIVETAB, online && activeTab->filePath != "" && game != game_darkages); // Tabs with no file shouldn't be useable with mh
 	mhMenu->Check(MEATHOOK_MAKEACTIVETAB, activeTab == mhTab);
-	mhMenu->Enable(MEATHOOK_RELOAD, online && activeTab == mhTab && game != game_darkages); // For simplicity, only enable this option when mhTab is the activeTab
+	mhMenu->Enable(MEATHOOK_RELOAD, online && game == game_darkages || (activeTab == mhTab && game == game_eternal)); // For simplicity, only enable this option when mhTab is the activeTab
 	mhMenu->Enable(MEATHOOK_OPENFILE, online && game != game_darkages);
 	mhMenu->Enable(MEATHOOK_GET_ENCOUNTER, online);
 	mhMenu->Enable(MEATHOOK_GET_SPAWNPOSITION, online);
